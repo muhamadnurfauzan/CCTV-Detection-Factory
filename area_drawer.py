@@ -1,4 +1,4 @@
-# program untuk menggambar area khusus pada gambar CCTV
+# program untuk menggambar area khusus (ROI) custom pada gambar CCTV
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
