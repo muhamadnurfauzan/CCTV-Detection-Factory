@@ -1,4 +1,9 @@
-ultralytics
-opencv-python
-ffmpeg 
-numpy
+torch==2.2.0 
+torchvision==0.17.0 
+numpy==1.26.4 
+opencv-python==4.11.0 
+ultralytics 
+flask 
+psutil
+
+gunicorn

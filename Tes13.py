@@ -24,14 +24,14 @@ VIDEO_PATH = "rtsps://192.168.199.9:7441/sKDBmnGEmed2VzuM?enableSrtp"  # CCTV UR
 OUTPUT_DIR = "violations"
 CONFIDENCE_THRESHOLD = 0.3  # Untuk PPE model
 MODEL_PATH = "model/helm detection.pt"  # PPE model
-COOLDOWN = 15  # Cooldown detik
+COOLDOWN = 60  # Cooldown detik
 CLEANUP_INTERVAL = 60  # Hapus track kalau hilang >60 detik
 PADDING_PERCENT = 0.5  # Expand bounding box
 TARGET_MAX_WIDTH = 320  # Resize untuk polaroid
 LOCATION = "Plant A"
 JSON_PATH = "JSON/cctv_area.json"
 FRAME_SKIP = 10  # Naikkan untuk optimasi memori (proses setiap 10 frame)
-RESIZE_SCALE = 0.5  # Turunkan untuk kurangi beban memori
+RESIZE_SCALE = 0.9  # Turunkan untuk kurangi beban memori
 QUEUE_SIZE = 5  # Kurangi max frame di queue
 
 # --- Load ROI dari JSON ---
@@ -208,8 +208,8 @@ def process_thread(frame_queue):
             annotated_frame = annotated_frame_local
         
         # Cleanup memori
-        del frame_enhanced  # Bebaskan variabel temporer
-        gc.collect()  # Force garbage collection
+        del frame_enhanced  
+        gc.collect()  
         
         # Cleanup tracked_violations
         if current_real_time - start_time > 1:
