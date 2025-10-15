@@ -30,7 +30,7 @@ PADDING_PERCENT = 0.5  # Expand bounding box
 TARGET_MAX_WIDTH = 320  # Resize untuk polaroid
 LOCATION = "Plant A"
 JSON_PATH = "JSON/cctv_area.json"
-FRAME_SKIP = 10  # Naikkan untuk optimasi memori (proses setiap 10 frame)
+FRAME_SKIP = 15  # Naikkan untuk optimasi memori (proses setiap 10 frame)
 RESIZE_SCALE = 0.9  # Turunkan untuk kurangi beban memori
 QUEUE_SIZE = 5  # Kurangi max frame di queue
 
@@ -77,7 +77,7 @@ ppe_colors = {
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 try:
     model = YOLO(MODEL_PATH)
-    model.half()  # Aktifkan FP16 untuk optimasi memori (CPU support)
+    model.half()  
 except Exception as e:
     print(f"Gagal load model YOLO: {e}")
     exit()
@@ -308,9 +308,10 @@ def process_detection(frame, annotated_frame, x1, y1, x2, y2, cls_id, conf, trac
 def index():
     return """
     <html>
-    <body>
+    <body style="text-align: center;">
         <h1>CCTV Monitoring Portal</h1>
-        <img src="/video_feed" style="width: 100%;">
+        <img src="/video_feed" style="max-width: 90%; height: auto; border: 2px solid #000;" />
+        <br/>
         <p>Access this portal at http://localhost:5000. Press Ctrl+C to stop. Last updated: 13 Oct 2025.</p>
     </body>
     </html>
