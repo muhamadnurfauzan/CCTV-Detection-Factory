@@ -3,7 +3,9 @@ from flask import Flask, Response
 import time
 import cv2
 import logging
-from detection import annotated_frame, frame_lock, start_detection
+import numpy as np
+
+from cctv_detection import annotated_frame, frame_lock, start_detection
 
 app = Flask(__name__)
 
@@ -29,13 +31,14 @@ def video_feed():
         while True:
             with frame_lock:
                 if annotated_frame is not None:
+                    logging.debug(f"Encoding frame with shape: {annotated_frame.shape}, sum: {np.sum(annotated_frame)}")
                     ret, jpeg = cv2.imencode('.jpg', annotated_frame)
                     if ret:
                         yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')
+                                b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')
                     else:
                         logging.error("Failed to encode frame")
-            time.sleep(0.5)  # Rate limit untuk kurangi load
+            time.sleep(0.2)  # Turunkan untuk lebih realtime
     logging.info("Starting video feed")
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

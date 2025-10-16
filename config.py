@@ -6,15 +6,15 @@ import numpy as np
 VIDEO_PATH = "rtsps://192.168.199.9:7441/sKDBmnGEmed2VzuM?enableSrtp"
 OUTPUT_DIR = "violations"
 CONFIDENCE_THRESHOLD = 0.3
-MODEL_PATH = "model/helm detection.pt"  # Ganti ke "yolov8n.pt" jika besar
+MODEL_PATH = "model/helm detection.pt"
 COOLDOWN = 60
 CLEANUP_INTERVAL = 60
 PADDING_PERCENT = 0.5
 TARGET_MAX_WIDTH = 320
 LOCATION = "Plant A"
 JSON_PATH = "JSON/cctv_area.json"
-FRAME_SKIP = 15  # Naikkan untuk kurangi load
-RESIZE_SCALE = 0.5  # Turunkan untuk memory kecil
+FRAME_SKIP = 15
+RESIZE_SCALE = 0.9
 QUEUE_SIZE = 5
 
 PPE_CLASSES = {
