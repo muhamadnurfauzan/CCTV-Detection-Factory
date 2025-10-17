@@ -310,7 +310,7 @@ def index():
     <html>
     <body style="text-align: center;">
         <h1>CCTV Monitoring Portal</h1>
-        <img src="/video_feed" style="max-width: 90%; height: auto; border: 2px solid #000;" />
+        <img src="/video_feed" style="max-width: 75%; height: auto; border: 2px solid #000;" />
         <br/>
         <p>Access this portal at http://localhost:5000. Press Ctrl+C to stop. Last updated: 13 Oct 2025.</p>
     </body>

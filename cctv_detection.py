@@ -8,6 +8,7 @@ import torch
 import datetime
 import numpy as np
 from ultralytics import YOLO
+from collections import deque
 import logging
 import os
 
@@ -18,6 +19,8 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 # Global untuk annotated_frame dan lock
 annotated_frame = None  # Awalnya None, update di thread
 frame_lock = threading.Lock()
+
+frame_buffer = deque(maxlen=1)
 
 tracked_violations = {}
 
@@ -56,7 +59,7 @@ def open_stream():
 
 def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf, track_id, current_real_time, video_time, model, tracked_violations):
     class_name = model.names[int(cls_id)]
-    logging.info(f"Deteksi: {class_name} (conf: {conf:.2f}, track_id: {track_id}) at ({x1}, {y1}, {x2}, {y2})")
+    # logging.info(f"Deteksi: {class_name} (conf: {conf:.2f}, track_id: {track_id}) at ({x1}, {y1}, {x2}, {y2})") # Debugging info deteksi kelas model berhasil
     
     center = ((x1 + x2) // 2, (y1 + y2) // 2)
     in_roi = any(point_in_polygon(center, region['points']) if region['type'] == 'polygon' else
@@ -89,9 +92,7 @@ def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf
             
             try:
                 violation_crop = frame[y1_exp:y2_exp, x1_exp:x2_exp]
-                logging.info(f"Crop berhasil untuk {class_name} pada track {track_id}")
-                # Enhance crop
-                violation_crop = cv2.bilateralFilter(violation_crop, d=9, sigmaColor=75, sigmaSpace=75)
+                # logging.info(f"Crop berhasil untuk {class_name} pada track {track_id}") # Debugging info crop berhasil
             except Exception as e:
                 logging.error(f"Error cropping: {e}")
                 return
@@ -100,10 +101,7 @@ def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf
                 try:
                     scale_factor = TARGET_MAX_WIDTH / violation_crop.shape[1]
                     new_height = int(violation_crop.shape[0] * scale_factor)
-                    violation_crop = cv2.resize(violation_crop, (TARGET_MAX_WIDTH, new_height), interpolation=cv2.INTER_LANCZOS4)
-                    # Sharpen agresif
-                    kernel = np.array([[-1,-1,-1], [-1,9.5,-1], [-1,-1,-1]])
-                    violation_crop = cv2.filter2D(violation_crop, -1, kernel)
+                    violation_crop = cv2.resize(violation_crop, (TARGET_MAX_WIDTH, new_height), interpolation=cv2.INTER_LINEAR)  # Kembalikan ke normal
                 except Exception as e:
                     logging.error(f"Error resizing crop: {e}")
                     return
@@ -129,7 +127,7 @@ def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf
                     
                     timestamp_file = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     filename = os.path.join(OUTPUT_DIR, f"{track_id}_{class_name}_{timestamp_file}.jpg")
-                    cv2.imwrite(filename, polaroid, [cv2.IMWRITE_JPEG_QUALITY, 100])
+                    cv2.imwrite(filename, polaroid, [cv2.IMWRITE_JPEG_QUALITY, 95])
                     logging.info(f"Pelanggaran {class_name} pada {track_id} disimpan: {filename}")
                     
                     tracked_violations[track_id]['last_times'][class_name] = current_real_time
@@ -164,9 +162,12 @@ def capture_thread(frame_queue):
             frame_count += 1
             if frame_count % FRAME_SKIP != 0:
                 continue
-            # Hapus resize hardcode, gunakan original untuk jernih
-            # frame = cv2.resize(frame, (0, 0), fx=RESIZE_SCALE, fy=RESIZE_SCALE)
             logging.info(f"Queue filled with frame {frame_count}, shape {frame.shape}")
+            while not frame_queue.empty():
+                try:
+                    frame_queue.get_nowait()
+                except queue.Empty:
+                    break
             frame_queue.put((frame, time.time()))
 
             if not scaled:
@@ -185,6 +186,8 @@ def capture_thread(frame_queue):
                 break
 
 def process_thread(frame_queue):
+    global annotated_frame
+
     try:
         model = YOLO(MODEL_PATH)
         device = torch.device('cpu')
@@ -198,7 +201,16 @@ def process_thread(frame_queue):
     cleanup_timer = start_time
     while True:
         try:
-            frame, capture_time = frame_queue.get(timeout=1)
+            # frame, capture_time = frame_queue.get(timeout=1)
+            frame = None
+            capture_time = None
+            while not frame_queue.empty():
+                try:
+                    frame, capture_time = frame_queue.get_nowait()
+                except queue.Empty:
+                    break
+            if frame is None:
+                continue
         except queue.Empty:
             continue
 
@@ -211,7 +223,9 @@ def process_thread(frame_queue):
             logging.error(f"Preprocessing error: {e}")
             frame_enhanced = frame
 
-        annotated_frame_local = frame.copy()
+        # Resize for model only
+        frame_for_model = cv2.resize(frame_enhanced, (1280, 768), interpolation=cv2.INTER_AREA)
+        annotated_frame_local = frame.copy()  # Use original for high quality
         for region in roi_regions:
             if region['type'] == 'polygon':
                 cv2.polylines(annotated_frame_local, [region['points']], isClosed=True, color=(0, 165, 255), thickness=2)
@@ -221,13 +235,20 @@ def process_thread(frame_queue):
         if model is not None:
             try:
                 with torch.no_grad():
-                    frame_tensor = torch.from_numpy(frame_enhanced.transpose(2, 0, 1)).unsqueeze(0).float().to(device) / 255.0
-                    ppe_results = model.track(frame_tensor, conf=CONFIDENCE_THRESHOLD, persist=True, imgsz=(640, 384))  # Force size untuk YOLO
+                    frame_tensor = torch.from_numpy(frame_for_model.transpose(2, 0, 1)).unsqueeze(0).float().to(device) / 255.0
+                    ppe_results = model.track(frame_tensor, conf=CONFIDENCE_THRESHOLD, persist=True)
                     for ppe_result in ppe_results:
                         for box in ppe_result.boxes:
                             if box.id is None:
                                 continue
                             x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                            # Scale back to original frame
+                            scale_x = frame.shape[1] / 1280
+                            scale_y = frame.shape[0] / 768
+                            x1 = int(x1 * scale_x)
+                            y1 = int(y1 * scale_y)
+                            x2 = int(x2 * scale_x)
+                            y2 = int(y2 * scale_y)
                             cls_id = int(box.cls.cpu().numpy()[0])
                             conf = float(box.conf.cpu().numpy()[0])
                             track_id = int(box.id.cpu().numpy()[0])
@@ -236,11 +257,15 @@ def process_thread(frame_queue):
                 logging.error(f"Detection error: {e}")
 
         with frame_lock:
-            annotated_frame = annotated_frame_local  # Force update
-            logging.debug(f"Updated annotated_frame with shape {annotated_frame.shape}, sum {np.sum(annotated_frame)}")
+            annotated_frame = annotated_frame_local
+            frame_buffer.clear()
+            frame_buffer.append(annotated_frame_local.copy())
+            # logging.debug(f"Updated annotated_frame with shape {annotated_frame.shape}, sum {np.sum(annotated_frame)}") # Debugging info frame ada/tidak
 
-        del frame_enhanced
+        del frame_enhanced, frame_for_model
         gc.collect()
+
+        logging.debug(f"Frame latency: {current_real_time - capture_time:.3f}s")
 
         if current_real_time - cleanup_timer > CLEANUP_INTERVAL:
             cleanup_timer = current_real_time
@@ -251,7 +276,8 @@ def process_thread(frame_queue):
 
 def start_detection():
     frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
-    capture_t = threading.Thread(target=capture_thread, args=(frame_queue,))
-    process_t = threading.Thread(target=process_thread, args=(frame_queue,))
+    capture_t = threading.Thread(target=capture_thread, args=(frame_queue,), daemon=True)
+    process_t = threading.Thread(target=process_thread, args=(frame_queue,), daemon=True)
     capture_t.start()
     process_t.start()
+    logging.info("Detection threads started: capture_t and process_t (daemon)")

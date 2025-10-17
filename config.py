@@ -15,7 +15,7 @@ LOCATION = "Plant A"
 JSON_PATH = "JSON/cctv_area.json"
 FRAME_SKIP = 15
 RESIZE_SCALE = 0.9
-QUEUE_SIZE = 5
+QUEUE_SIZE = 3
 
 PPE_CLASSES = {
     "helmet": True,
