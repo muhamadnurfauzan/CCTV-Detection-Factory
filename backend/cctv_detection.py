@@ -12,7 +12,7 @@ from collections import deque
 import logging
 import os
 
-from config import MODEL_PATH, CONFIDENCE_THRESHOLD, FRAME_SKIP, RESIZE_SCALE, QUEUE_SIZE, CLEANUP_INTERVAL, json_image_width, json_image_height, roi_regions, VIDEO_PATH, PPE_CLASSES, ppe_colors, PADDING_PERCENT, TARGET_MAX_WIDTH, LOCATION, COOLDOWN, OUTPUT_DIR
+from config import MODEL_PATH, CONFIDENCE_THRESHOLD, FRAME_SKIP, QUEUE_SIZE, CLEANUP_INTERVAL, json_image_width, json_image_height, roi_regions, VIDEO_PATH, PPE_CLASSES, PPE_COLORS, PADDING_PERCENT, TARGET_MAX_WIDTH, LOCATION, COOLDOWN, OUTPUT_DIR, CCTV_RATIO
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -137,7 +137,7 @@ def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf
                     return
     
     # Gambar bounding box pada annotated_frame_local
-    color = ppe_colors.get(class_name, (0, 0, 0))
+    color = PPE_COLORS.get(class_name, (0, 0, 0))
     cv2.rectangle(annotated_frame_local, (x1, y1), (x2, y2), color, 2)
     cv2.putText(annotated_frame_local, f"{class_name} {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
@@ -192,7 +192,7 @@ def process_thread(frame_queue):
         model = YOLO(MODEL_PATH)
         device = torch.device('cpu')
         model.to(device)
-        logging.info("YOLO loaded on CPU in FP32")
+        logging.info("YOLO loaded successfully")
     except Exception as e:
         logging.error(f"Failed to load YOLO: {e}")
         model = None
@@ -224,7 +224,7 @@ def process_thread(frame_queue):
             frame_enhanced = frame
 
         # Resize for model only
-        frame_for_model = cv2.resize(frame_enhanced, (1280, 768), interpolation=cv2.INTER_AREA)
+        frame_for_model = cv2.resize(frame_enhanced, CCTV_RATIO, interpolation=cv2.INTER_AREA)
         annotated_frame_local = frame.copy()  # Use original for high quality
         for region in roi_regions:
             if region['type'] == 'polygon':

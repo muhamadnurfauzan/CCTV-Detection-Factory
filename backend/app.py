@@ -1,11 +1,10 @@
 from flask import Flask, Response
-from time import perf_counter, sleep
 import threading
 import cv2
 import logging
 import time
-import datetime
 import cctv_detection
+import config
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,7 +34,7 @@ def video_feed():
                 frame_copy = frame.copy()
 
             # resize & encode
-            frame_web = cv2.resize(frame_copy, (1280, 768), interpolation=cv2.INTER_AREA)
+            frame_web = cv2.resize(frame_copy, config.CCTV_RATIO, interpolation=cv2.INTER_AREA)
             ret, jpeg = cv2.imencode('.jpg', frame_web)
             if not ret:
                 continue
@@ -46,7 +45,7 @@ def video_feed():
                    b'\r\n\r\n')
 
             # tidak perlu sleep lama, hanya kasih napas CPU
-            time.sleep(0.005)
+            time.sleep(0.05)
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
