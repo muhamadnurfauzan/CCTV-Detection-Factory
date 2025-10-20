@@ -9,7 +9,6 @@ import config
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-
 @app.route('/')
 def index():
     return """
@@ -45,7 +44,7 @@ def video_feed():
                    b'\r\n\r\n')
 
             # tidak perlu sleep lama, hanya kasih napas CPU
-            time.sleep(0.05)
+            time.sleep(0.005)
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
