@@ -20,7 +20,8 @@ PADDING_PERCENT = 0.5
 TARGET_MAX_WIDTH = 320
 FRAME_SKIP = 30
 QUEUE_SIZE = 3
-CCTV_RATIO = (1280, 720)  # harus bisa dibagi 32
+CCTV_RATIO = (1920, 1080) 
+# CCTV_RATIO = (1280, 720)  # harus bisa dibagi 32
 
 # --- Definisi Kelas Model ---
 PPE_CLASSES = {
@@ -49,11 +50,12 @@ PPE_COLORS = {
     "googles": (200, 50, 50),
 }
 
+# --- Add data CCTV dari MySQL ---
 def get_active_cctv():
     """Ambil 1 CCTV yang enabled=True dari tabel MySQL."""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM cctv_data WHERE enabled = TRUE LIMIT 1;")
+    cursor.execute("SELECT * FROM cctv_data WHERE enabled = TRUE;")
     result = cursor.fetchone()
     cursor.close()
     conn.close()
