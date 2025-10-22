@@ -121,46 +121,46 @@ def process_detection(frame, annotated_frame_local, x1, y1, x2, y2, cls_id, conf
 
 # --- Capture Thread ---
 def capture_thread(frame_queue):
-    cap = open_stream()
-    if cap is None:
-        return
-
-    frame_count = 0
-    scaled = False
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            cap.release()
-            cap = open_stream()
-            if cap is None:
+        cap = open_stream()
+        if cap is None:
+            logging.error("Failed to open stream, retrying in 5 seconds...")
+            time.sleep(5)
+            continue
+        frame_count = 0
+        scaled = False
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                logging.warning("Failed to read frame, reconnecting...")
+                cap.release()
+                time.sleep(1)
                 break
-            continue
+            frame_count += 1
+            if frame_count % FRAME_SKIP != 0:
+                continue
 
-        frame_count += 1
-        if frame_count % FRAME_SKIP != 0:
-            continue
-
-        # flush queue agar hanya frame terbaru
-        while not frame_queue.empty():
+            # flush queue agar hanya frame terbaru
+            while not frame_queue.empty():
+                try:
+                    frame_queue.get_nowait()
+                except queue.Empty:
+                    break
             try:
-                frame_queue.get_nowait()
-            except queue.Empty:
-                break
+                frame_queue.put((frame, time.time()), block=False)
+            except queue.Full:
+                continue
 
-        try:
-            frame_queue.put((frame, time.time()), block=False)
-        except queue.Full:
-            continue
-
-        # ROI scaling hanya sekali
-        if not scaled:
-            h, w = frame.shape[:2]
-            sx = w / json_image_width if json_image_width > 0 else 1.0
-            sy = h / json_image_height if json_image_height > 0 else 1.0
-            for region in roi_regions:
-                region['points'] = (region['points'] * np.array([sx, sy])).astype(np.int32)
-            scaled = True
-            logging.info("ROI scaled once.")
+            # ROI scaling hanya sekali
+            if not scaled:
+                h, w = frame.shape[:2]
+                sx = w / json_image_width if json_image_width > 0 else 1.0
+                sy = h / json_image_height if json_image_height > 0 else 1.0
+                for region in roi_regions:
+                    region['points'] = (region['points'] * np.array([sx, sy])).astype(np.int32)
+                scaled = True
+                logging.info("ROI scaled once.")
+        cap.release()
 
 # --- Process Thread ---
 def process_thread(frame_queue):

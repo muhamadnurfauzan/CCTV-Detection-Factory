@@ -1,25 +1,66 @@
-import React, { useEffect, useState } from 'react';
-import './App.css';
+import React, { useEffect, useRef } from 'react';
+import Hls from 'hls.js';
 
 function App() {
-  const [status, setStatus] = useState('Loading stream...');
+  const videoRef = useRef(null);
 
-  // Use proxy path '/api/video_feed' so Node server can proxy to Flask backend and avoid CORS
-  const streamUrl = '/api/video_feed';
+  const handleHlsEvents = (hls, attempt) => {
+    return () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('HLS manifest parsed, playing video');
+        videoRef.current.play().catch(err => console.error('Playback error:', err));
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error(`HLS error attempt ${attempt}:`, data);
+        hls.destroy();
+      });
+    };
+  };
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const hlsUrl = '/api/video_feed';
+    console.log(`Attempting to load HLS stream from ${hlsUrl}`);
+
+    const loadHls = async () => {
+      if (Hls.isSupported()) {
+        let attempts = 0;
+        const maxAttempts = 3;
+        while (attempts < maxAttempts) {
+          try {
+            const hls = new Hls();
+            await new Promise(resolve => setTimeout(resolve, 3000 * (attempts + 1))); // 3, 6, 9 detik
+            console.log(`Loading HLS attempt ${attempts + 1}/${maxAttempts}`);
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
+            handleHlsEvents(hls, attempts + 1)();
+            return () => hls.destroy();
+          } catch (err) {
+            console.error(`HLS load failed attempt ${attempts + 1}:`, err);
+            attempts++;
+          }
+        }
+        console.error('Failed to load HLS after all attempts');
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        console.log('Native HLS support detected');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        video.src = hlsUrl;
+        video.addEventListener('loadedmetadata', () => {
+          console.log('Native HLS metadata loaded, playing video');
+          video.play().catch(err => console.error('Playback error:', err));
+        });
+      } else {
+        console.error('HLS not supported');
+      }
+    };
+
+    loadHls();
+  }, []);
 
   return (
-    <div style={{ textAlign: 'center', fontFamily: 'Arial, sans-serif', background: '#f4f4f4', padding: '20px' }}>
-      <h1>CCTV Monitoring Portal</h1>
-      <div style={{ maxWidth: '80%', margin: '20px auto', border: '2px solid #000', borderRadius: '8px', overflow: 'hidden' }}>
-        <img
-          src={streamUrl}
-          alt="CCTV Stream"
-          onLoad={() => setStatus('Stream connected!')}
-          onError={() => setStatus('Error loading stream.')}
-          style={{ width: '100%', height: 'auto' }}
-        />
-      </div>
-      <div style={{ color: status.includes('Error') ? 'red' : 'green', fontWeight: 'bold' }}>{status}</div>
+    <div>
+      <h1>CCTV PPE Detection</h1>
+      <video ref={videoRef} controls style={{ width: '100%', maxWidth: '1280px' }}></video>
     </div>
   );
 }
