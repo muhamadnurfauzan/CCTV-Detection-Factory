@@ -1,4 +1,3 @@
-# config.py
 import os
 import sys
 import json
@@ -20,98 +19,77 @@ PADDING_PERCENT = 0.5
 TARGET_MAX_WIDTH = 320
 FRAME_SKIP = 30
 QUEUE_SIZE = 3
-CCTV_RATIO = (1920, 1080) 
-# CCTV_RATIO = (1280, 720)  # harus bisa dibagi 32
+CCTV_RATIO = (1920, 1080)
 
 # --- Definisi Kelas Model ---
 PPE_CLASSES = {
-    "helmet": True,
-    "no-helmet": True,
-    "vest": True,
-    "no-vest": True,
-    "boots": False,
-    "no-boots": False,
-    "gloves": False,
-    "no-gloves": False,
-    "googles": False,
-    "no-googles": False,
+    "helmet": True, "no-helmet": True, "vest": True, "no-vest": True,
+    "boots": False, "no-boots": False, "gloves": False, "no-gloves": False,
+    "googles": False, "no-googles": False,
 }
 
 PPE_COLORS = {
-    "no-helmet": (255, 0, 255),
-    "helmet": (0, 255, 0),
-    "no-vest": (255, 255, 0),
-    "vest": (0, 255, 255),
-    "no-boots": (200, 100, 0),
-    "boots": (0, 100, 200),
-    "no-gloves": (100, 0, 200),
-    "gloves": (200, 0, 100),
-    "no-googles": (50, 50, 200),
-    "googles": (200, 50, 50),
+    "no-helmet": (255, 0, 255), "helmet": (0, 255, 0),
+    "no-vest": (255, 255, 0), "vest": (0, 255, 255),
+    "no-boots": (200, 100, 0), "boots": (0, 100, 200),
+    "no-gloves": (100, 0, 200), "gloves": (200, 0, 100),
+    "no-googles": (50, 50, 200), "googles": (200, 50, 50),
 }
 
-# --- Add data CCTV dari MySQL ---
-def get_active_cctv():
-    """Ambil 1 CCTV yang enabled=True dari tabel MySQL."""
+# --- Shared memory dict (diinisialisasi di app.py) ---
+annotated_frames = None
+
+# --- Fetch CCTV aktif dari database ---
+def get_all_active_cctv():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM cctv_data WHERE enabled = TRUE;")
-    result = cursor.fetchone()
+    results = cursor.fetchall()
     cursor.close()
     conn.close()
-
-    if not result:
+    if not results:
         raise RuntimeError("Tidak ada CCTV aktif di database.")
-    return result
+    return results
 
-# --- Load CCTV dari MySQL ---
-try:
-    active_cctv = get_active_cctv()
-    CCTV_ID = active_cctv["id"]
-    CCTV_NAME = active_cctv.get("name", "Unknown Camera")
-    LOCATION = active_cctv.get("location", "Unknown Location")
-    IP_ADDRESS = active_cctv.get("ip_address")
-    PORT = active_cctv.get("port")
-    TOKEN = active_cctv.get("token")
-    JSON_PATH = active_cctv.get("area", "Undefined ROI")
-
-    # Buat URL video RTSP otomatis
-    VIDEO_PATH = f"rtsps://{IP_ADDRESS}:{PORT}/{TOKEN}?enableSrtp"
-except Exception as e:
-    print(f"[WARNING] Gagal memuat CCTV aktif: {e}")
-    CCTV_ID = None
-    CCTV_NAME = "Undefined"
-    LOCATION = "Undefined"
-    VIDEO_PATH = None
-    JSON_PATH = None
-
-# --- ROI CONFIGURATION ---
-roi_regions = []
-json_image_width = 0
-json_image_height = 0
-
-def load_roi_from_json(json_path=JSON_PATH):
-    """Memuat region of interest (ROI) dari file JSON."""
-    global roi_regions, json_image_width, json_image_height
+# --- ROI Loader ---
+def load_roi_from_json(json_path):
     if not json_path or not os.path.exists(json_path):
-        print(f"[INFO] File ROI tidak ditemukan: {json_path}")
-        return
-
+        return [], 0, 0
     try:
         with open(json_path, "r") as f:
             data = json.load(f)
-            json_image_width = data.get('image_width', 0)
-            json_image_height = data.get('image_height', 0)
-            roi_regions.clear()
-            for item in data.get('items', []):
+            width = data.get("image_width", 0)
+            height = data.get("image_height", 0)
+            regions = []
+            for item in data.get("items", []):
                 if "points" in item:
-                    roi_regions.append({
-                        'type': item.get('type', 'undefined'),
-                        'points': np.array(item["points"], dtype=np.float32)
+                    regions.append({
+                        "type": item.get("type", "undefined"),
+                        "points": np.array(item["points"], dtype=np.float32),
                     })
-        print(f"[INFO] ROI loaded: {len(roi_regions)} region(s)")
+            return regions, width, height
     except Exception as e:
         print(f"[ERROR] Gagal load ROI JSON: {e}")
+        return [], 0, 0
 
-# Load ROI saat startup
-load_roi_from_json()
+# --- Muat konfigurasi semua CCTV aktif ---
+def load_all_cctv_configs():
+    configs = {}
+    active_cctvs = get_all_active_cctv()
+    for cctv in active_cctvs:
+        cctv_id = cctv["id"]
+        roi, w, h = load_roi_from_json(cctv.get("area"))
+        configs[cctv_id] = {
+            "name": cctv.get("name", f"CCTV {cctv_id}"),
+            "location": cctv.get("location", "Unknown"),
+            "ip_address": cctv.get("ip_address"),
+            "port": cctv.get("port"),
+            "token": cctv.get("token"),
+            "roi": roi,
+            "json_width": w,
+            "json_height": h,
+        }
+    return configs
+
+# --- Inisialisasi konfigurasi global ---
+cctv_configs = load_all_cctv_configs()

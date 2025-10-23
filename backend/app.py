@@ -1,56 +1,53 @@
-from flask import Flask, Response
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
-import threading
 import cv2
-import logging
 import time
+import logging
 import cctv_detection
 import config
 
 app = Flask(__name__)
-CORS(app)  # Tambah ini untuk handle CORS
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+CORS(app)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-@app.route('/video_feed')
+@app.route("/api/cctv_all", methods=["GET"])
+def get_all_cctv():
+    """Ambil semua CCTV, termasuk yang nonaktif."""
+    from db.db_config import get_connection
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id, name, ip_address, location, enabled FROM cctv_data;")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/video_feed")
 def video_feed():
+    cctv_id = int(request.args.get("id", 1))
     def gen():
+        last_log = 0
         while True:
-            with cctv_detection.frame_lock:
-                frame = cctv_detection.annotated_frame
-                if frame is None:
-                    time.sleep(0.05)
-                    continue
-                frame_copy = frame.copy()
-
-            try:
-                max_w = getattr(config, 'WEB_MAX_WIDTH', None)
-                if max_w is not None:
-                    h, w = frame_copy.shape[:2]
-                    if w > max_w:
-                        scale = max_w / float(w)
-                        new_w = int(w * scale)
-                        new_h = int(h * scale)
-                        frame_web = cv2.resize(frame_copy, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                    else:
-                        frame_web = frame_copy
-                else:
-                    frame_web = frame_copy
-                ret, jpeg = cv2.imencode('.jpg', frame_web)
-            except Exception:
-                ret, jpeg = cv2.imencode('.jpg', frame_copy)
-            if not ret:
+            frame = config.annotated_frames.get(cctv_id)
+            if frame is None:
+                if time.time() - last_log > 2:
+                    logging.warning(f"[CCTV {cctv_id}] Belum ada frame, tunggu proses deteksi...")
+                    last_log = time.time()
+                time.sleep(0.1)
                 continue
 
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' +
-                   jpeg.tobytes() +
-                   b'\r\n\r\n')
+            success, jpeg = cv2.imencode(".jpg", frame)
+            if not success:
+                time.sleep(0.05)
+                continue
 
-            time.sleep(0.005)
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n")
+            time.sleep(0.03)
 
-    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 if __name__ == "__main__":
-    t = threading.Thread(target=cctv_detection.start_detection, daemon=True)
-    t.start()
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    config.annotated_frames = {}
+    threads = cctv_detection.start_all_detections()
+    logging.info(f"Started {len(threads)} CCTV threads.")
+    app.run(host="0.0.0.0", port=5000, threaded=True)
