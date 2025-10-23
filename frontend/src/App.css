@@ -36,20 +36,3 @@
     transform: rotate(360deg);
   }
 }
-
-body {
-  margin: 0;
-  padding: 0;
-  background: #f4f4f4;
-}
-
-h1 {
-  color: #333;
-  font-family: Arial, sans-serif;
-}
-
-p {
-  font-size: 1.2em;
-  color: #666;
-  font-family: Arial, sans-serif;
-}

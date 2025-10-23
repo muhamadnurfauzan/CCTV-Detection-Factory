@@ -1,66 +1,55 @@
-import React, { useEffect, useRef } from 'react';
-import Hls from 'hls.js';
+import React, { useState, useEffect, useRef } from 'react';
 
 function App() {
-  const videoRef = useRef(null);
-
-  const handleHlsEvents = (hls, attempt) => {
-    return () => {
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('HLS manifest parsed, playing video');
-        videoRef.current.play().catch(err => console.error('Playback error:', err));
-      });
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error(`HLS error attempt ${attempt}:`, data);
-        hls.destroy();
-      });
-    };
-  };
+  const [status, setStatus] = useState('Loading stream...');
+  const imgRef = useRef(null);
 
   useEffect(() => {
-    const video = videoRef.current;
-    const hlsUrl = '/api/video_feed';
-    console.log(`Attempting to load HLS stream from ${hlsUrl}`);
+    const img = imgRef.current;
+    if (!img) {
+      console.error('Image ref is null');
+      return;
+    }
 
-    const loadHls = async () => {
-      if (Hls.isSupported()) {
-        let attempts = 0;
-        const maxAttempts = 3;
-        while (attempts < maxAttempts) {
-          try {
-            const hls = new Hls();
-            await new Promise(resolve => setTimeout(resolve, 3000 * (attempts + 1))); // 3, 6, 9 detik
-            console.log(`Loading HLS attempt ${attempts + 1}/${maxAttempts}`);
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-            handleHlsEvents(hls, attempts + 1)();
-            return () => hls.destroy();
-          } catch (err) {
-            console.error(`HLS load failed attempt ${attempts + 1}:`, err);
-            attempts++;
-          }
-        }
-        console.error('Failed to load HLS after all attempts');
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        console.log('Native HLS support detected');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        video.src = hlsUrl;
-        video.addEventListener('loadedmetadata', () => {
-          console.log('Native HLS metadata loaded, playing video');
-          video.play().catch(err => console.error('Playback error:', err));
-        });
-      } else {
-        console.error('HLS not supported');
+    const streamUrl = '/api/video_feed';
+    console.log(`Attempting to load stream from ${streamUrl}`);
+
+    // Pastikan gambar dimuat ulang jika koneksi berubah
+    const handleError = () => setStatus('Error loading stream.');
+    const handleLoad = () => setStatus('Stream connected!');
+
+    img.onerror = handleError;
+    img.onload = handleLoad;
+
+    // Muat ulang gambar secara berkala untuk memastikan stream aktif
+    const reloadInterval = setInterval(() => {
+      if (img.src) {
+        const newSrc = `${streamUrl}?t=${new Date().getTime()}`; // Tambah timestamp untuk memaksa reload
+        img.src = newSrc;
       }
-    };
+    }, 1000); // Reload setiap 1 detik (sesuaikan dengan kebutuhan)
 
-    loadHls();
+    return () => {
+      clearInterval(reloadInterval);
+      img.onerror = null;
+      img.onload = null;
+    };
   }, []);
 
   return (
-    <div>
-      <h1>CCTV PPE Detection</h1>
-      <video ref={videoRef} controls style={{ width: '100%', maxWidth: '1280px' }}></video>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <h1 className="text-3xl font-bold text-gray-800 mb-4">CCTV Monitoring Portal</h1>
+      <div className="w-[75%] mt-6 border-2 border-black shadow-lg rounded-lg overflow-hidden">
+        <img
+          ref={imgRef}
+          src="/api/video_feed"
+          alt="CCTV Stream"
+          className="w-full h-auto"
+        />
+      </div>
+      <div className={`mt-2 ${status.includes('Error') ? 'text-red-600' : 'text-green-600'} font-bold`}>
+        {status}
+      </div>
     </div>
   );
 }
