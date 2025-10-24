@@ -33,7 +33,7 @@ function CCTVStream({ cctvId, onBack }) {
         ← Kembali
       </button>
       <h1 className="text-2xl font-bold text-gray-800 mb-4">Streaming CCTV #{cctvId}</h1>
-      <div className="w-[80%] border-2 border-black shadow-lg rounded-lg overflow-hidden">
+      <div className="w-[75%] border-2 border-black shadow-lg rounded-lg overflow-hidden">
         <img
           ref={imgRef}
           alt="CCTV Stream"

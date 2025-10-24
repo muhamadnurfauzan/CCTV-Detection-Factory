@@ -70,7 +70,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     crop = frame[y1e:y2e, x1e:x2e]
     if crop.size == 0:
         return
-    if crop.shape[1] > config.TARGET_MAX_WIDTH:
+    if crop.shape[1] < config.TARGET_MAX_WIDTH:
         scale = config.TARGET_MAX_WIDTH / crop.shape[1]
         crop = cv2.resize(crop, (config.TARGET_MAX_WIDTH, int(crop.shape[0]*scale)))
 
@@ -104,11 +104,49 @@ def capture_thread(cctv_id, frame_queue):
             frame_queue.append(frame)
         frame_count += 1
 
+def cleanup_thread(tracked_violations):
+    """Membersihkan data pelanggaran lama yang tidak aktif."""
+    while True:
+        now = time.time()
+        removed_count = 0
+
+        # Iterasi salinan list supaya aman saat penghapusan
+        for track_id in list(tracked_violations.keys()):
+            data = tracked_violations[track_id]
+            last_times = data.get("last_times", {})
+            if not last_times:
+                continue
+
+            # Ambil waktu terakhir kali objek ini terlihat
+            last_seen = max(last_times.values(), default=0)
+
+            # Jika objek sudah tidak aktif selama CLEANUP_INTERVAL
+            if now - last_seen > config.CLEANUP_INTERVAL:
+                # Log class-class yang dihapus
+                classes_removed = list(last_times.keys())
+                logging.info(
+                    f"[CLEANUP] Hapus track_id={track_id} "
+                    f"dengan pelanggaran={classes_removed} "
+                    f"(tidak aktif selama {int(now - last_seen)} detik)"
+                )
+
+                # Hapus track dari memori
+                del tracked_violations[track_id]
+                removed_count += 1
+
+        if removed_count > 0:
+            logging.info(f"[CLEANUP] Total {removed_count} track lama dihapus.")
+        time.sleep(config.CLEANUP_INTERVAL)
+
+        
 def process_thread(cctv_id, frame_queue):
     tracked_violations = {}
     model = YOLO(config.MODEL_PATH)
     model.to("cpu")
     logging.info(f"YOLO loaded for CCTV {cctv_id}")
+
+    # Membersihkan data pelanggaran lama
+    Thread(target=cleanup_thread, args=(tracked_violations,), daemon=True).start()
 
     roi_regions = config.cctv_configs[cctv_id]["roi"]
 
@@ -146,13 +184,15 @@ def process_thread(cctv_id, frame_queue):
                     class_name = model.names[cls_id]
 
                     # --- Gambar bounding box ---
-                    color = (0, 255, 0) if "no-" not in class_name else (0, 0, 255)
+                    color = config.PPE_COLORS.get(class_name, (255, 255, 255))  # fallback putih jika tidak ditemukan
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
 
-                    # --- Label teks di atas box ---
-                    label = f"{class_name} {conf:.2f} ID:{track_id}"
-                    cv2.putText(annotated, label, (x1, max(20, y1 - 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    # Tambahkan label teks di atas bounding box
+                    label = f"{class_name} {conf:.2f}"
+                    cv2.putText(
+                        annotated, label, (x1, max(y1 - 10, 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
+                    )
 
                     # --- Proses pelanggaran ---
                     process_detection(
@@ -172,10 +212,9 @@ def start_all_detections():
     threads = []
     for cctv_id in config.cctv_configs.keys():
         config.annotated_frames[cctv_id] = np.zeros((480, 640, 3), dtype=np.uint8)  # placeholder frame hitam
-        frame_queue = deque(maxlen=2)
+        frame_queue = deque(maxlen=config.QUEUE_SIZE)
         t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue), daemon=True)
         t2 = Thread(target=process_thread, args=(cctv_id, frame_queue), daemon=True)
         t1.start(); t2.start()
         threads.append((t1, t2))
     return threads
-
