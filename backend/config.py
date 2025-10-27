@@ -2,17 +2,15 @@ import os
 import sys
 import json
 import numpy as np
+from dotenv import load_dotenv
+load_dotenv()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from db.db_config import get_connection
 
-# --- Direktori Output ---
-OUTPUT_DIR = "violations"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 # --- Model dan Pengaturan Umum ---
 MODEL_PATH = "model/helm detection.pt"
-CONFIDENCE_THRESHOLD = 0.3
+CONFIDENCE_THRESHOLD = 0.5
 COOLDOWN = 60
 CLEANUP_INTERVAL = 60
 PADDING_PERCENT = 0.5
@@ -35,6 +33,11 @@ PPE_COLORS = {
     "no-gloves": (100, 0, 200), "gloves": (200, 0, 100),
     "no-googles": (50, 50, 200), "googles": (200, 50, 50),
 }
+
+# --- Supabase Configuration ---
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "violations")
 
 # --- Shared memory dict (diinisialisasi di app.py) ---
 annotated_frames = None

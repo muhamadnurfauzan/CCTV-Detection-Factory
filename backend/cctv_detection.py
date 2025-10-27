@@ -2,15 +2,15 @@ import os
 import time
 import cv2
 import gc
-import torch
 import datetime
 import numpy as np
 from ultralytics import YOLO
-from multiprocessing import Queue, Process
 from threading import Thread
 from collections import deque
 import logging
 import config
+from cloud_storage import upload_violation_image
+from db.db_config import get_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -63,6 +63,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     if now - last_time < config.COOLDOWN:
         return
 
+    # --- Crop area pelanggaran ---
     h, w = frame.shape[:2]
     pad_w, pad_h = int((x2-x1)*config.PADDING_PERCENT), int((y2-y1)*config.PADDING_PERCENT)
     x1e, y1e = max(0, x1-pad_w), max(0, y1-pad_h)
@@ -74,6 +75,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         scale = config.TARGET_MAX_WIDTH / crop.shape[1]
         crop = cv2.resize(crop, (config.TARGET_MAX_WIDTH, int(crop.shape[0]*scale)))
 
+    # --- Tambahkan label seperti polaroid ---
     polaroid = np.ones((crop.shape[0]+80, crop.shape[1], 3), dtype=np.uint8)*255
     polaroid[:crop.shape[0], :] = crop
     y_pos = crop.shape[0] + 20
@@ -81,11 +83,35 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         cv2.putText(polaroid, text, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
         y_pos += 25
 
-    cctv_dir = os.path.join(config.OUTPUT_DIR, str(cctv_id))
-    os.makedirs(cctv_dir, exist_ok=True)
-    filename = os.path.join(cctv_dir, f"{track_id}_{class_name}_{datetime.datetime.now():%Y%m%d_%H%M%S}.jpg")
-    cv2.imwrite(filename, polaroid)
-    logging.info(f"[CCTV {cctv_id}] Violation saved: {filename}")
+    # --- Encode ke bytes untuk upload ---
+    success, buffer = cv2.imencode(".jpg", polaroid)
+    if not success:
+        logging.error(f"[CCTV {cctv_id}] Gagal encode gambar.")
+        return
+    image_bytes = buffer.tobytes()
+
+    # --- Upload ke Supabase Storage ---
+    try:
+        public_url = upload_violation_image(image_bytes, cctv_id, class_name)
+    except Exception as e:
+        logging.error(f"[CCTV {cctv_id}] Upload ke Supabase gagal: {e}")
+        return
+
+    # --- Simpan log ke MySQL ---
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
+            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s), %s, NOW());
+        """, (cctv_id, class_name, public_url))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logging.info(f"[CCTV {cctv_id}] Violation logged in DB & uploaded: {public_url}")
+    except Exception as e:
+        logging.error(f"[DB] Gagal simpan log violation: {e}")
+
     data["last_times"][class_name] = now
 
 def capture_thread(cctv_id, frame_queue):
