@@ -13,7 +13,8 @@ function CCTVTable({ onSelect }) {
 
   const filtered = data.filter(cctv =>
     cctv.name.toLowerCase().includes(search.toLowerCase()) ||
-    (cctv.location && cctv.location.toLowerCase().includes(search.toLowerCase()))
+    (cctv.location && cctv.location.toLowerCase().includes(search.toLowerCase())) ||
+    cctv.ip_address.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -22,7 +23,7 @@ function CCTVTable({ onSelect }) {
 
       <input
         type="text"
-        placeholder="Cari CCTV berdasarkan nama atau lokasi..."
+        placeholder="Cari CCTV berdasarkan nama, lokasi, atau IP..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-1/2 p-2 border rounded mb-6 shadow"
