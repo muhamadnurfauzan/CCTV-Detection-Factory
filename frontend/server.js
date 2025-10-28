@@ -11,18 +11,25 @@ app.use(
   createProxyMiddleware({
     target: 'http://localhost:5000',
     changeOrigin: true,
-    ws: true,                // dukung WebSocket / long-lived connection
-    proxyTimeout: 0,         // jangan timeout untuk stream
-    logLevel: 'debug',       // log detail supaya gampang debug
+    ws: true,
+    proxyTimeout: 0,
+    logLevel: 'debug',
   })
 );
 
 /* Serve React build */
 app.use(express.static(path.join(__dirname, 'build')));
 
-/* React Router fallback */
+/* React Router fallback dengan logging */
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  const indexPath = path.join(__dirname, 'build', 'index.html');
+  console.log(`Serving ${indexPath} for ${req.url}`);
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error('Error serving index.html:', err);
+      res.status(500).send('Server error');
+    }
+  });
 });
 
 app.listen(port, () => {

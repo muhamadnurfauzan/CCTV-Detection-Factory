@@ -30,7 +30,7 @@ def point_in_polygon(point, polygon):
         p1x, p1y = p2x, p2y
     return inside
 
-def open_stream(cctv):
+def open_stream(cctv, max_retries=5, retry_delay=1):
     video_path = f"rtsps://{cctv['ip_address']}:{cctv['port']}/{cctv['token']}?enableSrtp"
     cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -42,6 +42,19 @@ def open_stream(cctv):
             logging.error(f"[{cctv['name']}] Tidak dapat membuka stream.")
             return None
     return cap
+
+def reconnect_cap(cctv, cap, max_retries=5, retry_delay=1):
+    """Reconnect cap dengan backoff"""
+    for attempt in range(max_retries):
+        logging.warning(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
+        cap.release()
+        time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
+        cap = open_stream(cctv)
+        if cap and cap.isOpened():
+            logging.info(f"[{cctv['name']}] Reconnected successfully.")
+            return cap
+    logging.error(f"[{cctv['name']}] Failed to reconnect after {max_retries} attempts.")
+    return None
 
 def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations):
     cctv_cfg = config.cctv_configs[cctv_id]
@@ -132,13 +145,23 @@ def capture_thread(cctv_id, frame_queue):
     cap = open_stream(cctv)
     if not cap:
         return
+    fail_count = 0
+    max_fails = 10
     frame_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
-            logging.warning(f"[CCTV {cctv_id}] Frame read failed.")
+            fail_count += 1
+            logging.warning(f"[CCTV {cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
+            if fail_count >= max_fails:
+                cap = reconnect_cap(cctv, cap)
+                if not cap:
+                    time.sleep(5)  # Wait sebelum retry full
+                    continue
+                fail_count = 0
             time.sleep(0.5)
             continue
+        fail_count = 0  # Reset fail count kalau sukses
         if frame_count % config.FRAME_SKIP == 0:
             frame_queue.append(frame)
         frame_count += 1

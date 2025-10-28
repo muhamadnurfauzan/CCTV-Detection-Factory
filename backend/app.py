@@ -1,6 +1,7 @@
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from threading import Thread
+import numpy as np
 import cv2
 import time
 import datetime
@@ -11,11 +12,10 @@ import scheduler
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")  # Ubah ke ERROR
 
 @app.route("/api/cctv_all", methods=["GET"])
 def get_all_cctv():
-    """Ambil semua CCTV, termasuk yang nonaktif."""
     from db.db_config import get_connection
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -30,145 +30,102 @@ def video_feed():
     cctv_id = int(request.args.get("id", 1))
 
     def gen():
-        last_log = 0
+        last_frame_time = time.time()
+        placeholder_frame = np.zeros((480, 640, 3), dtype=np.uint8)  # Placeholder hitam
+        cv2.putText(placeholder_frame, "Stream disconnected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         while True:
             frame = config.annotated_frames.get(cctv_id)
-            if frame is None:
-                if time.time() - last_log > 2:
-                    logging.warning(f"[CCTV {cctv_id}] Belum ada frame, tunggu proses deteksi...")
-                    last_log = time.time()
-                time.sleep(0.1)
-                continue
-
+            if frame is None or time.time() - last_frame_time > 5:  # Freeze >5s
+                frame = placeholder_frame
+                logging.warning(f"[CCTV {cctv_id}] Using placeholder (freeze detected).")
+            else:
+                last_frame_time = time.time()
             success, jpeg = cv2.imencode(".jpg", frame)
             if not success:
                 time.sleep(0.05)
                 continue
-
             yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n")
             time.sleep(0.03)
 
     return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-@app.route("/api/dashboard/summary_today", methods=["GET"])
+@app.route('/api/dashboard/summary_today')
 def summary_today():
     from db.db_config import get_connection
     conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-
-    today = datetime.date.today()
-
-    # Ambil nama-nama violation aktif (no- class yang True)
-    active_no_classes = [k for k, v in config.PPE_CLASSES.items() if v and k.startswith("no-")]
-    if not active_no_classes:
-        return jsonify({"error": "No active 'no-' violations."}), 400
-
-    format_strings = ','.join(['%s'] * len(active_no_classes))
-
-    query = f"""
-        SELECT v.name AS violation_name, COALESCE(SUM(l.total_violation), 0) AS total
-        FROM violation_daily_log l
-        JOIN violation_data v ON v.id = l.id_violation
-        WHERE l.log_date = %s AND v.name IN ({format_strings})
-        GROUP BY v.name;
-    """
-    cur.execute(query, [today] + active_no_classes)
-    rows = cur.fetchall()
-    cur.close()
+    cursor = conn.cursor(dictionary=True)
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    logging.info(f"Querying summary for {today}")
+    
+    # Ambil semua jenis violation dari violation_data sebagai baseline
+    cursor.execute("""
+        SELECT v.name
+        FROM violation_data v
+        WHERE v.name LIKE 'no-%'
+    """)
+    all_violations = {row['name']: None for row in cursor.fetchall()}
+    
+    # Hitung data untuk hari ini
+    cursor.execute("""
+        SELECT v.name, COALESCE(COUNT(vdl.id_violation), 0) as count
+        FROM violation_data v
+        LEFT JOIN violation_daily_log vdl ON vdl.id_violation = v.id AND vdl.log_date = %s
+        WHERE v.name LIKE 'no-%'
+        GROUP BY v.name
+    """, (today,))
+    result = cursor.fetchall() or []
+    
+    # Gabungkan semua violation dengan count (0 jadi "-")
+    summary = {v: (str(r['count']) if r else "-") for v in all_violations for r in [next((r for r in result if r['name'] == v), None)]}
+    logging.info(f"Summary result: {summary}")
+    cursor.close()
     conn.close()
+    return jsonify(summary)
 
-    # Buat dictionary lengkap agar yang tidak punya data muncul '-'
-    result = {}
-    for name in active_no_classes:
-        value = next((r["total"] for r in rows if r["violation_name"] == name), None)
-        result[name] = value if value and value > 0 else "-"
-
-    return jsonify(result)
-
-@app.route("/api/dashboard/top_cctv_today", methods=["GET"])
+@app.route('/api/dashboard/top_cctv_today')
 def top_cctv_today():
     from db.db_config import get_connection
     conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-    today = datetime.date.today()
-
-    # Ambil top 5 CCTV berdasarkan total pelanggaran
-    cur.execute("""
-        SELECT c.id, c.name AS cctv_name, c.location,
-               SUM(l.total_violation) AS total_violations
-        FROM violation_daily_log l
-        JOIN cctv_data c ON c.id = l.id_cctv
-        WHERE l.log_date = %s
-        GROUP BY c.id
-        ORDER BY total_violations DESC
-        LIMIT 5;
+    cursor = conn.cursor(dictionary=True)
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    logging.info(f"Querying top CCTV for {today}")
+    cursor.execute("""
+        SELECT cd.id, cd.name, cd.location, COUNT(vdl.id_violation) as total
+        FROM cctv_data cd
+        LEFT JOIN violation_daily_log vdl ON vdl.id_cctv = cd.id AND DATE(vdl.log_date) = %s
+        GROUP BY cd.id, cd.name, cd.location
+        ORDER BY total DESC
+        LIMIT 5
     """, (today,))
-    top_cctv = cur.fetchall()
-
-    if not top_cctv:
-        return jsonify([])
-
-    cctv_ids = [row["id"] for row in top_cctv]
-    format_strings = ','.join(['%s'] * len(cctv_ids))
-
-    # Ambil breakdown per violation (no-* aktif)
-    active_no_classes = [k for k, v in config.PPE_CLASSES.items() if v and k.startswith("no-")]
-    format_no = ','.join(['%s'] * len(active_no_classes))
-
-    query = f"""
-        SELECT l.id_cctv, v.name AS violation_name, SUM(l.total_violation) AS total
-        FROM violation_daily_log l
-        JOIN violation_data v ON v.id = l.id_violation
-        WHERE l.log_date = %s AND l.id_cctv IN ({format_strings}) AND v.name IN ({format_no})
-        GROUP BY l.id_cctv, v.name;
-    """
-    cur.execute(query, [today] + cctv_ids + active_no_classes)
-    breakdown = cur.fetchall()
-    cur.close()
+    result = cursor.fetchall()
+    logging.info(f"Top CCTV result: {result}")
+    cursor.close()
     conn.close()
-
-    # Gabungkan hasil
-    result = []
-    for c in top_cctv:
-        cctv_breakdown = [
-            {"violation": b["violation_name"], "total": b["total"]}
-            for b in breakdown if b["id_cctv"] == c["id"]
-        ]
-        result.append({
-            "cctv_name": c["cctv_name"],
-            "location": c["location"],
-            "total_violations": c["total_violations"],
-            "breakdown": cctv_breakdown
-        })
-
     return jsonify(result)
 
-@app.route("/api/dashboard/weekly_trend", methods=["GET"])
+@app.route('/api/dashboard/weekly_trend')
 def weekly_trend():
     from db.db_config import get_connection
-    conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-
-    cur.execute("""
-        SELECT log_date, SUM(total_violation) AS total
-        FROM violation_daily_log
-        WHERE log_date >= CURDATE() - INTERVAL 6 DAY
-        GROUP BY log_date
-        ORDER BY log_date;
-    """)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    # Lengkapi tanggal yang tidak ada data
-    today = datetime.date.today()
-    dates = [(today - datetime.timedelta(days=i)) for i in range(6, -1, -1)]
-    result = []
-    for d in dates:
-        found = next((r["total"] for r in rows if r["log_date"] == d), 0)
-        result.append({"date": d.strftime("%Y-%m-%d"), "total": found})
-
-    return jsonify(result)
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        logging.info("Querying weekly trend for last 7 days")
+        cursor.execute("""
+            SELECT DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY)) as date, 
+                   COALESCE(COUNT(vdl.id_violation), 0) as value
+            FROM (SELECT 0 as a UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) a
+            LEFT JOIN violation_daily_log vdl ON vdl.log_date = DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY))
+            GROUP BY DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY))
+            ORDER BY date
+        """)
+        result = cursor.fetchall() or []
+        logging.info(f"Weekly trend result: {result}")
+        cursor.close()
+        conn.close()
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Weekly trend error: {str(e)} - Query: {cursor._last_executed if 'cursor' in locals() else 'N/A'}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     config.annotated_frames = {}
@@ -182,4 +139,4 @@ if __name__ == "__main__":
     logging.info("Scheduler thread started (daily log + cleanup).")
 
     # Jalankan Flask server
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)  # Tambah debug=True
