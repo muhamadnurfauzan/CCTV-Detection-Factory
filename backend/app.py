@@ -1,10 +1,12 @@
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
+from threading import Thread
 import cv2
 import time
 import logging
-import cctv_detection
 import config
+import cctv_detection
+import scheduler  
 
 app = Flask(__name__)
 CORS(app)
@@ -25,6 +27,7 @@ def get_all_cctv():
 @app.route("/api/video_feed")
 def video_feed():
     cctv_id = int(request.args.get("id", 1))
+
     def gen():
         last_log = 0
         while True:
@@ -48,6 +51,14 @@ def video_feed():
 
 if __name__ == "__main__":
     config.annotated_frames = {}
+
+    # Jalankan deteksi multi-CCTV
     threads = cctv_detection.start_all_detections()
     logging.info(f"Started {len(threads)} CCTV threads.")
+
+    # Jalankan scheduler otomatis (rekap & pembersihan)
+    Thread(target=scheduler.scheduler_thread, daemon=True).start()
+    logging.info("Scheduler thread started (daily log + cleanup).")
+
+    # Jalankan Flask server
     app.run(host="0.0.0.0", port=5000, threaded=True)

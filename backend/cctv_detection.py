@@ -97,20 +97,33 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         logging.error(f"[CCTV {cctv_id}] Upload ke Supabase gagal: {e}")
         return
 
-    # --- Simpan log ke MySQL ---
+    # --- Simpan log + update daily log ---
     try:
         conn = get_connection()
         cur = conn.cursor()
+
+        # Simpan violation_detection
         cur.execute("""
             INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
             VALUES (%s, (SELECT id FROM violation_data WHERE name=%s), %s, NOW());
         """, (cctv_id, class_name, public_url))
+
+        # Update atau tambah log harian
+        cur.execute("""
+            INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation)
+            VALUES (CURDATE(), %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1)
+            ON DUPLICATE KEY UPDATE 
+                total_violation = total_violation + VALUES(total_violation),
+                latest_update = CURRENT_TIMESTAMP;
+        """, (cctv_id, class_name))
+
         conn.commit()
         cur.close()
         conn.close()
-        logging.info(f"[CCTV {cctv_id}] Violation logged in DB & uploaded: {public_url}")
+
+        logging.info(f"[CCTV {cctv_id}] Violation logged & daily count updated.")
     except Exception as e:
-        logging.error(f"[DB] Gagal simpan log violation: {e}")
+        logging.error(f"[DB] Gagal update log violation/daily: {e}")
 
     data["last_times"][class_name] = now
 
