@@ -16,7 +16,7 @@ export default function Navbar() {
   );
 
   return (
-    <nav className="bg-white shadow-sm p-3 flex gap-3">
+    <nav className="bg-white shadow-sm p-3 flex gap-3 sticky top-0 z-50">
       {navItem("/", "Dashboard")}
       {navItem("/cctv", "Daftar CCTV")}
     </nav>
