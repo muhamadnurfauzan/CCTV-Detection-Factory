@@ -10,7 +10,6 @@ import scheduler
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from threading import Thread
-# RealDictCursor adalah ekuivalen dari dictionary=True untuk psycopg2
 from psycopg2.extras import RealDictCursor 
 
 app = Flask(__name__)
@@ -109,28 +108,20 @@ def summary_today():
 @app.route('/api/dashboard/top_cctv_today')
 def top_cctv_today():
     """
-    2. Menunjukkan top 5 kamera CCTV dan total pelanggaran per jenis (combo bar chart).
+    Dashboard: menampilkan Top 5 CCTV berdasarkan total pelanggaran hari ini,
+    lengkap dengan breakdown per jenis pelanggaran.
     """
     conn = None
     cursor = None
     try:
         from db.db_config import get_connection
         conn = get_connection()
-        # FIX: Menggunakan cursor_factory untuk psycopg2
-        cursor = conn.cursor(cursor_factory=RealDictCursor) 
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         logging.info(f"Querying top CCTV for {today}")
 
-        # Dapatkan semua nama violation (keys)
-        cursor.execute("""
-            SELECT name
-            FROM violation_data 
-            WHERE name LIKE 'no-%'
-            ORDER BY id
-        """)
-        
-        # Step 1: Hitung Total semua violation per CCTV untuk hari ini, dan ambil Top 5 CCTV ID
-        # MENGHILANGKAN %s dan MENGGUNAKAN CURRENT_DATE
+        # 1. Ambil ID top 5 CCTV berdasarkan total pelanggaran hari ini
         cursor.execute("""
             SELECT cd.id
             FROM cctv_data cd
@@ -140,17 +131,18 @@ def top_cctv_today():
             ORDER BY SUM(vdl.total_violation) DESC
             LIMIT 5
         """)
-        
-        # Menggunakan LIST. Jika kosong, akan dikembalikan [] di bawah.
-        top_cctv_ids = [row['id'] for row in cursor.fetchall()]
-        
-        if not top_cctv_ids:
-            return jsonify([]) # Tidak ada data hari ini
-            
-        # Step 2: Ambil semua data cctv_data dan violation_daily_log untuk 5 CCTV teratas
-        
-        # PERBAIKAN KRUSIAL: 
-        # Mengganti IN %s menjadi WHERE cd.id = ANY(%s) untuk menghindari isu parameterisasi tuple/list
+        top_cctv_rows = cursor.fetchall()
+
+        # Pastikan hasil tidak kosong
+        if not top_cctv_rows:
+            logging.info("Tidak ada CCTV dengan pelanggaran hari ini.")
+            return jsonify([])
+
+        top_cctv_ids = [r["id"] for r in top_cctv_rows]
+        logging.info(f"Top CCTV IDs: {top_cctv_ids}")
+
+        # 2. Ambil data detail setiap CCTV
+        # Gunakan ANY() agar Postgres menerima array integer
         query = """
             SELECT 
                 cd.id,
@@ -159,71 +151,59 @@ def top_cctv_today():
                 vd.name AS violation_name,
                 COALESCE(SUM(vdl.total_violation), 0) AS count_per_type
             FROM cctv_data cd
-            CROSS JOIN violation_data vd 
+            CROSS JOIN violation_data vd
             LEFT JOIN violation_daily_log vdl 
                 ON vdl.id_cctv = cd.id 
                 AND vdl.id_violation = vd.id
-                AND vdl.log_date = CURRENT_DATE  -- Menggunakan CURRENT_DATE
-            WHERE cd.id = ANY(%s)               -- Menggunakan ANY() untuk array ID
-            AND vd.name LIKE 'no-%'
+                AND vdl.log_date = CURRENT_DATE
+            WHERE cd.id = ANY(%s)
+              AND vd.name LIKE 'no-%%'
             GROUP BY cd.id, cd.name, cd.location, vd.name
             ORDER BY cd.id, vd.name;
         """
-        
-        # Parameter eksekusi: HANYA LIST ID CCTV, DIBUNGKUS DALAM TUPLE
-        # Psycopg2 akan secara otomatis mengkonversi list/tuple Python menjadi array Postgres.
-        params = (top_cctv_ids,) 
-        
-        # DEBUG: Menambahkan logging untuk parameter yang dikirim
-        logging.info(f"Top CCTV IDs: {top_cctv_ids}")
-        logging.info(f"Executing query with params: {params}")
 
-        cursor.execute(query, params)
-
+        # 🔧 Eksekusi query dengan parameter array
+        cursor.execute(query, (top_cctv_ids,))
         raw_results = cursor.fetchall()
 
-        # 3. Transformasi data untuk frontend (Menggabungkan baris menjadi objek CCTV)
+        if not raw_results:
+            logging.warning("Query returned no results.")
+            return jsonify([])
+
+        # 3. Transformasi hasil ke struktur JSON per CCTV
         final_result = {}
         for row in raw_results:
-            cctv_id = row['id']
-            v_name = row['violation_name']
-            v_count = row['count_per_type']
-            
+            cctv_id = row["id"]
             if cctv_id not in final_result:
                 final_result[cctv_id] = {
-                    'id': cctv_id,
-                    'name': row['name'],
-                    'location': row['location'],
-                    'total': 0,
+                    "id": cctv_id,
+                    "name": row["name"],
+                    "location": row["location"],
+                    "total": 0,
+                    "breakdown": []
                 }
-            
-            # Tambahkan hitungan per jenis
-            final_result[cctv_id][v_name] = v_count
-            
-            # Hitung total keseluruhan
-            final_result[cctv_id]['total'] += v_count
 
-        result = list(final_result.values())
-        
-        # Sortir lagi berdasarkan total sebelum dikirim, untuk jaga-jaga
-        result.sort(key=lambda x: x['total'], reverse=True)
-        
-        logging.info(f"Top CCTV result: {result}")
-        return jsonify(result)
-        
+            final_result[cctv_id]["breakdown"].append({
+                "violation": row["violation_name"],
+                "total": row["count_per_type"]
+            })
+            final_result[cctv_id]["total"] += row["count_per_type"]
+
+        # 4. Urutkan berdasarkan total pelanggaran tertinggi
+        sorted_result = sorted(final_result.values(), key=lambda x: x["total"], reverse=True)
+
+        logging.info(f"Top CCTV result: {sorted_result}")
+        return jsonify(sorted_result)
+
     except Exception as e:
-        # Menambahkan pesan error yang lebih informatif untuk debugging
-        logging.error(f"Error in top_cctv_today: {str(e)}")
-        # Optional: Print the failed query and parameters for internal debugging
-        # if cursor:
-        #     logging.error(f"Failed Query: {query}")
-        #     logging.error(f"Failed Params: {params}")
+        logging.exception(f"Error in top_cctv_today: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
-        
-    finally:
-        if cursor: cursor.close()
-        if conn: conn.close()
 
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/dashboard/weekly_trend')
 def weekly_trend():

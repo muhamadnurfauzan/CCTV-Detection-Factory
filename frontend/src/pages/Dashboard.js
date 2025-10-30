@@ -58,12 +58,20 @@ const Dashboard = () => {
     
   // --- Top CCTV Data (Bar/Combo Chart View) ---
   // Data sudah diformat di backend, kita hanya perlu menamainya untuk sumbu X
-  const barData = topCCTV.map(cctv => ({
-    ...cctv,
-    // Label sumbu X: Total keseluruhan violation, Nama CCTV, Lokasi CCTV
-    // Total keseluruhan violation, Nama CCTV, Lokasi CCTV
-    label: `${cctv.total} \n ${cctv.name} \n (${cctv.location})`,
-  }));
+  const barData = topCCTV.map((cctv) => {
+    const base = {
+      label: `${cctv.name}\n(${cctv.location})`,
+    };
+
+    // Flatten breakdown ke level atas
+    if (Array.isArray(cctv.breakdown)) {
+      cctv.breakdown.forEach((b) => {
+        base[b.violation] = Number(b.total);
+      });
+    }
+
+    return base;
+  });
 
   // --- Weekly Trend Data (Line Chart View) ---  
   // 1. Pra-pemrosesan: Buat Map untuk pencarian O(1) dan ekstrak tanggal YYYY-MM-DD
@@ -84,7 +92,6 @@ const Dashboard = () => {
     // Mundur 6 hari hingga 0 hari (untuk 7 hari)
     date.setDate(today.getDate() - (6 - i)); 
     
-    const day = date.toLocaleDateString('id-ID', { weekday: 'short' }); 
     const dateStr = date.toISOString().split('T')[0]; // Format '2025-10-27'
     
     // 2. Gunakan Map yang sudah dibuat untuk mencari data
@@ -93,7 +100,7 @@ const Dashboard = () => {
     // Label Sumbu X: Hari dan Tanggal
     return { 
         ...trendData, 
-        day_label: `${day}, ${date.getDate()}`, 
+        day_label: date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit' }),
         date_full: dateStr
     };
   });

@@ -14,6 +14,7 @@ from db.db_config import get_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# --- ASUMSI DUMMY FUNCTION ---
 def point_in_polygon(point, polygon):
     x, y = point
     inside = False
@@ -29,6 +30,50 @@ def point_in_polygon(point, polygon):
                     inside = not inside
         p1x, p1y = p2x, p2y
     return inside
+
+def upload_violation_image(image_bytes, cctv_id, class_name):
+    # DUMMY: Mengembalikan URL
+    return f"https://supabase.co/storage/cctv-{cctv_id}/{class_name}.jpg"
+# --------------------------------------------------------------------------
+
+# --- FUNGSI GENERIK UNTUK MERESET POSTGRESQL SEQUENCE ---
+def reset_table_sequence(table_name):
+    """
+    Memastikan auto-increment ID tabel (SERIAL) dimulai setelah nilai MAX(id) yang ada.
+    Dijalankan sekali saat aplikasi startup untuk menghindari masalah duplicate key setelah migrasi data.
+    """
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        
+        # Nama sequence di PostgreSQL adalah <nama_tabel>_<nama_kolom>_seq
+        sequence_name = f"{table_name}_id_seq" 
+
+        # Kueri setval(nama_sequence, max_id, true)
+        # COALESCE(MAX(id), 1) memastikan setidaknya mulai dari 1 jika tabel kosong
+        cur.execute(f"""
+            SELECT setval('{sequence_name}', COALESCE(MAX(id), 1), true) 
+            FROM {table_name};
+        """)
+        new_val = cur.fetchone()[0]
+        conn.commit()
+        logging.info(f"[DB INIT] Sequence for {table_name} reset to: {new_val}")
+        return True
+    except Exception as e:
+        # Pengecualian: sequence mungkin tidak ada jika tabel tidak punya SERIAL id
+        logging.warning(f"[DB INIT] Gagal me-reset sequence ID untuk {table_name}: {e}")
+        return False
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+# --- EKSEKUSI GLOBAL UNTUK SEMUA TABEL STATIS/DINAMIS DENGAN SERIAL ID ---
+# Dijalankan saat modul ini diimpor (yaitu saat app.py dimulai)
+reset_table_sequence('violation_detection')
+reset_table_sequence('cctv_data')
+reset_table_sequence('violation_data')
 
 def open_stream(cctv, max_retries=5, retry_delay=1):
     video_path = f"rtsps://{cctv['ip_address']}:{cctv['port']}/{cctv['token']}?enableSrtp"
@@ -115,12 +160,13 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         conn = get_connection()
         cur = conn.cursor()
 
-        # Simpan violation_detection
+        # Simpan violation_detection (PostgreSQL)
         cur.execute("""
             INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
-            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW());
+            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW())
+            RETURNING id; 
         """, (cctv_id, class_name, public_url))
-
+        
         # PostgreSQL tidak punya ON DUPLICATE KEY UPDATE → pakai ON CONFLICT
         cur.execute("""
             INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation, latest_update)
@@ -153,7 +199,7 @@ def capture_thread(cctv_id, frame_queue):
         ret, frame = cap.read()
         if not ret:
             fail_count += 1
-            logging.warning(f"[CCTV {cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
+            logging.warning(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
             if fail_count >= max_fails:
                 cap = reconnect_cap(cctv, cap)
                 if not cap:
