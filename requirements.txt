@@ -4,7 +4,7 @@ numpy==1.26.4
 opencv-python==4.11.0.86
 ultralytics 
 flask 
-mysql-connector-python
+psycopg2-binary
 flask-cors
 supabase
 python-dotenv

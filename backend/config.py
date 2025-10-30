@@ -2,11 +2,15 @@ import os
 import sys
 import json
 import numpy as np
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from supabase import create_client, Client
 from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from db.db_config import get_connection
 
 # --- Model dan Pengaturan Umum ---
 MODEL_PATH = "model/helm detection.pt"
@@ -39,13 +43,23 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "violations")
 
-# --- Shared memory dict (diinisialisasi di app.py) ---
-annotated_frames = None
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+# --- PostgreSQL Connection ---
+def get_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        port=os.getenv("DB_PORT"),
+        sslmode=os.getenv("DB_SSLMODE", "require")
+    )
 
 # --- Fetch CCTV aktif dari database ---
 def get_all_active_cctv():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT * FROM cctv_data WHERE enabled = TRUE;")
     results = cursor.fetchall()
     cursor.close()
@@ -78,21 +92,28 @@ def load_roi_from_json(json_path):
 # --- Muat konfigurasi semua CCTV aktif ---
 def load_all_cctv_configs():
     configs = {}
-    active_cctvs = get_all_active_cctv()
-    for cctv in active_cctvs:
-        cctv_id = cctv["id"]
-        roi, w, h = load_roi_from_json(cctv.get("area"))
-        configs[cctv_id] = {
-            "name": cctv.get("name", f"CCTV {cctv_id}"),
-            "location": cctv.get("location", "Unknown"),
-            "ip_address": cctv.get("ip_address"),
-            "port": cctv.get("port"),
-            "token": cctv.get("token"),
-            "roi": roi,
-            "json_width": w,
-            "json_height": h,
-        }
+    try:
+        active_cctvs = get_all_active_cctv()
+        for cctv in active_cctvs:
+            cctv_id = cctv["id"]
+            roi, w, h = load_roi_from_json(cctv.get("area"))
+            configs[cctv_id] = {
+                "name": cctv.get("name", f"CCTV {cctv_id}"),
+                "location": cctv.get("location", "Unknown"),
+                "ip_address": cctv.get("ip_address"),
+                "port": cctv.get("port"),
+                "token": cctv.get("token"),
+                "roi": roi,
+                "json_width": w,
+                "json_height": h,
+            }
+    except Exception as e:
+        print(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")
     return configs
 
 # --- Inisialisasi konfigurasi global ---
-cctv_configs = load_all_cctv_configs()
+try:
+    cctv_configs = load_all_cctv_configs()
+except Exception as e:
+    print("[WARNING] CCTV config belum dapat dimuat:", e)
+    cctv_configs = {}

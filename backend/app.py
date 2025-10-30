@@ -1,6 +1,3 @@
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS
-from threading import Thread
 import numpy as np
 import cv2
 import time
@@ -10,15 +7,22 @@ import config
 import cctv_detection
 import scheduler  
 
+from flask import Flask, Response, jsonify, request
+from flask_cors import CORS
+from threading import Thread
+# RealDictCursor adalah ekuivalen dari dictionary=True untuk psycopg2
+from psycopg2.extras import RealDictCursor 
+
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")  # Ubah ke ERROR
+# Ubah level logging dari ERROR ke INFO agar pesan logging.info() juga terlihat
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")  
 
 @app.route("/api/cctv_all", methods=["GET"])
 def get_all_cctv():
     from db.db_config import get_connection
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT id, name, ip_address, location, enabled FROM cctv_data;")
     rows = cursor.fetchall()
     cursor.close()
@@ -59,12 +63,12 @@ def summary_today():
     try:
         from db.db_config import get_connection
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        # FIX: Menggunakan cursor_factory untuk psycopg2
+        cursor = conn.cursor(cursor_factory=RealDictCursor) 
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         logging.info(f"Querying summary for {today}")
         
         # Ambil semua jenis violation dari violation_data sebagai baseline
-        # Ini penting agar semua kategori (no-helmet, no-vest, dll.) muncul di hasil, bahkan jika count = 0
         cursor.execute("""
             SELECT v.name
             FROM violation_data v
@@ -72,23 +76,22 @@ def summary_today():
         """)
         all_violations = {row['name']: None for row in cursor.fetchall()}
         
-        # Hitung data untuk hari ini: Gunakan SUM(vdl.total_violation) untuk mendapatkan hitungan sebenarnya
+        # Hitung data untuk hari ini
         cursor.execute("""
             SELECT v.name, COALESCE(SUM(vdl.total_violation), 0) as count
             FROM violation_data v
             LEFT JOIN violation_daily_log vdl 
                 ON vdl.id_violation = v.id 
-                AND vdl.log_date = %s
+                AND vdl.log_date = CURRENT_DATE
             WHERE v.name LIKE 'no-%'
-            GROUP BY v.name
-        """, (today,))
+            GROUP BY v.name;
+        """)
         
         result = cursor.fetchall()
         
         # Gabungkan hasil (count) ke dalam template (all_violations)
         counted_map = {r['name']: str(r['count']) for r in result}
         
-        # Gabungkan semua violation dengan count (jika count 0, hasil query adalah '0', jika tidak ada data sama sekali, gunakan "-")
         summary = {name: counted_map.get(name, "-") for name in all_violations.keys()}
         
         logging.info(f"Summary result: {summary}")
@@ -113,7 +116,8 @@ def top_cctv_today():
     try:
         from db.db_config import get_connection
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        # FIX: Menggunakan cursor_factory untuk psycopg2
+        cursor = conn.cursor(cursor_factory=RealDictCursor) 
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         logging.info(f"Querying top CCTV for {today}")
 
@@ -124,33 +128,30 @@ def top_cctv_today():
             WHERE name LIKE 'no-%'
             ORDER BY id
         """)
-        violation_names = [row['name'] for row in cursor.fetchall()]
-        
-        # SQL untuk mendapatkan detail hitungan per CCTV dan total keseluruhan.
-        # Catatan: Ini mengasumsikan database Anda mendukung fitur JSON aggregation atau subqueries efisien. 
-        # Untuk kepatuhan SQL umum dan hasil yang akurat, kita gunakan aggregation di SQL.
         
         # Step 1: Hitung Total semua violation per CCTV untuk hari ini, dan ambil Top 5 CCTV ID
+        # MENGHILANGKAN %s dan MENGGUNAKAN CURRENT_DATE
         cursor.execute("""
             SELECT cd.id
             FROM cctv_data cd
             JOIN violation_daily_log vdl ON vdl.id_cctv = cd.id
-            WHERE vdl.log_date = %s
+            WHERE vdl.log_date = CURRENT_DATE
             GROUP BY cd.id
             ORDER BY SUM(vdl.total_violation) DESC
             LIMIT 5
-        """, (today,))
-        top_cctv_ids = tuple([row['id'] for row in cursor.fetchall()])
+        """)
+        
+        # Menggunakan LIST. Jika kosong, akan dikembalikan [] di bawah.
+        top_cctv_ids = [row['id'] for row in cursor.fetchall()]
         
         if not top_cctv_ids:
             return jsonify([]) # Tidak ada data hari ini
             
         # Step 2: Ambil semua data cctv_data dan violation_daily_log untuk 5 CCTV teratas
-        # Kita akan menggabungkan hasil dari violation_daily_log berdasarkan id_cctv dan id_violation
-        placeholders = ', '.join(['%s'] * len(top_cctv_ids))
         
-        # Query kompleks untuk mendapatkan nama CCTV, lokasi, total keseluruhan, dan total per jenis pelanggaran
-        query = f"""
+        # PERBAIKAN KRUSIAL: 
+        # Mengganti IN %s menjadi WHERE cd.id = ANY(%s) untuk menghindari isu parameterisasi tuple/list
+        query = """
             SELECT 
                 cd.id,
                 cd.name,
@@ -158,21 +159,27 @@ def top_cctv_today():
                 vd.name AS violation_name,
                 COALESCE(SUM(vdl.total_violation), 0) AS count_per_type
             FROM cctv_data cd
-            -- CROSS JOIN semua jenis violation untuk memastikan semua kategori muncul, bahkan jika count = 0
             CROSS JOIN violation_data vd 
             LEFT JOIN violation_daily_log vdl 
                 ON vdl.id_cctv = cd.id 
                 AND vdl.id_violation = vd.id
-                AND vdl.log_date = %s
-            WHERE cd.id IN ({placeholders}) 
+                AND vdl.log_date = CURRENT_DATE  -- Menggunakan CURRENT_DATE
+            WHERE cd.id = ANY(%s)               -- Menggunakan ANY() untuk array ID
             AND vd.name LIKE 'no-%'
             GROUP BY cd.id, cd.name, cd.location, vd.name
-            ORDER BY cd.id, vd.name
+            ORDER BY cd.id, vd.name;
         """
         
-        # Gabungkan today dengan top_cctv_ids untuk parameter eksekusi
-        params = (today,) + top_cctv_ids
+        # Parameter eksekusi: HANYA LIST ID CCTV, DIBUNGKUS DALAM TUPLE
+        # Psycopg2 akan secara otomatis mengkonversi list/tuple Python menjadi array Postgres.
+        params = (top_cctv_ids,) 
+        
+        # DEBUG: Menambahkan logging untuk parameter yang dikirim
+        logging.info(f"Top CCTV IDs: {top_cctv_ids}")
+        logging.info(f"Executing query with params: {params}")
+
         cursor.execute(query, params)
+
         raw_results = cursor.fetchall()
 
         # 3. Transformasi data untuk frontend (Menggabungkan baris menjadi objek CCTV)
@@ -205,7 +212,12 @@ def top_cctv_today():
         return jsonify(result)
         
     except Exception as e:
+        # Menambahkan pesan error yang lebih informatif untuk debugging
         logging.error(f"Error in top_cctv_today: {str(e)}")
+        # Optional: Print the failed query and parameters for internal debugging
+        # if cursor:
+        #     logging.error(f"Failed Query: {query}")
+        #     logging.error(f"Failed Params: {params}")
         return jsonify({"error": "Internal Server Error"}), 500
         
     finally:
@@ -217,33 +229,47 @@ def top_cctv_today():
 def weekly_trend():
     """
     3. Menunjukkan total violation (SUM(total_violation)) selama 7 hari terakhir.
+    Menggunakan TO_CHAR untuk memaksa format tanggal yang konsisten dengan frontend.
     """
     conn = None
     cursor = None
     try:
         from db.db_config import get_connection
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         logging.info("Querying weekly trend for last 7 days")
         
-        # Kueri untuk mendapatkan 7 hari terakhir dan total pelanggaran (SUM(total_violation))
+        # Kueri untuk mendapatkan 7 hari terakhir dan total pelanggaran
         cursor.execute("""
-            SELECT DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY)) as date, 
-                   COALESCE(SUM(vdl.total_violation), 0) as value
-            FROM (SELECT 0 as a UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) a
+            SELECT 
+                -- Gunakan TO_CHAR untuk memastikan format string tanggal yang konsisten
+                TO_CHAR(gs::date, 'Dy, DD Mon YYYY 00:00:00') AS date,
+                COALESCE(SUM(vdl.total_violation), 0) AS value
+            FROM generate_series(CURRENT_DATE - INTERVAL '6 day', CURRENT_DATE, '1 day') gs
             LEFT JOIN violation_daily_log vdl 
-                ON DATE(vdl.log_date) = DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY))
-            GROUP BY DATE(DATE_SUB(CURRENT_DATE, INTERVAL (6 - a.a) DAY))
-            ORDER BY date
+                ON vdl.log_date = gs::date
+            GROUP BY gs
+            ORDER BY gs;
         """)
-        
+
         result = cursor.fetchall() or []
-        logging.info(f"Weekly trend result: {result}")
-        return jsonify(result)
+        
+        # Mengubah value dari integer/float menjadi string (agar sama dengan format API sebelumnya)
+        # Serta memastikan kunci 'date' memiliki timezone GMT di akhir string
+        formatted_result = []
+        for row in result:
+            formatted_result.append({
+                # Pastikan format GMT yang dibutuhkan frontend tetap ada
+                'date': f"{row['date']} GMT", 
+                'value': str(row['value'])
+            })
+            
+        logging.info(f"Weekly trend result: {formatted_result}")
+        return jsonify(formatted_result)
         
     except Exception as e:
-        # Menampilkan kueri terakhir jika terjadi error (hanya jika cursor sudah ada)
-        last_query = cursor._last_executed if 'cursor' in locals() and hasattr(cursor, '_last_executed') else 'N/A'
+        # Menangani kesalahan kueri dengan lebih baik
+        last_query = cursor.query.decode('utf-8') if cursor and hasattr(cursor, 'query') else 'N/A'
         logging.error(f"Weekly trend error: {str(e)} - Query: {last_query}")
         return jsonify({"error": str(e)}), 500
         
@@ -263,4 +289,4 @@ if __name__ == "__main__":
     logging.info("Scheduler thread started (daily log + cleanup).")
 
     # Jalankan Flask server
-    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)  # Tambah debug=True
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)

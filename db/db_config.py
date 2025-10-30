@@ -1,9 +1,27 @@
-import mysql.connector
+# import mysql.connector
+
+# def get_connection():
+#     return mysql.connector.connect(
+#         host="localhost",
+#         user="root",
+#         password="1sampai8",
+#         database="SAI"
+#     )
+
+import psycopg2
+import os
+from dotenv import load_dotenv
+
+# Load environment variables dari file .env
+load_dotenv()
 
 def get_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="1sampai8",
-        database="SAI"
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        port=os.getenv("DB_PORT"),
+        sslmode="require"  
     )
+

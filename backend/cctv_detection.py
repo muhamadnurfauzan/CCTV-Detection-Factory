@@ -118,23 +118,24 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         # Simpan violation_detection
         cur.execute("""
             INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
-            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s), %s, NOW());
+            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW());
         """, (cctv_id, class_name, public_url))
 
-        # Update atau tambah log harian
+        # PostgreSQL tidak punya ON DUPLICATE KEY UPDATE → pakai ON CONFLICT
         cur.execute("""
-            INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation)
-            VALUES (CURDATE(), %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1)
-            ON DUPLICATE KEY UPDATE 
-                total_violation = total_violation + VALUES(total_violation),
-                latest_update = CURRENT_TIMESTAMP;
+            INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation, latest_update)
+            VALUES (CURRENT_DATE, %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1, CURRENT_TIMESTAMP)
+            ON CONFLICT (log_date, id_cctv, id_violation)
+            DO UPDATE SET 
+                total_violation = violation_daily_log.total_violation + 1,
+                latest_update = EXCLUDED.latest_update;
         """, (cctv_id, class_name))
 
         conn.commit()
         cur.close()
         conn.close()
 
-        logging.info(f"[CCTV {cctv_id}] Violation logged & daily count updated.")
+        logging.info(f"[CCTV {cctv_id}] Violation logged & daily count updated (PostgreSQL).")
     except Exception as e:
         logging.error(f"[DB] Gagal update log violation/daily: {e}")
 
