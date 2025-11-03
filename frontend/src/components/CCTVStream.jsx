@@ -27,15 +27,15 @@ function CCTVStream({ cctvId, onBack }) {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
+      <h1 className="text-3xl font-bold mb-2 text-gray-800 border-b pb-2">Streaming CCTV #{cctvId}</h1>
+      <div className="flex grid-cols-2 gap-4 my-2 justify-start">
+        <div className="flex items-center space-x-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition text-sm"
+            className="bg-indigo-500 text-white px-2 py-1 rounded-lg hover:bg-indigo-600 transition text-sm"
           >
-            ← Back
+            Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-800">Streaming CCTV #{cctvId}</h1>
         </div>
       </div>
       <div className="max-w-4xl w-full mx-auto bg-white shadow-lg rounded-lg overflow-hidden">

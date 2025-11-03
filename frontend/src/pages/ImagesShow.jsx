@@ -4,8 +4,6 @@ import { format } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import '../styles/MasonryGrid.css';
 
-const PAGE_SIZE = 24;
-
 const ImagesShow = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [images, setImages] = useState([]);
@@ -16,6 +14,44 @@ const ImagesShow = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [imageHeights, setImageHeights] = useState({});
+  const [pageSize, setPageSize] = useState(20);
+
+  // ---- LIMIT PAGINATION ACCORDING DEVICES ----
+  useEffect(() => {
+    const calcPageSize = () => {
+      const width = window.innerWidth;
+      if (width >= 1440) return 24;
+      if (width > 640) return 18;
+      if (width > 320) return 12;
+      return 6;
+    };
+
+    setPageSize(calcPageSize());
+
+    // Dengarkan perubahan ukuran layar
+    const handleResize = () => setPageSize(calcPageSize());
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // ---- HITUNG ROWSPAN ----
+  const calculateRowSpan = (imgUrl) => {
+    if (imageHeights[imgUrl]) return imageHeights[imgUrl];
+
+    const img = new Image();
+    img.src = imgUrl;
+    img.onload = () => {
+      const height = img.naturalHeight;
+      const width = img.naturalWidth;
+      // Asumsi column width ~280px
+      const scaledHeight = (height / width) * 280;
+      const rowSpan = Math.ceil(scaledHeight / 10); // 10px per row
+      setImageHeights(prev => ({ ...prev, [imgUrl]: rowSpan }));
+    };
+    return 30; // fallback
+  };
 
   // ---- FILTER + PAGE FROM URL ----
   const currentPath = useMemo(() => {
@@ -71,7 +107,7 @@ const ImagesShow = () => {
     try {
       const params = new URLSearchParams({
         page: pageNum,
-        limit: PAGE_SIZE,
+        limit: pageSize,
       });
       if (currentPath.cctv) params.append('cctv', currentPath.cctv);
       if (currentPath.year) params.append('year', currentPath.year);
@@ -101,8 +137,8 @@ const ImagesShow = () => {
 
       setImages(safe);
       setHasMore(json.hasMore === true);
-      const totalItems = pageNum * PAGE_SIZE + (json.hasMore ? 1 : 0);
-      setTotalPages(Math.ceil(totalItems / PAGE_SIZE));
+      const totalItems = pageNum * pageSize + (json.hasMore ? 1 : 0);
+      setTotalPages(Math.ceil(totalItems / pageSize));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -152,14 +188,14 @@ const ImagesShow = () => {
       {/* JUDUL DINAMIS */}
       <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Images</h2>
 
-      <p className="mb-4 text-gray-600">
+      <p className="mb-1 text-gray-600">
         {options
           ? `Choose ${options.options === 'cctv' ? 'CCTV' : options.options === 'year' ? 'Year' : options.options === 'month' ? 'Month' : 'Date'}`
           : `Violation ${currentPath.cctv ? `- CCTV ${currentPath.cctv}` : ''}${currentPath.day ? ` - ${format(new Date(currentPath.year, currentPath.month - 1, currentPath.day), 'dd MMM yyyy')}` : ''}`}
       </p>
 
       {/* BREADCRUMB SELALU TAMPIL */}
-      <div className="mb-6 flex items-center space-x-2 text-sm flex-wrap">
+      <div className="mb-1 flex items-center space-x-2 text-sm flex-wrap">
         {breadcrumb.map((crumb, i) => (
           <span key={i}>
             {i > 0 && <span className="mx-2 text-gray-400">›</span>}
@@ -174,8 +210,8 @@ const ImagesShow = () => {
 
       {/* HALAMAN OPSI */}
       {options && (
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="max-w-4xl lg:max-w-full mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {options.data.map(item => {
               const val = typeof item === 'object' ? (item.id ?? item) : item;
               const lbl = typeof item === 'object' ? (item.name ?? val) : item;
@@ -196,7 +232,7 @@ const ImagesShow = () => {
       {/* HALAMAN GAMBAR */}
       {!options && (
         <>
-          {loading && <div className="text-center py-8">Loading...</div>}
+          {loading && <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading...</p></div>}
 
           {images.length === 0 && !loading && (
             <p className="text-center text-gray-500">No pictures can be found.</p>
@@ -207,16 +243,17 @@ const ImagesShow = () => {
               <div className="masonry-grid">
                 {images.map((img, idx) => (
                   <div
-                    key={img.id ?? `img-${idx}`}
-                    className="mb-4 group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow masonry-item cursor-pointer"
+                    key={img.id ?? idx}
+                    className="masonry-item cursor-pointer"
                     onClick={() => setSelectedImage(img)}
                   >
-                    <img
-                      src={img.signedUrl}
-                      alt={img.violation || 'Violation'}
-                      className="w-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="masonry-img-container">
+                      <img
+                        src={img.signedUrl}
+                        alt={img.violation}
+                        className="masonry-img"
+                        loading="lazy"
+                      />
                     </div>
                   </div>
                 ))}
@@ -255,19 +292,27 @@ const ImagesShow = () => {
           className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="relative max-w-5xl w-full max-h-full">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 text-white text-3xl font-bold hover:text-gray-300 z-10"
-            >
-              ×
-            </button>
-
-            <img
-              src={selectedImage.signedUrl}
-              alt={selectedImage.violation || 'Violation'}
-              className="w-full h-auto max-h-screen object-contain rounded-lg"
-            />
+          {/* KOTAK TETAP: 90% lebar, max 900px, rasio 4:3 */}
+          <div 
+            className="relative overflow-hidden mx-auto"
+            style={{ 
+              width: 'min(90vw, 800px)', 
+              height: 'min(70vh, 600px)' 
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* GAMBAR: UTUH, TENGAH, TANPA CROP */}
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <img
+                src={selectedImage.signedUrl}
+                alt={selectedImage.violation || 'Violation'}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+          </div>
+          {/* INFO DI BAWAH */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center">
+            <p className='text-base'>Clik here to close image.</p>
           </div>
         </div>
       )}

@@ -6,9 +6,9 @@ import { Tooltip } from 'react-tooltip';
 const navItemsData = [
     { path: "/", label: "Dashboard", Icon: FaHome },
     { path: "/cctv", label: "CCTVs", Icon: FaVideo },
-    { path: "/#", label: "Camera Setting", Icon: FaSlidersH},
+    // { path: "/#", label: "Camera Setting", Icon: FaSlidersH},
     { path: "/images", label: "Violations", Icon: FaImages},
-    { path: "/#", label: "Reports", Icon: FaBullhorn},
+    { path: "/reports", label: "Reports", Icon: FaBullhorn},
 ];
 
 const Sidebar = ({ isExpanded, setIsExpanded }) => {

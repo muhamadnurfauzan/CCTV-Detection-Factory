@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Sidebar from './components/Sidebar'; 
 import Dashboard from './pages/Dashboard'; 
 import ImagesShow from './pages/ImagesShow'; 
+import Reports from './pages/Reports';
 import CCTVTable from './components/CCTVTable';
 import CCTVStream from './components/CCTVStream';
 import ErrorBoundary from './components/ErrorBoundary'; 
@@ -59,6 +60,7 @@ function App() {
               <Route path="/cctv" element={<CCTVTableWithRouting />} />
               <Route path="/stream/:id" element={<CCTVStreamWrapper />} />
               <Route path="/images" element={<ImagesShow />} />
+              <Route path="/reports" element={<Reports />} />
             </Routes>
           </ErrorBoundary>
         </div>
