@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
 
 function CCTVStream({ cctvId, onBack }) {
-  const [status, setStatus] = useState('Menghubungkan stream...');
+  const [status, setStatus] = useState('Connecting...');
   const imgRef = useRef(null);
 
   useEffect(() => {
@@ -12,8 +12,8 @@ function CCTVStream({ cctvId, onBack }) {
     const streamUrl = `/api/video_feed?id=${cctvId}`;
     console.log(`Streaming dari ${streamUrl}`);
 
-    const handleError = () => setStatus('Gagal memuat stream.');
-    const handleLoad = () => setStatus('Stream aktif!');
+    const handleError = () => setStatus('Streaming Failed.');
+    const handleLoad = () => setStatus('Streaming Active!');
 
     img.onerror = handleError;
     img.onload = handleLoad;
@@ -33,7 +33,7 @@ function CCTVStream({ cctvId, onBack }) {
             onClick={onBack}
             className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition text-sm"
           >
-            ← Kembali
+            ← Back
           </button>
           <h1 className="text-2xl font-bold text-gray-800">Streaming CCTV #{cctvId}</h1>
         </div>

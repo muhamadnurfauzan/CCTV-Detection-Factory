@@ -1,10 +1,15 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams } from "react-router-dom";
 import React, { useState } from 'react';
+import fetch from 'node-fetch';
+
 import Sidebar from './components/Sidebar'; 
 import Dashboard from './pages/Dashboard'; 
+import ImagesShow from './pages/ImagesShow'; 
 import CCTVTable from './components/CCTVTable';
 import CCTVStream from './components/CCTVStream';
 import ErrorBoundary from './components/ErrorBoundary'; 
+
+await fetch('http://localhost:3000/invalidate-cache', { method: 'POST' });
 
 // ---- Wrapper agar streaming tetap kompatibel ----
 const CCTVStreamWrapper = () => {
@@ -31,14 +36,12 @@ function App() {
 
   return (
     <Router>
-      <div className="relative min-h-screen bg-gray-50 overflow-x-hidden">
-        {/* Sidebar Overlay */}
+      <div className="relative min-h-screen bg-gray-50 overflow-x-hidden flex flex-col items-center">
         <Sidebar 
           isExpanded={isSidebarExpanded} 
           setIsExpanded={setIsSidebarExpanded} 
         />
 
-        {/* Backdrop (opsional) */}
         {isSidebarExpanded && (
           <div
             className="fixed inset-0 bg-black bg-opacity-40 z-30"
@@ -46,13 +49,17 @@ function App() {
           />
         )}
 
-        {/* Konten utama (tidak bergeser) */}
-        <div className="transition-all duration-300 p-4 md:p-8" style={{ marginLeft: isSidebarExpanded ? '80px' : '80px' }}>
+        {/* Konten utama */}
+        <div
+          className="transition-all duration-300 p-4 md:p-8 ml-8 2xl:mx-auto max-w-[1440px] w-full"
+          style={{ paddingLeft: isSidebarExpanded ? '80px' : '80px' }}
+        >
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/cctv" element={<CCTVTableWithRouting />} />
               <Route path="/stream/:id" element={<CCTVStreamWrapper />} />
+              <Route path="/images" element={<ImagesShow />} />
             </Routes>
           </ErrorBoundary>
         </div>

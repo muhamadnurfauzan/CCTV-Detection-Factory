@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FaPlus, FaSlidersH } from 'react-icons/fa';
+import { FaPlus, FaSlidersH, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 function CCTVTable({ onSelect }) {
   const [data, setData] = useState([]);
@@ -20,11 +20,11 @@ function CCTVTable({ onSelect }) {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 p-6">
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {/* Judul di kiri */}
-        <h1 className="text-3xl font-bold text-gray-800 self-start">Daftar CCTV</h1>
+      {/* Judul di kiri */}
+      <h1 className="text-3xl font-bold mb-2 text-gray-800 border-b pb-2">CCTVs' List</h1>
+      <div className="flex grid-cols-2 gap-4 my-2 justify-end">
         {/* Search bar dan tombol di kanan */}
-        <div className="flex justify-end items-center space-x-2">
+        <div className="flex items-center space-x-2">
           <button
             className="bg-indigo-500 text-white px-2 py-1 rounded-lg hover:bg-indigo-600 transition"
           >
@@ -37,10 +37,10 @@ function CCTVTable({ onSelect }) {
           </button>
           <input
             type="text"
-            placeholder="Search by name, loc., or IP..."
+            placeholder="Search by Name, IP, or Location..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-64 px-2 py-1 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-64 px-2 py-1 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-opacity-75"
           />
         </div>
       </div>
@@ -72,27 +72,21 @@ function CCTVTable({ onSelect }) {
                   <td className="border p-2 text-gray-600">{cctv.location || '-'}</td>
                   <td className="border p-2 font-semibold text-center">
                     <span
-                      className={`px-2 py-1 rounded text-white ${
+                      className={`px-2 py-1 rounded-full text-white ${
                         cctv.enabled === true || cctv.enabled === 1 ? 'bg-green-600' : 'bg-red-600'
                       }`}
                     >
-                      {cctv.enabled === true || cctv.enabled === 1 ? 'Aktif' : 'Nonaktif'}
+                      {cctv.enabled === true || cctv.enabled === 1 ? 'Active' : 'Nonactive'}
                     </span>
                   </td>
                   <td className="border p-2 text-center">
                     {cctv.enabled === true || cctv.enabled === 1 ? (
-                      <button
-                        onClick={() => onSelect(cctv.id)}
-                        className="bg-indigo-500 text-white px-3 py-1 rounded-lg hover:bg-indigo-600 transition text-sm"
-                      >
-                        Lihat Stream
+                      <button onClick={() => onSelect(cctv.id)}>
+                        <FaEye className='text-indigo-500 hover:text-indigo-600 transition w-5 h-5'/>
                       </button>
                     ) : (
-                      <button
-                        disabled
-                        className="bg-gray-300 text-gray-500 px-3 py-1 rounded-lg cursor-not-allowed text-sm"
-                      >
-                        Nonaktif
+                      <button disabled>
+                        <FaEyeSlash className='text-[#6b7280] w-5 h-5'/>
                       </button>
                     )}
                   </td>

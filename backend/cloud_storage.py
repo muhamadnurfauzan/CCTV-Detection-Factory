@@ -1,7 +1,4 @@
-# cloud_storage.py (perbaikan)
-import io
-import os
-import tempfile
+# cloud_storage.py
 import datetime
 import uuid
 import logging
@@ -15,38 +12,39 @@ except Exception as e:
     logging.error(f"[Supabase] Gagal membuat koneksi: {e}")
     supabase = None
 
-
 def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str) -> str:
-    """
-    Upload image hasil deteksi pelanggaran ke Supabase Storage dan mengembalikan URL publiknya.
-    Kompatibel dengan supabase-py versi lama (hanya menerima path file).
-    """
     if supabase is None:
         raise RuntimeError("Supabase client belum diinisialisasi.")
 
-    now = datetime.datetime.utcnow()
+    # GMT+7
+    # gmt7 = datetime.timezone(datetime.timedelta(hours=7), "GMT+7")
+    # now = datetime.datetime.now(gmt7)
+
+    now = datetime.datetime.now()
     date_path = now.strftime("%Y/%m/%d")
     unique_name = f"{violation_type}_{now:%H%M%S}_{uuid.uuid4().hex[:8]}.jpg"
     file_path = f"cctv/{cctv_id}/{date_path}/{unique_name}"
 
     try:
-        # Simpan sementara ke file temp
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
-            tmp_file.write(image_bytes)
-            tmp_file.flush()
-            temp_filename = tmp_file.name
+        file_options = {
+            "content-type": "image/jpeg",
+            "upsert": "true",  
+            "cache-control": "3600"  
+        }
+        res = supabase.storage.from_(config.SUPABASE_BUCKET).upload(
+            path=file_path,  # Path first (v2)
+            file=image_bytes,
+            file_options=file_options
+        )
 
-        # Upload file temp ke Supabase Storage
-        res = supabase.storage.from_(config.SUPABASE_BUCKET).upload(file_path, temp_filename)
+        # Hybrid check: v2 bisa dict {data, error} atau httpx.Response
+        if isinstance(res, dict):
+            if res.get("error"):
+                raise RuntimeError(f"Gagal upload: {res['error']}")
+        elif hasattr(res, "status_code") and res.status_code not in [200, 201]:
+            error_detail = res.json().get("message", "Unknown")
+            raise RuntimeError(f"Gagal upload (status={res.status_code}): {error_detail}")
 
-        # Hapus file temp setelah upload
-        os.remove(temp_filename)
-
-        # Validasi hasil
-        if hasattr(res, "status_code") and res.status_code not in [200, 201]:
-            raise RuntimeError(f"Gagal upload ke Supabase (status={res.status_code}): {res}")
-
-        # Dapatkan URL publik
         public_url = supabase.storage.from_(config.SUPABASE_BUCKET).get_public_url(file_path)
         logging.info(f"[Supabase] Upload berhasil: {public_url}")
         return public_url

@@ -31,11 +31,6 @@ def point_in_polygon(point, polygon):
         p1x, p1y = p2x, p2y
     return inside
 
-def upload_violation_image(image_bytes, cctv_id, class_name):
-    # DUMMY: Mengembalikan URL
-    return f"https://supabase.co/storage/cctv-{cctv_id}/{class_name}.jpg"
-# --------------------------------------------------------------------------
-
 # --- FUNGSI GENERIK UNTUK MERESET POSTGRESQL SEQUENCE ---
 def reset_table_sequence(table_name):
     """
@@ -151,6 +146,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     # --- Upload ke Supabase Storage ---
     try:
         public_url = upload_violation_image(image_bytes, cctv_id, class_name)
+        logging.info(f"[CCTV {cctv_id}] Upload image {class_name} berhasil.")
     except Exception as e:
         logging.error(f"[CCTV {cctv_id}] Upload ke Supabase gagal: {e}")
         return
@@ -163,14 +159,14 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         # Simpan violation_detection (PostgreSQL)
         cur.execute("""
             INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
-            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW())
+            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
             RETURNING id; 
         """, (cctv_id, class_name, public_url))
         
         # PostgreSQL tidak punya ON DUPLICATE KEY UPDATE → pakai ON CONFLICT
         cur.execute("""
             INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation, latest_update)
-            VALUES (CURRENT_DATE, %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1, CURRENT_TIMESTAMP)
+            VALUES (CURRENT_DATE AT TIME ZONE 'Asia/Jakarta', %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
             ON CONFLICT (log_date, id_cctv, id_violation)
             DO UPDATE SET 
                 total_violation = violation_daily_log.total_violation + 1,

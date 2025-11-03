@@ -1,11 +1,14 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaVideo, FaCog, FaTimes, FaBars } from 'react-icons/fa';
+import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaSlidersH, FaBullhorn } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 
 const navItemsData = [
-  { path: "/", label: "Dashboard", Icon: FaHome },
-  { path: "/cctv", label: "Daftar CCTV", Icon: FaVideo },
+    { path: "/", label: "Dashboard", Icon: FaHome },
+    { path: "/cctv", label: "CCTVs", Icon: FaVideo },
+    { path: "/#", label: "Camera Setting", Icon: FaSlidersH},
+    { path: "/images", label: "Violations", Icon: FaImages},
+    { path: "/#", label: "Reports", Icon: FaBullhorn},
 ];
 
 const Sidebar = ({ isExpanded, setIsExpanded }) => {
@@ -40,7 +43,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
             id="sidebar-tooltip" 
             place="right" 
             effect="float" 
-            style={{ borderRadius: '0.375rem' }}
+            style={{ borderRadius: '0.375rem', zIndex: 50 }}
       />}
       <nav
         className={`fixed top-0 left-0 h-screen bg-indigo-900 text-indigo-300 shadow-xl transition-all duration-300 ${isExpanded ? 'z-40' : 'z-0'}
@@ -58,7 +61,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
             {isExpanded ? (
               <span className="text-xl font-bold text-white">APP LOGO</span>
             ) : (
-              <span className="text-xl font-bold text-white">L</span>
+              <span className="text-xl font-bold text-white">X</span>
             )}
             {isExpanded && (
               <button
@@ -75,6 +78,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
           <ul className="space-y-2 flex-grow">{navItemsData.map(navItem)}</ul>
 
           {/* Bagian bawah */}
+
           <div className={`mt-auto pt-4 border-t border-indigo-700`}>
             <a
               href="/settings"
