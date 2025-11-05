@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaPlus, FaSlidersH, FaEye, FaEyeSlash } from 'react-icons/fa';
+import ViolationConfigModal from './ViolationConfigModal';
 
 function CCTVTable({ onSelect }) {
   const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/cctv_all')
@@ -26,7 +28,8 @@ function CCTVTable({ onSelect }) {
         {/* Search bar dan tombol di kanan */}
         <div className="flex items-center space-x-2">
           <button
-            className="bg-indigo-500 text-white px-2 py-1 rounded-lg hover:bg-indigo-600 transition"
+            onClick={() => setModalOpen(true)}
+            className="bg-indigo-500 text-white px-3 py-1 rounded-lg hover:bg-indigo-600 transition flex items-center gap-2"
           >
             <FaSlidersH className="w-6 h-6" />
           </button>
@@ -60,7 +63,7 @@ function CCTVTable({ onSelect }) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan="6" className="text-center text-gray-500 p-4">
-                  Tidak ada data CCTV ditemukan.
+                  No CCTV data.
                 </td>
               </tr>
             ) : (
@@ -96,6 +99,7 @@ function CCTVTable({ onSelect }) {
           </tbody>
         </table>
       </div>
+      <ViolationConfigModal open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
 }

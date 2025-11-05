@@ -1,4 +1,3 @@
-import os
 import time
 import cv2
 import gc
@@ -68,7 +67,6 @@ def reset_table_sequence(table_name):
 # Dijalankan saat modul ini diimpor (yaitu saat app.py dimulai)
 reset_table_sequence('violation_detection')
 reset_table_sequence('cctv_data')
-reset_table_sequence('violation_data')
 
 def open_stream(cctv, max_retries=5, retry_delay=1):
     video_path = f"rtsps://{cctv['ip_address']}:{cctv['port']}/{cctv['token']}?enableSrtp"
@@ -102,21 +100,39 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     location = cctv_cfg["location"]
 
     class_name = model.names[int(cls_id)]
+    class_info = config.OBJECT_CLASS_CACHE.get(class_name)
+    if not class_info:
+        logging.warning(f"[DETECT] Class tidak dikenal: {class_name}")
+        return
+
+    # Hanya gambar bounding box untuk semua kelas, tapi proses violation hanya jika aktif
+    color = config.get_color_for_class(class_name)
+    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+    label = f"{class_name} {conf:.2f}"
+    cv2.putText(annotated, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    # Skip jika bukan violation atau tidak aktif
+    if not class_info["is_violation"]:
+        return
+    active_ids = config.get_active_violation_ids_for_cctv(cctv_id)
+    if class_info["id"] not in active_ids:
+        return
+
+    # Cek ROI dan confidence (hapus PPE_CLASSES residu)
     center = ((x1 + x2)//2, (y1 + y2)//2)
     if not any(point_in_polygon(center, r["points"]) for r in roi_regions):
         return
-    if not config.PPE_CLASSES.get(class_name, False) or conf < config.CONFIDENCE_THRESHOLD:
-        return
-    if "no-" not in class_name:
+    if conf < config.CONFIDENCE_THRESHOLD:
         return
 
+    # Cooldown check
     now = time.time()
     data = tracked_violations.setdefault(track_id, {"last_times": {}})
     last_time = data["last_times"].get(class_name, 0)
     if now - last_time < config.COOLDOWN:
         return
 
-    # --- Crop area pelanggaran ---
+    # Crop area
     h, w = frame.shape[:2]
     pad_w, pad_h = int((x2-x1)*config.PADDING_PERCENT), int((y2-y1)*config.PADDING_PERCENT)
     x1e, y1e = max(0, x1-pad_w), max(0, y1-pad_h)
@@ -159,14 +175,14 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         # Simpan violation_detection (PostgreSQL)
         cur.execute("""
             INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
-            VALUES (%s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
+            VALUES (%s, (SELECT id FROM object_class WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
             RETURNING id; 
         """, (cctv_id, class_name, public_url))
         
         # PostgreSQL tidak punya ON DUPLICATE KEY UPDATE → pakai ON CONFLICT
         cur.execute("""
             INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation, latest_update)
-            VALUES (CURRENT_DATE AT TIME ZONE 'Asia/Jakarta', %s, (SELECT id FROM violation_data WHERE name=%s LIMIT 1), 1, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
+            VALUES (CURRENT_DATE AT TIME ZONE 'Asia/Jakarta', %s, (SELECT id FROM object_class WHERE name=%s LIMIT 1), 1, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
             ON CONFLICT (log_date, id_cctv, id_violation)
             DO UPDATE SET 
                 total_violation = violation_daily_log.total_violation + 1,
@@ -289,7 +305,7 @@ def process_thread(cctv_id, frame_queue):
                     class_name = model.names[cls_id]
 
                     # --- Gambar bounding box ---
-                    color = config.PPE_COLORS.get(class_name, (255, 255, 255))  # fallback putih jika tidak ditemukan
+                    color = config.get_color_for_class(class_name)
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
 
                     # Tambahkan label teks di atas bounding box

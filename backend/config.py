@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -22,21 +23,13 @@ TARGET_MAX_WIDTH = 320
 FRAME_SKIP = 15
 QUEUE_SIZE = 3
 CCTV_RATIO = (1920, 1080)
+ 
 
-# --- Definisi Kelas Model ---
-PPE_CLASSES = {
-    "helmet": True, "no-helmet": True, "vest": True, "no-vest": True,
-    "boots": False, "no-boots": False, "gloves": False, "no-gloves": False,
-    "googles": False, "no-googles": False,
-}
-
-PPE_COLORS = {
-    "no-helmet": (255, 0, 255), "helmet": (0, 255, 0),
-    "no-vest": (255, 255, 0), "vest": (0, 255, 255),
-    "no-boots": (200, 100, 0), "boots": (0, 100, 200),
-    "no-gloves": (100, 0, 200), "gloves": (200, 0, 100),
-    "no-googles": (50, 50, 200), "googles": (200, 50, 50),
-}
+# Cache global dengan TTL (30 detik)
+OBJECT_CLASS_CACHE = {}
+VIOLATION_CLASS_IDS = {}
+_CACHE_TIMESTAMP = 0
+_CACHE_TTL = 30  # detik
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -56,6 +49,34 @@ def get_connection():
         sslmode=os.getenv("DB_SSLMODE", "require")
     )
 
+# --- Object PPE Configuration ---
+def load_object_classes(force_refresh=False):
+    global OBJECT_CLASS_CACHE, VIOLATION_CLASS_IDS, _CACHE_TIMESTAMP
+    now = time.time()
+    if force_refresh or now - _CACHE_TIMESTAMP > _CACHE_TTL:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
+        rows = cur.fetchall()
+        OBJECT_CLASS_CACHE = {}
+        VIOLATION_CLASS_IDS = {}
+        for row in rows:
+            cid, name, r, g, b, is_viol = row
+            OBJECT_CLASS_CACHE[name] = {
+                "id": cid,
+                "color": (r, g, b) if r is not None else (255, 255, 255),  # Fallback white
+                "is_violation": is_viol
+            }
+            if is_viol:
+                VIOLATION_CLASS_IDS[cid] = name
+        cur.close(); conn.close()
+        _CACHE_TIMESTAMP = now
+        if not OBJECT_CLASS_CACHE:
+            print("[CACHE] Object classes kosong — fallback ke default?")
+
+# Panggil di startup
+load_object_classes()
+
 # --- Fetch CCTV aktif dari database ---
 def get_all_active_cctv():
     conn = get_connection()
@@ -65,7 +86,7 @@ def get_all_active_cctv():
     cursor.close()
     conn.close()
     if not results:
-        raise RuntimeError("Tidak ada CCTV aktif di database.")
+        raise RuntimeError("No CCTV Active")
     return results
 
 # --- ROI Loader ---
@@ -110,6 +131,22 @@ def load_all_cctv_configs():
     except Exception as e:
         print(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")
     return configs
+
+# --- Fetch jenis violation yang aktif dari CCTV secara custom ---
+def get_active_violation_ids_for_cctv(cctv_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT class_id FROM cctv_violation_config
+        WHERE cctv_id = %s AND is_active = TRUE
+    """, (cctv_id,))
+    active = {row[0] for row in cur.fetchall()}
+    cur.close(); conn.close()
+    return active
+
+# Fungsi helper untuk color
+def get_color_for_class(class_name):
+    return OBJECT_CLASS_CACHE.get(class_name, {}).get("color", (255, 255, 255))
 
 # --- Inisialisasi konfigurasi global ---
 try:

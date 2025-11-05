@@ -6,11 +6,13 @@ import logging
 import config
 import cctv_detection
 import scheduler  
+import sys
 
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from threading import Thread
 from psycopg2.extras import RealDictCursor 
+from db.db_config import get_connection
 
 app = Flask(__name__)
 CORS(app)
@@ -19,7 +21,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 @app.route("/api/cctv_all", methods=["GET"])
 def get_all_cctv():
-    from db.db_config import get_connection
     conn = get_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT id, name, ip_address, location, enabled FROM cctv_data;")
@@ -60,30 +61,29 @@ def summary_today():
     conn = None
     cursor = None
     try:
-        from db.db_config import get_connection
         conn = get_connection()
         # FIX: Menggunakan cursor_factory untuk psycopg2
         cursor = conn.cursor(cursor_factory=RealDictCursor) 
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         logging.info(f"Querying summary for {today}")
         
-        # Ambil semua jenis violation dari violation_data sebagai baseline
+        # Ambil semua jenis violation dari object_class sebagai baseline
         cursor.execute("""
-            SELECT v.name
-            FROM violation_data v
-            WHERE v.name LIKE 'no-%'
+            SELECT o.name
+            FROM object_class o
+            WHERE o.is_violation = TRUE
         """)
         all_violations = {row['name']: None for row in cursor.fetchall()}
         
         # Hitung data untuk hari ini
         cursor.execute("""
-            SELECT v.name, COALESCE(SUM(vdl.total_violation), 0) as count
-            FROM violation_data v
+            SELECT o.name, COALESCE(SUM(vdl.total_violation), 0) as count
+            FROM object_class o
             LEFT JOIN violation_daily_log vdl 
-                ON vdl.id_violation = v.id 
+                ON vdl.id_violation = o.id 
                 AND vdl.log_date = CURRENT_DATE
-            WHERE v.name LIKE 'no-%'
-            GROUP BY v.name;
+            WHERE o.is_violation = TRUE
+            GROUP BY o.name;
         """)
         
         result = cursor.fetchall()
@@ -114,7 +114,6 @@ def top_cctv_today():
     conn = None
     cursor = None
     try:
-        from db.db_config import get_connection
         conn = get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -148,18 +147,18 @@ def top_cctv_today():
                 cd.id,
                 cd.name,
                 cd.location,
-                vd.name AS violation_name,
+                oc.name AS violation_name,
                 COALESCE(SUM(vdl.total_violation), 0) AS count_per_type
             FROM cctv_data cd
-            CROSS JOIN violation_data vd
+            CROSS JOIN object_class oc
             LEFT JOIN violation_daily_log vdl 
                 ON vdl.id_cctv = cd.id 
-                AND vdl.id_violation = vd.id
+                AND vdl.id_violation = oc.id
                 AND vdl.log_date = CURRENT_DATE
             WHERE cd.id = ANY(%s)
-              AND vd.name LIKE 'no-%%'
-            GROUP BY cd.id, cd.name, cd.location, vd.name
-            ORDER BY cd.id, vd.name;
+              AND oc.is_violation = TRUE
+            GROUP BY cd.id, cd.name, cd.location, oc.name
+            ORDER BY cd.id, oc.name;
         """
 
         # 🔧 Eksekusi query dengan parameter array
@@ -214,7 +213,6 @@ def weekly_trend():
     conn = None
     cursor = None
     try:
-        from db.db_config import get_connection
         conn = get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         logging.info("Querying weekly trend for last 7 days")
@@ -256,6 +254,73 @@ def weekly_trend():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+# Tambah API untuk object_class jika perlu
+@app.route('/api/object_classes', methods=['GET'])
+def get_object_classes():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route('/api/cctv_violations/<int:cctv_id>', methods=['GET', 'POST'])
+def cctv_violations(cctv_id):
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'GET':
+        cur.execute("""
+            SELECT class_id
+            FROM cctv_violation_config
+            WHERE cctv_id = %s AND is_active = TRUE
+        """, (cctv_id,))
+        rows = cur.fetchall()
+        result = [row['class_id'] for row in rows]
+        cur.close()
+        conn.close()
+        return jsonify(result)
+
+    data = request.json.get('enabled_class_ids', [])
+    logging.info(f"[POST] /api/cctv_violations/{cctv_id} enabled_class_ids={data}")
+    logging.info(f"===> REQUEST RECEIVED for CCTV {cctv_id}: {data}")
+    sys.stdout.flush()
+
+    try:
+        # Upsert aktif
+        for class_id in data:
+            cur.execute("""
+                INSERT INTO cctv_violation_config (cctv_id, class_id, is_active)
+                VALUES (%s, %s, TRUE)
+                ON CONFLICT (cctv_id, class_id)
+                DO UPDATE SET is_active = TRUE
+            """, (cctv_id, class_id))
+
+        # Nonaktifkan yang tidak dipilih
+        if data:
+            cur.execute("""
+                UPDATE cctv_violation_config
+                SET is_active = FALSE
+                WHERE cctv_id = %s AND NOT (class_id = ANY(%s))
+            """, (cctv_id, data))
+        else:
+            cur.execute("""
+                UPDATE cctv_violation_config
+                SET is_active = FALSE
+                WHERE cctv_id = %s
+            """, (cctv_id,))
+
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        logging.error(f"[POST ERROR] /api/cctv_violations/{cctv_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == "__main__":
     config.annotated_frames = {}

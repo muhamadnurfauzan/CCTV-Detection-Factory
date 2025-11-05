@@ -1,12 +1,13 @@
 // server.mjs
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import NodeCache from 'node-cache';
+import bodyParser from "body-parser";
+import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import NodeCache from 'node-cache';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +30,11 @@ const cache = new NodeCache({ stdTTL: 60 });
 
 // === MIDDLEWARE ===
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 // === SUPABASE CLIENT (SERVICE ROLE - AMAN) ===
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -151,7 +156,7 @@ app.get('/supabase-api/violations', async (req, res) => {
 
     let query = supabase
       .from('violation_detection')
-      .select('id, id_cctv, image, timestamp, violation_data(name)')
+      .select('id, id_cctv, image, timestamp, object_class(name)')
       .eq('id_cctv', validCctv)
       .gte('timestamp', start)
       .lte('timestamp', end)
@@ -190,7 +195,7 @@ app.get('/supabase-api/violations', async (req, res) => {
           image: item.image,
           signedUrl,
           timestamp: safeTimestamp,
-          violation: item.violation_data?.name || 'unknown',
+          violation: item.object_class?.name || 'unknown',
         };
       })
     );
@@ -218,16 +223,32 @@ app.post('/invalidate-cache', (req, res) => {
 });
 
 // 2. PROXY KE PYTHON BACKEND
+// app.use(
+//   '/api',
+//   createProxyMiddleware({
+//     target: 'http://localhost:5000',
+//     changeOrigin: true,
+//     ws: true,
+//     logLevel: 'debug',
+//     onError: (err, req, res) => {
+//       console.error('[PROXY ERROR]:', err.message);
+//       res.status(502).json({ error: 'Python backend unreachable' });
+//     },
+//   })
+// );
 app.use(
   '/api',
   createProxyMiddleware({
     target: 'http://localhost:5000',
     changeOrigin: true,
-    ws: true,
     logLevel: 'debug',
-    onError: (err, req, res) => {
-      console.error('[PROXY ERROR]:', err.message);
-      res.status(502).json({ error: 'Python backend unreachable' });
+    onProxyReq: (proxyReq, req) => {
+      // Pastikan body dikirim ulang
+      if (req.rawBody) {
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
+        proxyReq.write(req.rawBody);
+      }
     },
   })
 );

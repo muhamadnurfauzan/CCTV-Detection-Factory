@@ -1,35 +1,13 @@
-import { BrowserRouter as Router, Routes, Route, useNavigate, useParams } from "react-router-dom";
+// App.jsx
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import React, { useState } from 'react';
 
 import Sidebar from './components/Sidebar'; 
 import Dashboard from './pages/Dashboard'; 
 import ImagesShow from './pages/ImagesShow'; 
 import Reports from './pages/Reports';
-import CCTVTable from './components/CCTVTable';
-import CCTVStream from './components/CCTVStream';
+import CCTVList from './pages/CCTVList';
 import ErrorBoundary from './components/ErrorBoundary'; 
-
-await fetch('http://localhost:3000/invalidate-cache', { method: 'POST' });
-
-// ---- Wrapper agar streaming tetap kompatibel ----
-const CCTVStreamWrapper = () => {
-  const { id } = useParams(); // Ambil id dari URL
-  const navigate = useNavigate();
-
-  // Validasi id
-  const cctvId = id ? parseInt(id, 10) : null;
-  if (cctvId === null || isNaN(cctvId)) {
-    return <div>Invalid CCTV ID</div>; // Fallback kalau id nggak valid
-  }
-
-  return <CCTVStream cctvId={cctvId} onBack={() => navigate("/cctv")} />;
-};
-
-// ---- CCTVTable versi baru, langsung navigasi ke stream ----
-const CCTVTableWithRouting = () => {
-  const navigate = useNavigate();
-  return <CCTVTable onSelect={(id) => navigate(`/stream/${id}`)} />;
-};
 
 function App() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -57,8 +35,7 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/cctv" element={<CCTVTableWithRouting />} />
-              <Route path="/stream/:id" element={<CCTVStreamWrapper />} />
+              <Route path="/cctv/*" element={<CCTVList />} /> 
               <Route path="/images" element={<ImagesShow />} />
               <Route path="/reports" element={<Reports />} />
             </Routes>

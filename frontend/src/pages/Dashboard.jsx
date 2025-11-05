@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import SafeResponsiveContainer from "../components/SafeResponsiveContainer"; 
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, AreaChart, Area } from "recharts";
+import { XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, AreaChart, Area } from "recharts";
 import { FaShieldAlt, FaVest, FaSocks, FaGlasses, FaMitten, FaExclamationTriangle} from 'react-icons/fa'
 
 const Dashboard = () => {
@@ -8,46 +8,72 @@ const Dashboard = () => {
   const [topCCTV, setTopCCTV] = useState([]);
   const [weeklyTrend, setWeeklyTrend] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [objectClasses, setObjectClasses] = useState([]);
   
-  // Dapatkan semua nama violation dari summary untuk digunakan sebagai kunci BarChart
-  // --- Ambil semua jenis violation dari summary ---
-  const violationKeys = Object.keys(summary).filter(key => key.startsWith('no-'));
+  useEffect(() => {
+  let mounted = true;
+  const fetchAll = async () => {
+      setLoading(true);
+      try {
+      const [sRes, tRes, wRes, oRes] = await Promise.all([
+          fetch("/api/dashboard/summary_today"),
+          fetch("/api/dashboard/top_cctv_today"),
+          fetch("/api/dashboard/weekly_trend"),
+          fetch("/api/object_classes"),
+      ]);
+      if (!mounted) return;
+      
+      const summaryData = sRes.ok ? await sRes.json() : {};
+      setSummary(summaryData);
+      
+      const topCCTVData = tRes.ok ? await tRes.json() : [];
+      setTopCCTV(topCCTVData);
+      
+      const weeklyTrendData = wRes.ok ? await wRes.json() : [];
+      setWeeklyTrend(weeklyTrendData);
 
-    useEffect(() => {
-    let mounted = true;
-    const fetchAll = async () => {
-        setLoading(true);
-        try {
-        const [sRes, tRes, wRes] = await Promise.all([
-            fetch("/api/dashboard/summary_today"),
-            fetch("/api/dashboard/top_cctv_today"),
-            fetch("/api/dashboard/weekly_trend"),
-        ]);
-        if (!mounted) return;
-        
-        const summaryData = sRes.ok ? await sRes.json() : { error: "Failed to fetch summary" };
-        if (!sRes.ok) console.warn('Summary fetch failed:', summaryData.error);
-        else setSummary(summaryData);
-        
-        const topCCTVData = tRes.ok ? await tRes.json() : { error: "Failed to fetch top CCTV" };
-        if (!tRes.ok) console.warn('Top CCTV fetch failed:', topCCTVData.error);
-        else setTopCCTV(topCCTVData);
-        
-        const weeklyTrendData = wRes.ok ? await wRes.json() : { error: "Failed to fetch weekly trend" };
-        if (!wRes.ok) console.warn('Weekly trend failed:', weeklyTrendData.error);
-        else setWeeklyTrend(weeklyTrendData);
-        
-        } catch (e) {
-        console.error("Dashboard fetch error", e);
-        } finally {
-        if (mounted) setLoading(false);
-        }
-    };
-    fetchAll();
-    return () => { mounted = false; };
-    }, []);
+      const classesData = oRes.ok ? await oRes.json() : [];
+      setObjectClasses(classesData);
+
+      if (!oRes.ok) {
+        console.warn("Failed to fetch object_classes, using fallback colors");
+      }
+      
+    } catch (e) {
+    console.error("Dashboard fetch error", e);
+    } finally {
+    if (mounted) setLoading(false);
+    }
+  };
+  fetchAll();
+  return () => { mounted = false; };
+  }, []);
 
   if (loading) return <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading...</p></div>;
+
+  // --- Color Map (hanya violation) ---
+  const colorMap = objectClasses
+    .filter(cls => cls.is_violation)
+    .reduce((acc, cls) => {
+      acc[cls.name] = `rgb(${cls.color_r ?? 255}, ${cls.color_g ?? 255}, ${cls.color_b ?? 255})`;
+      return acc;
+    }, {});
+
+  // --- violationKeys dari summary ---
+  const violationKeys = Object.keys(summary).filter(key => key.startsWith('no-'));
+
+  // --- Ikon Dinamis ---
+  const getIconForViolation = (name) => {
+    const color = colorMap[name] || '#6b7280';
+    switch (name) {
+      case 'no-helmet': return <FaShieldAlt className="text-4xl" style={{ color }} />;
+      case 'no-vest': return <FaVest className="text-4xl" style={{ color }} />;
+      case 'no-boots': return <FaSocks className="text-4xl" style={{ color }} />;
+      case 'no-goggles': return <FaGlasses className="text-4xl" style={{ color }} />;
+      case 'no-gloves': return <FaMitten className="text-4xl" style={{ color }} />;
+      default: return <FaExclamationTriangle className="text-4xl" style={{ color }} />;
+    }
+  };
 
   // --- Summary Data (Card View) ---
   const summaryData = Object.keys(summary).length > 0
@@ -79,12 +105,8 @@ const Dashboard = () => {
   // --- Weekly Trend Data (Line Chart View) ---  
   // 1. Pra-pemrosesan: Buat Map untuk pencarian O(1) dan ekstrak tanggal YYYY-MM-DD
   const weeklyTrendMap = weeklyTrend.reduce((acc, item) => {
-      // Ubah string date API ("Mon, 27 Oct 2025...") menjadi objek Date
       const dateObj = new Date(item.date);
-      // Ambil string YYYY-MM-DD (format yang dicari)
       const dateKey = dateObj.toISOString().split('T')[0]; 
-      
-      // Pastikan value adalah angka (diconvert dari string API)
       acc[dateKey] = { date: dateKey, value: parseInt(item.value, 10) };
       return acc;
   }, {});
@@ -92,22 +114,18 @@ const Dashboard = () => {
   const today = new Date();
   const days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(today);
-    // Mundur 6 hari hingga 0 hari (untuk 7 hari)
     date.setDate(today.getDate() - (6 - i)); 
-    
     const dateStr = date.toISOString().split('T')[0]; // Format '2025-10-27'
     
     // 2. Gunakan Map yang sudah dibuat untuk mencari data
     const trendData = weeklyTrendMap[dateStr] || { date: dateStr, value: 0 };
-    
-    // Label Sumbu X: Hari dan Tanggal
-    return { 
+      return { 
         ...trendData, 
         day_label: date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit'}),
         date_full: dateStr
     };
   });
-  
+
   // Custom Tooltip untuk Bar Chart
   const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -130,29 +148,6 @@ const Dashboard = () => {
     }
     return null;
   };
-  
-  const COLOR_POOL = [
-    "#1d4ed8", // biru
-    "#059669", // hijau
-    "#f59e0b", // kuning
-    "#dc2626", // merah
-    "#7c3aed", // ungu
-    "#0ea5e9", // cyan
-    "#9333ea", // violet
-  ];
-
-  const ICON_POOL = [FaSocks, FaMitten, FaGlasses, FaShieldAlt, FaVest, FaExclamationTriangle];
-
-    // --- Buat peta warna & ikon dinamis ---
-  const dynamicColorMap = violationKeys.reduce((acc, key, idx) => {
-    acc[key] = COLOR_POOL[idx % COLOR_POOL.length];
-    return acc;
-  }, {});
-
-  const dynamicIconMap = violationKeys.reduce((acc, key, idx) => {
-    acc[key] = ICON_POOL[idx % ICON_POOL.length];
-    return acc;
-  }, {});
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
@@ -164,15 +159,18 @@ const Dashboard = () => {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 place-items-center">
           {summaryData.length > 0 ? (
             summaryData.map(({ name, count, tooltip }, index) => {
-              const color = dynamicColorMap[name] || "#6b7280";
-              const Icon = dynamicIconMap[name] || FaExclamationTriangle;
+              const color = colorMap[name] || '#6b7280';
               return (
                 <div key={name} className="w-full p-4 bg-white rounded-xl shadow-lg border-l-4 transform transition duration-300 hover:scale-[1.03]" style={{ borderColor: color }}>
+                  <div className="flex items-start justify-start mb-2">
+                    {getIconForViolation(name)}
+                  </div>
                   <div className="flex items-center space-x-3">
-                    <Icon className="w-6 h-6" style={{ color }} />
                     <p className="text-sm font-medium text-gray-600 truncate" style={{ color }}>{name}</p>
                   </div>
-                  <p className={`text-3xl font-extrabold mt-2 ${count === "-" ? "text-gray-400" : "text-gray-900"}`}title={tooltip}>{count === "-" ? "N/A" : count}</p>
+                  <div className="flex items-center space-x-3">
+                    <p className={`text-3xl font-extrabold mt-2 ${count === "-" ? "text-gray-400" : "text-gray-900"}`}title={tooltip}>{count === "-" ? "N/A" : count}</p>
+                  </div>
                 </div>
               );
             })
@@ -216,7 +214,7 @@ const Dashboard = () => {
                     formatter={(value) => (
                       <span
                         className="text-xs font-medium"
-                        style={{ color: dynamicColorMap[value] || "#374151" }}
+                        style={{ color: colorMap[value] || "#374151" }}
                       >
                         {value}
                       </span>
@@ -232,7 +230,7 @@ const Dashboard = () => {
                         key={type}
                         dataKey={type}
                         name={type}
-                        fill={dynamicColorMap[type] || "#9ca3af"}
+                        fill={colorMap[type] || "#9ca3af"}
                         barSize={25}
                       />
                     );
@@ -240,7 +238,7 @@ const Dashboard = () => {
                 </BarChart>
               </SafeResponsiveContainer>
             ) : (
-              <div className="p-10 h-[328px] text-center text-gray-500">
+              <div className="p-10 h-[300px] text-center text-gray-500">
                 No data for top 5 camera by violation for today.
               </div>
             )}

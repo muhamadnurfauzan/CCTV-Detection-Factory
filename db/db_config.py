@@ -1,13 +1,3 @@
-# import mysql.connector
-
-# def get_connection():
-#     return mysql.connector.connect(
-#         host="localhost",
-#         user="root",
-#         password="1sampai8",
-#         database="SAI"
-#     )
-
 import psycopg2
 import os
 from dotenv import load_dotenv
