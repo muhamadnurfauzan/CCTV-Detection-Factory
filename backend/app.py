@@ -93,7 +93,7 @@ def summary_today():
         
         summary = {name: counted_map.get(name, "-") for name in all_violations.keys()}
         
-        logging.info(f"Summary result: {summary}")
+        # logging.info(f"Summary result: {summary}")
         return jsonify(summary)
     
     except Exception as e:
@@ -138,7 +138,7 @@ def top_cctv_today():
             return jsonify([])
 
         top_cctv_ids = [r["id"] for r in top_cctv_rows]
-        logging.info(f"Top CCTV IDs: {top_cctv_ids}")
+        # logging.info(f"Top CCTV IDs: {top_cctv_ids}")
 
         # 2. Ambil data detail setiap CCTV
         # Gunakan ANY() agar Postgres menerima array integer
@@ -191,7 +191,7 @@ def top_cctv_today():
         # 4. Urutkan berdasarkan total pelanggaran tertinggi
         sorted_result = sorted(final_result.values(), key=lambda x: x["total"], reverse=True)
 
-        logging.info(f"Top CCTV result: {sorted_result}")
+        # logging.info(f"Top CCTV result: {sorted_result}")
         return jsonify(sorted_result)
 
     except Exception as e:
@@ -242,7 +242,7 @@ def weekly_trend():
                 'value': str(row['value'])
             })
             
-        logging.info(f"Weekly trend result: {formatted_result}")
+        # logging.info(f"Weekly trend result: {formatted_result}")
         return jsonify(formatted_result)
         
     except Exception as e:
@@ -322,12 +322,20 @@ def cctv_violations(cctv_id):
         cur.close()
         conn.close()
 
+@app.route('/api/refresh_config', methods=['POST'])
+def refresh_config():
+    import config
+    config.refresh_active_violations()
+    return jsonify({"success": True})
+
 if __name__ == "__main__":
     config.annotated_frames = {}
 
     # Jalankan deteksi multi-CCTV
     threads = cctv_detection.start_all_detections()
     logging.info(f"Started {len(threads)} CCTV threads.")
+
+    config.refresh_active_violations()
 
     # Jalankan scheduler otomatis (rekap & pembersihan)
     Thread(target=scheduler.scheduler_thread, daemon=True).start()

@@ -223,19 +223,6 @@ app.post('/invalidate-cache', (req, res) => {
 });
 
 // 2. PROXY KE PYTHON BACKEND
-// app.use(
-//   '/api',
-//   createProxyMiddleware({
-//     target: 'http://localhost:5000',
-//     changeOrigin: true,
-//     ws: true,
-//     logLevel: 'debug',
-//     onError: (err, req, res) => {
-//       console.error('[PROXY ERROR]:', err.message);
-//       res.status(502).json({ error: 'Python backend unreachable' });
-//     },
-//   })
-// );
 app.use(
   '/api',
   createProxyMiddleware({

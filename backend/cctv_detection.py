@@ -53,11 +53,11 @@ def reset_table_sequence(table_name):
         """)
         new_val = cur.fetchone()[0]
         conn.commit()
-        logging.info(f"[DB INIT] Sequence for {table_name} reset to: {new_val}")
+        print(f"[DB INIT] Sequence for {table_name} reset to: {new_val}")
         return True
     except Exception as e:
         # Pengecualian: sequence mungkin tidak ada jika tabel tidak punya SERIAL id
-        logging.warning(f"[DB INIT] Gagal me-reset sequence ID untuk {table_name}: {e}")
+        print(f"[DB INIT] Gagal me-reset sequence ID untuk {table_name}: {e}")
         return False
     finally:
         if cur: cur.close()
@@ -73,56 +73,150 @@ def open_stream(cctv, max_retries=5, retry_delay=1):
     cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
-        logging.warning(f"[{cctv['name']}] Gagal RTSPS, fallback RTSP...")
+        print(f"[{cctv['name']}] Gagal RTSPS, fallback RTSP...")
         rtsp_url = video_path.replace("rtsps://", "rtsp://").replace(":7441", ":7447")
         cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
-            logging.error(f"[{cctv['name']}] Tidak dapat membuka stream.")
+            print(f"[{cctv['name']}] Tidak dapat membuka stream.")
             return None
     return cap
 
 def reconnect_cap(cctv, cap, max_retries=5, retry_delay=1):
     """Reconnect cap dengan backoff"""
     for attempt in range(max_retries):
-        logging.warning(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
+        print(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
         cap.release()
         time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
         cap = open_stream(cctv)
         if cap and cap.isOpened():
-            logging.info(f"[{cctv['name']}] Reconnected successfully.")
+            print(f"[{cctv['name']}] Reconnected successfully.")
             return cap
-    logging.error(f"[{cctv['name']}] Failed to reconnect after {max_retries} attempts.")
+    print(f"[{cctv['name']}] Failed to reconnect after {max_retries} attempts.")
     return None
 
 def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations):
+    """
+    Proses satu deteksi violation: crop → polaroid → upload → simpan ke DB.
+    Semua validasi (class aktif, is_violation) SUDAH dilakukan di process_thread.
+    """
     cctv_cfg = config.cctv_configs[cctv_id]
     roi_regions = cctv_cfg["roi"]
     location = cctv_cfg["location"]
-
     class_name = model.names[int(cls_id)]
-    class_info = config.OBJECT_CLASS_CACHE.get(class_name)
-    if not class_info:
-        logging.warning(f"[DETECT] Class tidak dikenal: {class_name}")
+
+    # --- 1. Cek ROI ---
+    center = ((x1 + x2) // 2, (y1 + y2) // 2)
+    if not any(point_in_polygon(center, r["points"]) for r in roi_regions):
+        print(f"[VIOLATION] SKIP → {class_name} di luar ROI")
         return
 
-    # Hanya gambar bounding box untuk semua kelas, tapi proses violation hanya jika aktif
-    color = config.get_color_for_class(class_name)
-    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-    label = f"{class_name} {conf:.2f}"
-    cv2.putText(annotated, label, (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    # --- 2. Cek Confidence ---
+    if conf < config.CONFIDENCE_THRESHOLD:
+        print(f"[VIOLATION] SKIP → Confidence {conf:.2f} < {config.CONFIDENCE_THRESHOLD}")
+        return
 
-    # Skip jika bukan violation atau tidak aktif
-    if not class_info["is_violation"]:
+    # --- 3. Cooldown Check ---
+    now = time.time()
+    data = tracked_violations.setdefault(track_id, {"last_times": {}})
+    last_time = data["last_times"].get(class_name, 0)
+    if now - last_time < config.COOLDOWN:
+        print(f"[VIOLATION] SKIP → Cooldown aktif ({now - last_time:.1f}s)")
         return
-    active_ids = config.get_active_violation_ids_for_cctv(cctv_id)
-    if class_info["id"] not in active_ids:
+    data["last_times"][class_name] = now
+
+    # --- 4. Crop dengan Padding ---
+    h, w = frame.shape[:2]
+    pad_w = int((x2 - x1) * config.PADDING_PERCENT)
+    pad_h = int((y2 - y1) * config.PADDING_PERCENT)
+    x1e = max(0, x1 - pad_w)
+    y1e = max(0, y1 - pad_h)
+    x2e = min(w, x2 + pad_w)
+    y2e = min(h, y2 + pad_h)
+    crop = frame[y1e:y2e, x1e:x2e]
+
+    if crop.size == 0:
+        print(f"[VIOLATION] SKIP → Crop kosong")
         return
+
+    # --- 5. Resize jika terlalu kecil ---
+    if crop.shape[1] < config.TARGET_MAX_WIDTH:
+        scale = config.TARGET_MAX_WIDTH / crop.shape[1]
+        new_h = int(crop.shape[0] * scale)
+        crop = cv2.resize(crop, (config.TARGET_MAX_WIDTH, new_h))
+
+    # --- 6. Buat Polaroid ---
+    label_height = 80
+    polaroid = np.ones((crop.shape[0] + label_height, crop.shape[1], 3), dtype=np.uint8) * 255
+    polaroid[:crop.shape[0], :] = crop
+
+    texts = [
+        class_name.upper(),
+        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        location
+    ]
+    y_pos = crop.shape[0] + 20
+    for text in texts:
+        cv2.putText(polaroid, text, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1)
+        y_pos += 22
+
+    # --- 7. Encode ke JPEG ---
+    success, buffer = cv2.imencode(".jpg", polaroid, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not success:
+        print(f"[CCTV {cctv_id}] GAGAL → Encode gambar gagal")
+        return
+    image_bytes = buffer.tobytes()
+
+    # --- 8. Upload ke Supabase ---
+    try:
+        public_url = upload_violation_image(image_bytes, cctv_id, class_name)
+        # print(f"[CCTV {cctv_id}] UPLOAD → {class_name} berhasil: {public_url}")
+    except Exception as e:
+        print(f"[CCTV {cctv_id}] UPLOAD GAGAL → {e}")
+        return
+
+    # --- 9. Simpan ke PostgreSQL ---
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        # Insert violation_detection
+        cur.execute("""
+            INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
+            VALUES (%s, (SELECT id FROM object_class WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
+            RETURNING id;
+        """, (cctv_id, class_name, public_url))
+        violation_id = cur.fetchone()[0]
+
+        # Update violation_daily_log
+        cur.execute("""
+            INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation, latest_update)
+            VALUES (CURRENT_DATE AT TIME ZONE 'Asia/Jakarta', %s, 
+                    (SELECT id FROM object_class WHERE name=%s LIMIT 1), 1, NOW() AT TIME ZONE 'Asia/Jakarta')
+            ON CONFLICT (log_date, id_cctv, id_violation)
+            DO UPDATE SET 
+                total_violation = violation_daily_log.total_violation + 1,
+                latest_update = EXCLUDED.latest_update;
+        """, (cctv_id, class_name))
+
+        conn.commit()
+        print(f"[DB] SUCCESS → Violation ID: {violation_id} | Daily log updated")
+    except Exception as e:
+        print(f"[DB] GAGAL → {e}")
+    finally:
+        if 'cur' in locals(): cur.close()
+        if 'conn' in locals(): conn.close()
+    cctv_cfg = config.cctv_configs[cctv_id]
+    roi_regions = cctv_cfg["roi"]
+    location = cctv_cfg["location"]
+    class_name = model.names[int(cls_id)]
 
     # Cek ROI dan confidence (hapus PPE_CLASSES residu)
     center = ((x1 + x2)//2, (y1 + y2)//2)
     if not any(point_in_polygon(center, r["points"]) for r in roi_regions):
+        print(f"[VIOLATION] SKIP: {class_name} di luar ROI")
         return
     if conf < config.CONFIDENCE_THRESHOLD:
+        print(f"[VIOLATION] SKIP: Confidence {conf:.2f} < {config.CONFIDENCE_THRESHOLD}")
         return
 
     # Cooldown check
@@ -155,16 +249,16 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     # --- Encode ke bytes untuk upload ---
     success, buffer = cv2.imencode(".jpg", polaroid)
     if not success:
-        logging.error(f"[CCTV {cctv_id}] Gagal encode gambar.")
+        print(f"[CCTV {cctv_id}] Gagal encode gambar.")
         return
     image_bytes = buffer.tobytes()
 
     # --- Upload ke Supabase Storage ---
     try:
         public_url = upload_violation_image(image_bytes, cctv_id, class_name)
-        logging.info(f"[CCTV {cctv_id}] Upload image {class_name} berhasil.")
+        print(f"[CCTV {cctv_id}] Upload image {class_name} berhasil.")
     except Exception as e:
-        logging.error(f"[CCTV {cctv_id}] Upload ke Supabase gagal: {e}")
+        print(f"[CCTV {cctv_id}] Upload ke Supabase gagal: {e}")
         return
 
     # --- Simpan log + update daily log ---
@@ -193,9 +287,9 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         cur.close()
         conn.close()
 
-        logging.info(f"[CCTV {cctv_id}] Violation logged & daily count updated (PostgreSQL).")
+        print(f"[CCTV {cctv_id}] Violation logged & daily count updated (PostgreSQL).")
     except Exception as e:
-        logging.error(f"[DB] Gagal update log violation/daily: {e}")
+        print(f"[DB] Gagal update log violation/daily: {e}")
 
     data["last_times"][class_name] = now
 
@@ -211,7 +305,7 @@ def capture_thread(cctv_id, frame_queue):
         ret, frame = cap.read()
         if not ret:
             fail_count += 1
-            logging.warning(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
+            print(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
             if fail_count >= max_fails:
                 cap = reconnect_cap(cctv, cap)
                 if not cap:
@@ -245,7 +339,7 @@ def cleanup_thread(tracked_violations):
             if now - last_seen > config.CLEANUP_INTERVAL:
                 # Log class-class yang dihapus
                 classes_removed = list(last_times.keys())
-                logging.info(
+                print(
                     f"[CLEANUP] Hapus track_id={track_id} "
                     f"dengan pelanggaran={classes_removed} "
                     f"(tidak aktif selama {int(now - last_seen)} detik)"
@@ -256,17 +350,17 @@ def cleanup_thread(tracked_violations):
                 removed_count += 1
 
         if removed_count > 0:
-            logging.info(f"[CLEANUP] Total {removed_count} track lama dihapus.")
+            print(f"[CLEANUP] Total {removed_count} track lama dihapus.")
         time.sleep(config.CLEANUP_INTERVAL)
 
-        
 def process_thread(cctv_id, frame_queue):
+    """
+    Thread utama: ambil frame → deteksi → gambar anotasi → proses violation.
+    """
     tracked_violations = {}
-    model = YOLO(config.MODEL_PATH)
-    model.to("cpu")
-    logging.info(f"YOLO loaded for CCTV {cctv_id}")
+    model = YOLO(config.MODEL_PATH).to("cpu")
 
-    # Membersihkan data pelanggaran lama
+    # Start cleanup thread
     Thread(target=cleanup_thread, args=(tracked_violations,), daemon=True).start()
 
     roi_regions = config.cctv_configs[cctv_id]["roi"]
@@ -279,18 +373,43 @@ def process_thread(cctv_id, frame_queue):
         frame = frame_queue.pop()
         annotated = frame.copy()
 
-        # --- Gambar ROI lebih dulu ---
+        # --- Gambar ROI ---
         for region in roi_regions:
-            pts = np.array(region["points"], np.int32)
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
+            pts = np.array(region["points"], np.int32).reshape((-1, 1, 2))
+            cv2.polylines(annotated, [pts], True, (0, 255, 255), 2)
             cv2.putText(annotated, region.get("name", "ROI"), tuple(pts[0][0]),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
+        # --- Ambil active violation IDs ---
+        active_ids = config.get_active_violation_ids_for_cctv(cctv_id)
+
+        # --- Bangun track_classes: violation aktif + pasangan PPE ---
+        track_classes = set()
+
+        # Tambahkan violation aktif
+        track_classes.update(active_ids)
+
+        # Tambahkan pasangan PPE
+        for viol_id in active_ids:
+            ppe_id = config.PPE_VIOLATION_PAIRS.get(viol_id)
+            if ppe_id:
+                track_classes.add(ppe_id)
+
+        # Jika tidak ada violation aktif → deteksi semua
+        if not active_ids:
+            track_classes = None
+        else:
+            track_classes = list(track_classes)
+
+        print(f"[CCTV {cctv_id}] Active IDs: {active_ids} | Tracking: {track_classes}")
+
         try:
             results = model.track(
-                frame, conf=config.CONFIDENCE_THRESHOLD,
-                persist=True, tracker="bytetrack.yaml"
+                frame,
+                conf=config.CONFIDENCE_THRESHOLD,
+                persist=True,
+                tracker="bytetrack.yaml",
+                # classes=track_classes
             )
 
             for r in results:
@@ -299,33 +418,40 @@ def process_thread(cctv_id, frame_queue):
                         continue
 
                     x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
-                    cls_id = int(box.cls.cpu().numpy()[0])
-                    conf = float(box.conf.cpu().numpy()[0])
-                    track_id = int(box.id.cpu().numpy()[0])
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    track_id = int(box.id[0])
                     class_name = model.names[cls_id]
 
-                    # --- Gambar bounding box ---
+                    # Gambar bounding box
                     color = config.get_color_for_class(class_name)
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(annotated, f"{class_name} {conf:.2f}",
+                                (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-                    # Tambahkan label teks di atas bounding box
-                    label = f"{class_name} {conf:.2f}"
-                    cv2.putText(
-                        annotated, label, (x1, max(y1 - 10, 10)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
-                    )
+                    # --- VALIDASI VIOLATION ---
+                    class_info = config.OBJECT_CLASS_CACHE.get(class_name)
+                    if not class_info:
+                        print(f"[SKIP] Class tidak dikenal: {class_name}")
+                        continue
 
-                    # --- Proses pelanggaran ---
+                    if not class_info["is_violation"]:
+                        print(f"[SKIP] {class_name} bukan violation")
+                        continue
+
+                    if class_info["id"] not in active_ids:
+                        print(f"[SKIP] {class_name} TIDAK AKTIF di CCTV {cctv_id} (ID: {class_info['id']})")
+                        continue
+
                     process_detection(
-                        cctv_id, frame, annotated,
-                        x1, y1, x2, y2, cls_id, conf, track_id,
-                        model, tracked_violations
+                        cctv_id, frame, annotated, x1, y1, x2, y2,
+                        cls_id, conf, track_id, model, tracked_violations
                     )
 
         except Exception as e:
-            logging.error(f"[CCTV {cctv_id}] Detection error: {e}")
+            print(f"[CCTV {cctv_id}] DETECTION ERROR → {e}")
 
-        # Simpan annotated frame untuk ditampilkan di frontend
+        # Simpan frame teranotasi
         config.annotated_frames[cctv_id] = annotated
         gc.collect()
 

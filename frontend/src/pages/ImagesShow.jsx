@@ -232,7 +232,7 @@ const ImagesShow = () => {
       {/* HALAMAN GAMBAR */}
       {!options && (
         <>
-          {loading && <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading...</p></div>}
+          {loading && <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Violation Images...</p></div>}
 
           {images.length === 0 && !loading && (
             <p className="text-center text-gray-500">No pictures can be found.</p>
@@ -312,7 +312,7 @@ const ImagesShow = () => {
           </div>
           {/* INFO DI BAWAH */}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center">
-            <p className='text-base'>Clik here to close image.</p>
+            <p className='text-base'>Clik here to close the image.</p>
           </div>
         </div>
       )}

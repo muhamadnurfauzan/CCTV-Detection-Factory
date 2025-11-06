@@ -1,60 +1,83 @@
+// CCTVStream.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
+import { FaExclamationTriangle, FaCheckCircle, FaRedo } from 'react-icons/fa';
 
-function CCTVStream({ cctvId, onBack }) {
+function CCTVStream({ cctvId }) {
   const [status, setStatus] = useState('Connecting...');
+  const [errorCount, setErrorCount] = useState(0);
   const imgRef = useRef(null);
+  const maxRetries = 3;
 
   useEffect(() => {
     if (!cctvId || !imgRef.current) return;
 
     const img = imgRef.current;
-    const streamUrl = `/api/video_feed?id=${cctvId}`;
-    console.log(`Streaming dari ${streamUrl}`);
+    let retryCount = 0;
 
-    const handleError = () => setStatus('Streaming Failed.');
-    const handleLoad = () => setStatus('Streaming Active!');
+    const loadImage = () => {
+      const timestamp = Date.now();
+      const streamUrl = `/api/video_feed?id=${cctvId}&t=${timestamp}`;
+      img.src = streamUrl;
+      setStatus('Connecting...');
+    };
 
-    img.onerror = handleError;
+    const handleLoad = () => {
+      setStatus('Streaming Active!');
+      setErrorCount(0);
+    };
+
+    const handleError = () => {
+      retryCount++;
+      setErrorCount(retryCount);
+      if (retryCount <= maxRetries) {
+        setStatus(`Reconnecting... (${retryCount}/${maxRetries})`);
+        setTimeout(loadImage, 2000 * retryCount);
+      } else {
+        setStatus('Streaming Failed.');
+      }
+    };
+
     img.onload = handleLoad;
-    img.src = streamUrl;
+    img.onerror = handleError;
+
+    loadImage();
 
     return () => {
-      img.onerror = null;
       img.onload = null;
+      img.onerror = null;
+      img.src = '';
     };
   }, [cctvId]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 p-6">
-      <h1 className="text-3xl font-bold mb-2 text-gray-800 border-b pb-2">Streaming CCTV #{cctvId}</h1>
-      <div className="flex grid-cols-2 gap-4 my-2 justify-start">
-        <div className="flex items-center space-x-2">
+    <div className="max-w-4xl w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+      <div className="border-2 border-indigo-200 relative">
+        <img
+          ref={imgRef}
+          alt={`CCTV ${cctvId} Stream`}
+          className="w-full h-auto object-cover"
+        />
+        {status.includes('Failed') && (
           <button
-            onClick={onBack}
-            className="bg-indigo-500 text-white px-2 py-1 rounded-lg hover:bg-indigo-600 transition text-sm"
+            onClick={() => window.location.reload()}
+            class  className="absolute top-4 right-4 bg-red-600 text-white p-2 rounded-full hover:bg-red-700"
           >
-            Back
+            <FaRedo />
           </button>
-        </div>
+        )}
       </div>
-      <div className="max-w-4xl w-full mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="border-2 border-indigo-200">
-          <img
-            ref={imgRef}
-            alt="CCTV Stream"
-            className="w-full h-auto object-cover"
-          />
-        </div>
-        <div
-          className={`mt-4 p-2 text-center font-semibold ${
-            status.includes('Gagal') ? 'text-red-600' : 'text-green-600'
-          } transition-colors duration-300`}
-        >
-          {status.includes('Gagal') ? 
-          <FaExclamationTriangle className="inline mr-1 text-red-600" /> : <FaCheckCircle className="inline mr-1 text-green-600" />}
-          {status}
-        </div>
+
+      <div
+        className={`mt-4 p-3 text-center font-semibold transition-all ${
+          status.includes('Failed') ? 'text-red-600' : 'text-green-600'
+        }`}
+      >
+        {status.includes('Failed') ? (
+          <FaExclamationTriangle className="inline mr-2" />
+        ) : (
+          <FaCheckCircle className="inline mr-2" />
+        )}
+        {status}
       </div>
     </div>
   );

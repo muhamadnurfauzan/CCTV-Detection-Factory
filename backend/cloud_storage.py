@@ -1,15 +1,14 @@
 # cloud_storage.py
 import datetime
 import uuid
-import logging
 from supabase import create_client, Client
 import config
 
 try:
     supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
-    logging.info("[Supabase] Koneksi berhasil dibuat.")
+    print("[Supabase] Koneksi berhasil dibuat.")
 except Exception as e:
-    logging.error(f"[Supabase] Gagal membuat koneksi: {e}")
+    print(f"[Supabase] Gagal membuat koneksi: {e}")
     supabase = None
 
 def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str) -> str:
@@ -46,9 +45,9 @@ def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str
             raise RuntimeError(f"Gagal upload (status={res.status_code}): {error_detail}")
 
         public_url = supabase.storage.from_(config.SUPABASE_BUCKET).get_public_url(file_path)
-        logging.info(f"[Supabase] Upload berhasil: {public_url}")
+        print(f"[Supabase] Upload berhasil: {public_url}")
         return public_url
 
     except Exception as e:
-        logging.error(f"[Supabase] Gagal upload gambar: {e}")
+        print(f"[Supabase] Gagal upload gambar: {e}")
         raise

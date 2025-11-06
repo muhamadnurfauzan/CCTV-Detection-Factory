@@ -13,8 +13,8 @@ const Dashboard = () => {
   useEffect(() => {
   let mounted = true;
   const fetchAll = async () => {
-      setLoading(true);
-      try {
+    setLoading(true);
+    try {
       const [sRes, tRes, wRes, oRes] = await Promise.all([
           fetch("/api/dashboard/summary_today"),
           fetch("/api/dashboard/top_cctv_today"),
@@ -238,7 +238,7 @@ const Dashboard = () => {
                 </BarChart>
               </SafeResponsiveContainer>
             ) : (
-              <div className="p-10 h-[300px] text-center text-gray-500">
+              <div className="p-10 h-[328px] text-center text-gray-500">
                 No data for top 5 camera by violation for today.
               </div>
             )}

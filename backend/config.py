@@ -23,11 +23,24 @@ TARGET_MAX_WIDTH = 320
 FRAME_SKIP = 15
 QUEUE_SIZE = 3
 CCTV_RATIO = (1920, 1080)
- 
+
+PPE_VIOLATION_PAIRS = {
+    6: 1,
+    7: 2,
+    8: 3,
+    9: 4,
+    10: 5,
+    1: 6,
+    2: 7,
+    3: 8,
+    4: 9,
+    5: 10,
+} 
 
 # Cache global dengan TTL (30 detik)
 OBJECT_CLASS_CACHE = {}
 VIOLATION_CLASS_IDS = {}
+ACTIVE_VIOLATION_CACHE = {}
 _CACHE_TIMESTAMP = 0
 _CACHE_TTL = 30  # detik
 
@@ -54,25 +67,28 @@ def load_object_classes(force_refresh=False):
     global OBJECT_CLASS_CACHE, VIOLATION_CLASS_IDS, _CACHE_TIMESTAMP
     now = time.time()
     if force_refresh or now - _CACHE_TIMESTAMP > _CACHE_TTL:
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
-        rows = cur.fetchall()
-        OBJECT_CLASS_CACHE = {}
-        VIOLATION_CLASS_IDS = {}
-        for row in rows:
-            cid, name, r, g, b, is_viol = row
-            OBJECT_CLASS_CACHE[name] = {
-                "id": cid,
-                "color": (r, g, b) if r is not None else (255, 255, 255),  # Fallback white
-                "is_violation": is_viol
-            }
-            if is_viol:
-                VIOLATION_CLASS_IDS[cid] = name
-        cur.close(); conn.close()
-        _CACHE_TIMESTAMP = now
-        if not OBJECT_CLASS_CACHE:
-            print("[CACHE] Object classes kosong — fallback ke default?")
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
+            rows = cur.fetchall()
+            OBJECT_CLASS_CACHE = {}
+            VIOLATION_CLASS_IDS = {}
+            for row in rows:
+                cid, name, r, g, b, is_viol = row
+                OBJECT_CLASS_CACHE[name] = {
+                    "id": cid,
+                    "color": (r, g, b) if r is not None else (255, 255, 255),
+                    "is_violation": is_viol
+                }
+                if is_viol:
+                    VIOLATION_CLASS_IDS[cid] = name
+            cur.close(); conn.close()
+            _CACHE_TIMESTAMP = now
+            if not OBJECT_CLASS_CACHE:
+                print("[CACHE] WARNING: Object classes kosong dari DB!")
+        except Exception as e:
+            print(f"[CACHE] ERROR: Gagal load object_classes: {e}")
 
 # Panggil di startup
 load_object_classes()
@@ -137,16 +153,42 @@ def get_active_violation_ids_for_cctv(cctv_id):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT class_id FROM cctv_violation_config
-        WHERE cctv_id = %s AND is_active = TRUE
+        SELECT oc.id 
+        FROM cctv_violation_config cvc
+        JOIN object_class oc ON cvc.class_id = oc.id
+        WHERE cvc.cctv_id = %s AND cvc.is_active = true
     """, (cctv_id,))
-    active = {row[0] for row in cur.fetchall()}
+    ids = [row[0] for row in cur.fetchall()]
     cur.close(); conn.close()
-    return active
+    return ids
 
 # Fungsi helper untuk color
 def get_color_for_class(class_name):
     return OBJECT_CLASS_CACHE.get(class_name, {}).get("color", (255, 255, 255))
+
+# --- Cache aktif violation per CCTV ---
+def refresh_active_violations():
+    conn = get_connection()
+    cur = conn.cursor()
+    # Bukan dari object_class, tapi dari cctv_violation_config
+    cur.execute("""
+        SELECT cvc.cctv_id, oc.id
+        FROM cctv_violation_config cvc
+        JOIN object_class oc ON cvc.class_id = oc.id
+        WHERE cvc.is_active = true
+    """)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+
+    ACTIVE_VIOLATION_CACHE.clear()
+    for cctv_id, class_id in rows:
+        ACTIVE_VIOLATION_CACHE.setdefault(cctv_id, []).append(class_id)
+
+    print(f"[ACTIVE CACHE] Updated: {ACTIVE_VIOLATION_CACHE}")
+
+# Fungsi untuk mendapatkan active violation IDs dari cache
+# def get_active_violation_ids_for_cctv(cctv_id):
+#     return ACTIVE_VIOLATION_CACHE.get(cctv_id, [])
 
 # --- Inisialisasi konfigurasi global ---
 try:
