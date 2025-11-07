@@ -185,7 +185,6 @@ const ImagesShow = () => {
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
-      {/* JUDUL DINAMIS */}
       <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Images</h2>
 
       <p className="mb-1 text-gray-600">

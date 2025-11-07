@@ -4,6 +4,7 @@ import { FaPlus, FaSlidersH, FaArrowLeft } from 'react-icons/fa';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
 import CCTVViolation from '../components/CCTVViolation';
+import AddCCTV from '../components/AddCCTV';
 
 const CCTVList = () => {
   const [view, setView] = useState('table');
@@ -14,6 +15,8 @@ const CCTVList = () => {
   const [configs, setConfigs] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- Fetch semua data sekali di parent ---
   useEffect(() => {
@@ -89,6 +92,30 @@ const CCTVList = () => {
     }
   };
 
+  const handleAddCCTV = async (data) => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/cctv_add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        const newCctv = await res.json();
+        setCctvs(prev => [...prev, newCctv]); // ← Update state langsung
+        setShowAddModal(false);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to add CCTV');
+      }
+    } catch (e) {
+        alert('Network error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // --- Filter CCTV ---
   const filteredCctvs = cctvs.filter(cctv =>
     cctv.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -109,10 +136,10 @@ const CCTVList = () => {
         {view === 'violation' && "Violation Configurations"}
         </h2>
 
-        <div className='grid grid-flow-col justify-stretch items-center mb-2'>
+        <div className='grid grid-flow-col gap-2 justify-stretch items-center mb-2'>
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
-                <div className="flex justify-start" >
+                <div className="flex justify-start my-1" >
                     <button
                         onClick={handleBack}
                         className="flex items-center gap-2 bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
@@ -136,10 +163,11 @@ const CCTVList = () => {
                             <FaSlidersH className="w-5 h-5" />
                             </button>
                             <button
-                            className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition"
-                            title="Add New CCTV"
+                              onClick={() => setShowAddModal(true)}
+                              className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition"
+                              title="Add New CCTV"
                             >
-                            <FaPlus className="w-5 h-5" />
+                              <FaPlus className="w-5 h-5" />
                             </button>
                         </>
                         )}
@@ -151,7 +179,7 @@ const CCTVList = () => {
                             placeholder="Search by Name, IP, or Location..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-64 px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="flex w-full min-w-[270px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
                 </div>
@@ -159,7 +187,7 @@ const CCTVList = () => {
         </div>
 
       {/* Main Content */}
-      <div className=" overflow-x-auto">
+      <div className="overflow-x-auto">
         {view !== 'stream' ? (
             <div className='bg-white'>
                 {view === 'table' && (
@@ -182,6 +210,12 @@ const CCTVList = () => {
             <CCTVStream cctvId={selectedCCTV} />
          )}
       </div>
+      <AddCCTV
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleAddCCTV}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 };

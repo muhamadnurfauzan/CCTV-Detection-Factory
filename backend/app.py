@@ -6,6 +6,7 @@ import logging
 import config
 import cctv_detection
 import scheduler  
+import backend.routes.cctv_crud as cctv_crud
 import sys
 
 from flask import Flask, Response, jsonify, request
@@ -340,6 +341,8 @@ if __name__ == "__main__":
     # Jalankan scheduler otomatis (rekap & pembersihan)
     Thread(target=scheduler.scheduler_thread, daemon=True).start()
     logging.info("Scheduler thread started (daily log + cleanup).")
+
+    app.register_blueprint(cctv_crud.cctv_bp)
 
     # Jalankan Flask server
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)

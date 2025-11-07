@@ -180,73 +180,73 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Bagian 2: Top CCTV Today - Combo Bar Chart */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4 text-gray-700">Top Camera by Total Violation</h3>
-          <div className="p-6 bg-white rounded-xl shadow-lg">
-            {barData.length > 0 ? (
-              <SafeResponsiveContainer height={300}>
-                <BarChart
-                  data={barData}
-                  margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={({ x, y, payload }) => {
-                      const lines = payload.value.split("\n");
-                      return (
-                        <text x={x} y={y + 10} textAnchor="middle" fill="#6b7280" fontSize={12}>
-                          {lines.map((line, i) => (
-                            <tspan key={i} x={x} dy={i === 0 ? 0 : 14}>
-                              {line.trim()}
-                            </tspan>
-                          ))}
-                        </text>
-                      );
-                    }}
-                  />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip content={<CustomBarTooltip />} />
-                  <Legend
-                    wrapperStyle={{ paddingTop: "10px" }}
-                    formatter={(value) => (
-                      <span
-                        className="text-xs font-medium"
-                        style={{ color: colorMap[value] || "#374151" }}
-                      >
-                        {value}
-                      </span>
-                    )}
-                  />
-
-                  {violationKeys.map((type) => {
-                    const hasData = barData.some((item) => item[type] && item[type] > 0);
-                    if (!hasData) return null;
-
+      {/* Bagian 2: Top CCTV Today - Combo Bar Chart */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold mb-4 text-gray-700">Top Camera by Total Violation</h3>
+        <div className="p-6 bg-white rounded-xl shadow-lg">
+          {barData.length > 0 ? (
+            <SafeResponsiveContainer height={300}>
+              <BarChart
+                data={barData}
+                margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={({ x, y, payload }) => {
+                    const lines = payload.value.split("\n");
                     return (
-                      <Bar
-                        key={type}
-                        dataKey={type}
-                        name={type}
-                        fill={colorMap[type] || "#9ca3af"}
-                        barSize={25}
-                      />
+                      <text x={x} y={y + 10} textAnchor="middle" fill="#6b7280" fontSize={12}>
+                        {lines.map((line, i) => (
+                          <tspan key={i} x={x} dy={i === 0 ? 0 : 14}>
+                            {line.trim()}
+                          </tspan>
+                        ))}
+                      </text>
                     );
-                  })}
-                </BarChart>
-              </SafeResponsiveContainer>
-            ) : (
-              <div className="p-10 h-[328px] text-center text-gray-500">
-                No data for top 5 camera by violation for today.
-              </div>
-            )}
-          </div>
-        </div>
+                  }}
+                />
+                <YAxis allowDecimals={false} />
+                <Tooltip content={<CustomBarTooltip />} />
+                <Legend
+                  wrapperStyle={{ paddingTop: "10px" }}
+                  formatter={(value) => (
+                    <span
+                      className="text-xs font-medium"
+                      style={{ color: colorMap[value] || "#374151" }}
+                    >
+                      {value}
+                    </span>
+                  )}
+                />
 
+                {violationKeys.map((type) => {
+                  const hasData = barData.some((item) => item[type] && item[type] > 0);
+                  if (!hasData) return null;
+
+                  return (
+                    <Bar
+                      key={type}
+                      dataKey={type}
+                      name={type}
+                      fill={colorMap[type] || "#9ca3af"}
+                      barSize={25}
+                    />
+                  );
+                })}
+              </BarChart>
+            </SafeResponsiveContainer>
+          ) : (
+            <div className="p-10 text-center text-gray-500">
+              No data for top 5 camera by violation for today.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-4">
         {/* Bagian 3: Weekly Trend - Line Chart */}
-        <div className="mb-8">
+        <div className="mb-8 col-span-2">
           <h3 className="text-xl font-semibold mb-4 text-gray-700">Weekly Trend</h3>
           <div className="p-6 bg-white rounded-xl shadow-lg">
             <SafeResponsiveContainer height={300}>
@@ -261,7 +261,7 @@ const Dashboard = () => {
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#1d4ed8"
+                  stroke="#3730A3"
                   strokeWidth={3}
                   fill="url(#color)"
                   dot={{ r: 4 }}
@@ -270,8 +270,8 @@ const Dashboard = () => {
                 />
                 <defs>
                   <linearGradient id="color" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1d4ed8" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#3730A3" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#3730A3" stopOpacity={0} />
                   </linearGradient>
                 </defs>
               </AreaChart>
@@ -281,6 +281,13 @@ const Dashboard = () => {
                 No data in the past 7 days.
               </p>
             )}
+          </div>
+        </div>
+        {/* Bagian 4: Persentase kenaikan/penurunan */}
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold mb-4 text-gray-700">Percentage Incr./Decr. Violation</h3>
+          <div className="p-6 bg-white rounded-xl shadow-lg">
+
           </div>
         </div>
       </div>

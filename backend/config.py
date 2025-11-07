@@ -24,18 +24,10 @@ FRAME_SKIP = 15
 QUEUE_SIZE = 3
 CCTV_RATIO = (1920, 1080)
 
-PPE_VIOLATION_PAIRS = {
-    6: 1,
-    7: 2,
-    8: 3,
-    9: 4,
-    10: 5,
-    1: 6,
-    2: 7,
-    3: 8,
-    4: 9,
-    5: 10,
-} 
+cctv_streams = {}        # {id: {url, enabled, name}}
+detection_threads = {}   # {id: thread}
+annotated_frames = {}    # {id: np.array}
+active_violations = {}   # {cctv_id: [class_id]}
 
 # Cache global dengan TTL (30 detik)
 OBJECT_CLASS_CACHE = {}
@@ -106,11 +98,15 @@ def get_all_active_cctv():
     return results
 
 # --- ROI Loader ---
-def load_roi_from_json(json_path):
-    if not json_path or not os.path.exists(json_path):
+def load_roi_from_json(area_field):
+    if not area_field:
+        return [], 0, 0
+    filepath = os.path.join("JSON", area_field) 
+    if not os.path.exists(filepath):
+        print(f"[ROI] File not found: {filepath}")
         return [], 0, 0
     try:
-        with open(json_path, "r") as f:
+        with open(filepath, "r") as f:
             data = json.load(f)
             width = data.get("image_width", 0)
             height = data.get("image_height", 0)
@@ -118,12 +114,12 @@ def load_roi_from_json(json_path):
             for item in data.get("items", []):
                 if "points" in item:
                     regions.append({
-                        "type": item.get("type", "undefined"),
+                        "type": item.get("type", "polygon"),
                         "points": np.array(item["points"], dtype=np.float32),
                     })
             return regions, width, height
     except Exception as e:
-        print(f"[ERROR] Gagal load ROI JSON: {e}")
+        print(f"[ROI LOAD ERROR]: {e}")
         return [], 0, 0
 
 # --- Muat konfigurasi semua CCTV aktif ---
@@ -162,6 +158,25 @@ def get_active_violation_ids_for_cctv(cctv_id):
     cur.close(); conn.close()
     return ids
 
+# --- Muat pasangan pelanggaran PPE dari database ---
+def load_violation_pairs():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, pair_id FROM object_class WHERE pair_id IS NOT NULL;")
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+
+    pairs = {}
+    for id_, pair_id in rows:
+        pairs[id_] = pair_id
+        pairs[pair_id] = id_  # buat simetris
+
+    print(f"[PAIR CACHE] Loaded {len(pairs)//2} PPE pairs.")
+    return pairs
+
+# Panggil saat startup
+PPE_VIOLATION_PAIRS = load_violation_pairs()
+
 # Fungsi helper untuk color
 def get_color_for_class(class_name):
     return OBJECT_CLASS_CACHE.get(class_name, {}).get("color", (255, 255, 255))
@@ -185,10 +200,6 @@ def refresh_active_violations():
         ACTIVE_VIOLATION_CACHE.setdefault(cctv_id, []).append(class_id)
 
     print(f"[ACTIVE CACHE] Updated: {ACTIVE_VIOLATION_CACHE}")
-
-# Fungsi untuk mendapatkan active violation IDs dari cache
-# def get_active_violation_ids_for_cctv(cctv_id):
-#     return ACTIVE_VIOLATION_CACHE.get(cctv_id, [])
 
 # --- Inisialisasi konfigurasi global ---
 try:

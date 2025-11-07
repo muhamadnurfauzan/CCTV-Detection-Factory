@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 
 import Sidebar from './components/Sidebar'; 
 import Dashboard from './pages/Dashboard'; 
+import CCTVList from './pages/CCTVList';
 import ImagesShow from './pages/ImagesShow'; 
 import Reports from './pages/Reports';
-import CCTVList from './pages/CCTVList';
 import ErrorBoundary from './components/ErrorBoundary'; 
 
 function App() {
