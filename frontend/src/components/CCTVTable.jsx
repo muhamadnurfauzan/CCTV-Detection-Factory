@@ -1,8 +1,8 @@
 // CCTVTable.jsx
 import React from 'react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaPenSquare, FaTrash } from 'react-icons/fa';
 
-function CCTVTable({ cctvs, onSelect }) {
+function CCTVTable({ cctvs, onSelect, onEdit, onDelete }) {
   return (
     <div className="rounded-lg shadow-lg"> 
       <table className="w-full border-collapse text-sm">
@@ -39,7 +39,7 @@ function CCTVTable({ cctvs, onSelect }) {
                     {cctv.enabled ? 'Active' : 'Nonactive'}
                   </span>
                 </td>
-                <td className="border p-2 text-center items-center">
+                <td className="grid border p-2 sm:grid-flow-col grid-flow-row justify-items-center gap-1">
                   {cctv.enabled ? (
                     <button
                       onClick={() => onSelect(cctv.id)}
@@ -52,6 +52,18 @@ function CCTVTable({ cctvs, onSelect }) {
                       <FaEyeSlash className="w-5 h-5 text-gray-400" />
                     </button>
                   )}
+                  <button
+                  onClick={() => onEdit(cctv.id)}
+                  className="text-green-600 hover:text-green-800 transition"
+                  >
+                    <FaPenSquare className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(cctv.id)}
+                    className="text-red-600 hover:text-red-800 transition"
+                  >
+                    <FaTrash className="w-5 h-5" />
+                  </button>
                 </td>
               </tr>
             ))

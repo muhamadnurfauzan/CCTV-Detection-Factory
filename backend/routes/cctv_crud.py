@@ -133,3 +133,110 @@ def rtsp_snapshot():
     except Exception as e:
         logging.error(f"[SNAPSHOT ERROR]: {e}")
         return jsonify({"error": str(e)}), 500
+
+@cctv_bp.route('/cctv_update/<int:cctv_id>', methods=['PUT'])
+def update_cctv(cctv_id):
+    data = request.get_json()
+    logging.info(f"[UPDATE CCTV {cctv_id}] Received: {data}")
+
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Update fields yang ada
+        update_fields = []
+        update_values = []
+        if 'name' in data:
+            update_fields.append("name = %s")
+            update_values.append(data['name'])
+        if 'ip_address' in data:
+            update_fields.append("ip_address = %s")
+            update_values.append(data['ip_address'])
+        if 'port' in data:
+            update_fields.append("port = %s")
+            update_values.append(data['port'])
+        if 'token' in data:
+            update_fields.append("token = %s")
+            update_values.append(data['token'])
+        if 'location' in data:
+            update_fields.append("location = %s")
+            update_values.append(data['location'])
+        if 'enabled' in data:
+            update_fields.append("enabled = %s")
+            update_values.append(data['enabled'])
+
+        # Handle ROI update
+        area_path = None
+        if 'area' in data:
+            roi_json = json.loads(data['area'])
+            filename = save_roi_to_file(roi_json, cctv_id)
+            if filename:
+                update_fields.append("area = %s")
+                update_values.append(filename)
+                area_path = filename
+            else:
+                raise Exception("Failed to update ROI")
+
+        if not update_fields:
+            return jsonify({"error": "No fields to update"}), 400
+
+        update_query = f"UPDATE cctv_data SET {', '.join(update_fields)} WHERE id = %s RETURNING *"
+        update_values.append(cctv_id)
+        cur.execute(update_query, update_values)
+        updated_cctv = cur.fetchone()
+        conn.commit()
+
+        # Update config jika perlu
+        if updated_cctv:
+            rtsps_url = f"rtsps://{updated_cctv['ip_address']}:{updated_cctv['port']}/{updated_cctv['token']}"
+            config.cctv_streams[cctv_id] = {
+                'url': rtsps_url,
+                'enabled': updated_cctv['enabled'],
+                'name': updated_cctv['name']
+            }
+            config.refresh_active_violations()
+
+        return jsonify(updated_cctv), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        logging.error(f"[UPDATE ERROR {cctv_id}]: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@cctv_bp.route('/cctv_delete/<int:cctv_id>', methods=['DELETE'])
+def delete_cctv(cctv_id):
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        # Hapus ROI file jika ada
+        cur.execute("SELECT area FROM cctv_data WHERE id = %s", (cctv_id,))
+        area = cur.fetchone()
+        if area and area[0]:
+            filepath = os.path.join(ROI_DIR, area[0])
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                logging.info(f"[DELETE] Removed ROI file: {filepath}")
+
+        # Hapus dari DB
+        cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))
+        conn.commit()
+
+        # Hapus dari config
+        config.cctv_streams.pop(cctv_id, None)
+        config.refresh_active_violations()
+
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        logging.error(f"[DELETE ERROR {cctv_id}]: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()

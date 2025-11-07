@@ -1,10 +1,11 @@
 // CCTVList.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaSlidersH, FaArrowLeft } from 'react-icons/fa';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
 import CCTVViolation from '../components/CCTVViolation';
-import AddCCTV from '../components/AddCCTV';
+import ModalAddCCTV from '../components/ModalAddCCTV';
+import ModalEditCCTV from '../components/ModalEditCCTV.jsx';
 
 const CCTVList = () => {
   const [view, setView] = useState('table');
@@ -17,6 +18,8 @@ const CCTVList = () => {
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedEditCCTV, setSelectedEditCCTV] = useState(null);
 
   // --- Fetch semua data sekali di parent ---
   useEffect(() => {
@@ -74,7 +77,6 @@ const CCTVList = () => {
       ? current.filter(id => id !== Number(class_id))
       : [...current, Number(class_id)];
 
-    // Optimistic UI
     setConfigs(prev => ({ ...prev, [cctv_id]: newEnabled }));
 
     try {
@@ -116,6 +118,45 @@ const CCTVList = () => {
     }
   };
 
+  const handleEdit = useCallback((id) => {
+    const cctv = cctvs.find(c => c.id === id);
+    setSelectedEditCCTV(cctv);
+    setShowEditModal(true);
+  }, [cctvs]);
+
+  const handleUpdate = useCallback(async (id, data) => {
+    try {
+      const res = await fetch(`/api/cctv_update/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCctvs(prev => prev.map(c => c.id === id ? updated : c));
+        setShowEditModal(false);
+      } else {
+        alert('Update failed');
+      }
+    } catch {
+      alert('Network error');
+    }
+  }, []);
+
+  const handleDelete = useCallback(async (id) => {
+    if (!window.confirm('Delete this CCTV?')) return;
+    try {
+      const res = await fetch(`/api/cctv_delete/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setCctvs(prev => prev.filter(c => c.id !== id));
+      } else {
+        alert('Delete failed');
+      }
+    } catch {
+      alert('Network error');
+    }
+  }, []);
+
   // --- Filter CCTV ---
   const filteredCctvs = cctvs.filter(cctv =>
     cctv.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -139,12 +180,13 @@ const CCTVList = () => {
         <div className='grid grid-flow-col gap-2 justify-stretch items-center mb-2'>
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
-                <div className="flex justify-start my-1" >
+                <div className="flex justify-start" >
                     <button
                         onClick={handleBack}
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
+                        title="Back to CCTV List"
+                        className="bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
                     >
-                        <FaArrowLeft /> Back
+                        <FaArrowLeft className='h-4 w-4'/>
                     </button>
                 </div>
             )}
@@ -157,29 +199,26 @@ const CCTVList = () => {
                         <>
                             <button
                             onClick={handleOpenViolation}
-                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition"
+                            className="bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
                             title="Configure Violations"
                             >
-                            <FaSlidersH className="w-5 h-5" />
+                            <FaSlidersH className='h-4 w-4'/>
                             </button>
                             <button
                               onClick={() => setShowAddModal(true)}
                               className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition"
                               title="Add New CCTV"
                             >
-                              <FaPlus className="w-5 h-5" />
+                              <FaPlus className='h-4 w-4'/>
                             </button>
                         </>
                         )}
-                    </div>
-
-                    <div className='flex'>
                         <input
                             type="text"
-                            placeholder="Search by Name, IP, or Location..."
+                            placeholder="Type Name, IP, or Location..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="flex w-full min-w-[270px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="flex w-full min-w-[100px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
                 </div>
@@ -194,6 +233,8 @@ const CCTVList = () => {
                     <CCTVTable
                         cctvs={filteredCctvs}
                         onSelect={handleSelect}
+                        onEdit={handleEdit}     
+                        onDelete={handleDelete}
                     />
                 )}
                 {view === 'violation' && (
@@ -210,11 +251,17 @@ const CCTVList = () => {
             <CCTVStream cctvId={selectedCCTV} />
          )}
       </div>
-      <AddCCTV
+      <ModalAddCCTV
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddCCTV}
         isSubmitting={isSubmitting}
+      />
+      <ModalEditCCTV
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onUpdate={handleUpdate}
+        cctvData={selectedEditCCTV}
       />
     </div>
   );

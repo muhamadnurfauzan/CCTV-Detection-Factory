@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FaTimes, FaUpload, FaDrawPolygon, FaCamera } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaCamera } from 'react-icons/fa';
 
-export default function AddCCTV({ open, onClose, onSuccess }) {
+export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [form, setForm] = useState({
         name: '', location: '', ip: '', port: '', token: '', enabled: true
     });
@@ -16,6 +16,7 @@ export default function AddCCTV({ open, onClose, onSuccess }) {
     const [submitting, setSubmitting] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState(null);
+    const [uploadError, setUploadError] = useState(null);
 
     // Reset on open
     useEffect(() => {
@@ -215,50 +216,151 @@ export default function AddCCTV({ open, onClose, onSuccess }) {
                         onChange={(e) => setForm({ ...form, url: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Contoh: rtsps://192.168.x.x:xxxx/aBcdEfGhIj123456?enableSrtp</p>
+                    <p className="text-xs text-gray-500 mt-1">Example: rtsps://192.168.x.x:xxxx/aBcdEfGhIj123456?enableSrtp</p>
                 </div>
 
                 {/* ROI Section */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">ROI Area *</label>
-                    <div className="flex gap-2 mb-3">
-                    <button type="button" onClick={() => setRoiMethod('upload')} className={`...`}>Upload JSON</button>
-                    <button type="button" onClick={() => setRoiMethod('draw')} className={`...`}>Draw on Image</button>
-                    <button
-                        type="button"
-                        onClick={loadStreamPreview}
-                        disabled={previewLoading || !form.ip || !form.port}
-                        className="px-4 py-2 rounded-lg font-medium transition bg-blue-600 text-white disabled:opacity-50 items-center"
-                    >
-                        <FaCamera className="inline mr-2" /> {previewLoading ? 'Loading...' : 'Load Preview from Stream'}
-                    </button>
-                    </div>
-                    {previewError && <p className="text-red-500 mb-2">{previewError}</p>}
+                <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
 
+                {/* Tab Pilihan Metode */}
+                <div className="flex gap-2 border-b border-gray-200">
+                    <button
+                    type="button"
+                    onClick={() => setRoiMethod('upload')}
+                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${
+                        roiMethod === 'upload'
+                        ? 'bg-white text-indigo-600 border border-b-0 border-gray-300'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                    >
+                    Upload JSON File
+                    </button>
+                    <button
+                    type="button"
+                    onClick={() => setRoiMethod('draw')}
+                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${
+                        roiMethod === 'draw'
+                        ? 'bg-white text-indigo-600 border border-b-0 border-gray-300'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                    >
+                    Draw on Stream
+                    </button>
+                </div>
+
+                {/* Upload Mode */}
                 {roiMethod === 'upload' && (
-                    <div {...getRootProps()} className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-500 transition">
-                    <input {...getInputProps()} />
-                    {isDragActive ? <p>Drop file here...</p> : <p>Drag & drop ROI JSON or image, or click to select</p>}
-                    {roiFile && <p className="mt-2 text-sm text-green-600">✓ {roiFile.name}</p>}
+                    <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                        <div
+                        {...getRootProps()}
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition bg-white"
+                        >
+                        <input
+                            {...getInputProps()}
+                            accept=".json"
+                            onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                                if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                                setRoiFile(file);
+                                setUploadError(null);
+                                } else {
+                                setRoiFile(null);
+                                setUploadError('Only JSON files are allowed');
+                                e.target.value = null; // Reset input
+                                }
+                            }
+                            }}
+                        />
+                        <FaUpload className="mx-auto text-4xl text-gray-400 mb-3" />
+                        {isDragActive ? (
+                            <p className="text-sm text-gray-600">Drop file here...</p>
+                        ) : (
+                            <p className="text-sm text-gray-600">
+                            Drag & drop <strong>ROI JSON file</strong> or click to select file.
+                            </p>
+                        )}
+                        
+                        {/* Status File */}
+                        {roiFile && !uploadError && (
+                            <p className="mt-3 text-sm font-medium text-green-600">
+                            File: {roiFile.name}
+                            </p>
+                        )}
+                        
+                        {/* Error jika bukan JSON */}
+                        {uploadError && (
+                            <p className="mt-3 text-sm font-medium text-red-600 bg-red-50 px-3 py-1 rounded border border-red-200">
+                            {uploadError}
+                            </p>
+                        )}
+                        </div>
                     </div>
                 )}
 
+                {/* Draw Mode */}
                 {roiMethod === 'draw' && (
-                    <div className="space-y-3">
-                    <div className="flex gap-2">
-                        <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white rounded text-sm">Start Drawing</button>
-                        <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Close Polygon</button>
-                        <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white rounded text-sm">Clear</button>
-                    </div>
-                    <canvas
-                        ref={canvasRef}
-                        className="w-full border border-gray-300 rounded-lg cursor-crosshair"
-                        style={{ maxHeight: '400px' }}
-                        onClick={handleCanvasClick}
-                    />
-                    {previewUrl && !drawingMode && (
-                        <img src={previewUrl} alt="Preview" className="w-full rounded-lg border" />
-                    )}
+                    <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                        {/* Tombol Load Preview */}
+                        <div className="flex justify-end items-center">
+                            <button
+                            type="button"
+                            onClick={loadStreamPreview}
+                            disabled={previewLoading || !form.ip || !form.port}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            >
+                            <FaCamera />
+                            {previewLoading ? 'Loading...' : 'Take picture from stream'}
+                            </button>
+                        </div>
+
+                        {previewError && (
+                            <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                            {previewError}
+                            </p>
+                        )}
+
+                        {/* Canvas untuk Gambar */}
+                        {imageUrl ? (
+                            <div className="space-y-2">
+                                <div className="flex gap-2 justify-center">
+                                    <button
+                                    type="button"
+                                    onClick={startDrawing}
+                                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
+                                    >
+                                    Start Drawing
+                                    </button>
+                                    <button
+                                    type="button"
+                                    onClick={closePolygon}
+                                    className="px-3 py-1 bg-green-600 text-white text-xs rounded"
+                                    >
+                                    Close the Polygon
+                                    </button>
+                                    <button
+                                    type="button"
+                                    onClick={clearDrawing}
+                                    className="px-3 py-1 bg-red-600 text-white text-xs rounded"
+                                    >
+                                    Erase
+                                    </button>
+                                </div>
+
+                                <canvas
+                                    ref={canvasRef}
+                                    className="w-full border border-gray-300 rounded-lg shadow-sm"
+                                    style={{ maxHeight: '420px', imageRendering: 'pixelated' }}
+                                    onClick={handleCanvasClick}
+                                />
+                            </div>
+                        ) : (
+                        <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-lg bg-white p-8 text-center">
+                            <FaCamera className="text-4xl text-gray-400 mb-2" />
+                            <p className="text-sm text-gray-500">Click button above for take a picture from stream.</p>
+                        </div>
+                        )}
                     </div>
                 )}
                 </div>
