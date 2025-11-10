@@ -5,7 +5,9 @@ import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
 import CCTVViolation from '../components/CCTVViolation';
 import ModalAddCCTV from '../components/ModalAddCCTV';
-import ModalEditCCTV from '../components/ModalEditCCTV.jsx';
+import ModalEditCCTV from '../components/ModalEditCCTV';
+import ModalDeleteCCTV from '../components/ModalDeleteCCTV';
+import { useAlert } from '../components/AlertProvider';
 
 const CCTVList = () => {
   const [view, setView] = useState('table');
@@ -20,6 +22,8 @@ const CCTVList = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEditCCTV, setSelectedEditCCTV] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const { showAlert } = useAlert();
 
   // --- Fetch semua data sekali di parent ---
   useEffect(() => {
@@ -47,6 +51,7 @@ const CCTVList = () => {
         setConfigs(Object.assign({}, ...configResults));
       } catch (err) {
         setError('Failed to load CCTV data.');
+        showAlert('Failed to load CCTV data.', 'error'); 
       } finally {
         setLoading(false);
       }
@@ -86,11 +91,13 @@ const CCTVList = () => {
         body: JSON.stringify({ enabled_class_ids: newEnabled }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error("Failed to save violation config.");
+
       await fetch('/api/refresh_config', { method: 'POST' });
-    } catch {
-      alert('Failed to save. Reverting...');
-      setConfigs(prev => ({ ...prev, [cctv_id]: current })); // rollback
+      showAlert('Violation configuration saved successfully.', 'success'); 
+    } catch (e) {
+      showAlert(e.message || 'Failed to save configuration. Reverting changes.', 'error'); 
+      setConfigs(prev => ({ ...prev, [cctv_id]: current })); 
     }
   };
 
@@ -105,24 +112,43 @@ const CCTVList = () => {
 
       if (res.ok) {
         const newCctv = await res.json();
-        setCctvs(prev => [...prev, newCctv]); // ← Update state langsung
+        setCctvs(prev => [...prev, newCctv]); 
         setShowAddModal(false);
+        // Note: Success alert dipanggil di ModalAddCCTV.jsx
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to add CCTV');
+        showAlert(err.error || 'Failed to add CCTV', 'error'); 
       }
     } catch (e) {
-        alert('Network error. Please try again.');
+        showAlert('Network error. Please try again.', 'error'); 
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = useCallback((id) => {
+  const handleEdit = useCallback(async (id) => {
     const cctv = cctvs.find(c => c.id === id);
-    setSelectedEditCCTV(cctv);
-    setShowEditModal(true);
-  }, [cctvs]);
+    
+    if (cctv && (!cctv.port || !cctv.token)) { 
+      try {
+        const res = await fetch(`/api/cctv_details/${id}`); 
+        if (!res.ok) throw new Error("Failed to fetch CCTV details.");
+        const details = await res.json();
+        
+        const fullCctvData = { ...cctv, ...details };
+        setCctvs(prev => prev.map(c => c.id === id ? fullCctvData : c));
+        setSelectedEditCCTV(fullCctvData);
+        setShowEditModal(true);
+      } catch (err) {
+        showAlert(err.message || 'Error fetching CCTV details.', 'error');
+        return;
+      }
+    } else if (cctv) {
+        setSelectedEditCCTV(cctv);
+        setShowEditModal(true);
+    }
+
+  }, [cctvs, showAlert]);
 
   const handleUpdate = useCallback(async (id, data) => {
     try {
@@ -132,29 +158,35 @@ const CCTVList = () => {
         body: JSON.stringify(data)
       });
       if (res.ok) {
-        const updated = await res.json();
+        let updated;
+        try {
+            updated = await res.json();
+        } catch (jsonError) {
+            updated = { ...data, id: id };
+        }
+        
         setCctvs(prev => prev.map(c => c.id === id ? updated : c));
         setShowEditModal(false);
       } else {
-        alert('Update failed');
+        let errorMessage = 'Update failed';
+        try {
+            const err = await res.json();
+            errorMessage = err.error || errorMessage;
+        } catch {}
+        showAlert(errorMessage, 'error');
       }
     } catch {
-      alert('Network error');
+      showAlert('Network error during update.', 'error');
     }
+  }, [showAlert]);
+
+  const handleDelete = useCallback((id) => {
+    setShowDeleteModal(id);
   }, []);
 
-  const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Delete this CCTV?')) return;
-    try {
-      const res = await fetch(`/api/cctv_delete/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setCctvs(prev => prev.filter(c => c.id !== id));
-      } else {
-        alert('Delete failed');
-      }
-    } catch {
-      alert('Network error');
-    }
+const handleDeleteConfirm = useCallback((id) => {
+    setCctvs(prev => prev.filter(c => c.id !== id));
+    setShowDeleteModal(null);
   }, []);
 
   // --- Filter CCTV ---
@@ -262,6 +294,12 @@ const CCTVList = () => {
         onClose={() => setShowEditModal(false)}
         onUpdate={handleUpdate}
         cctvData={selectedEditCCTV}
+      />
+      <ModalDeleteCCTV
+        open={showDeleteModal !== null}
+        onClose={() => setShowDeleteModal(null)}
+        onConfirm={handleDeleteConfirm}
+        cctvId={showDeleteModal}
       />
     </div>
   );

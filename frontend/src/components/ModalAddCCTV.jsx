@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FaTimes, FaUpload, FaCamera } from 'react-icons/fa';
+import { useAlert } from './AlertProvider';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [form, setForm] = useState({
@@ -17,6 +18,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState(null);
     const [uploadError, setUploadError] = useState(null);
+    const { showAlert } = useAlert();
 
     // Reset on open
     useEffect(() => {
@@ -33,7 +35,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         const reader = new FileReader();
         reader.onload = (e) => {
             try { setPolygons(JSON.parse(e.target.result).items || []); }
-            catch { alert('Invalid JSON'); }
+            catch { showAlert('Invalid ROI JSON format.', 'error'); }
         };
         reader.readAsText(file);
         setRoiFile(file);
@@ -45,7 +47,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
     // Fungsi load preview dari stream
     const loadStreamPreview = async () => {
-        if (!form.url) return alert('URL required');
+        if (!form.url) return showAlert('URL required for stream preview.', 'warning');
         setPreviewLoading(true);
         setPreviewError(null);
         try {
@@ -61,10 +63,13 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             setRoiMethod('draw');
             } else {
             const err = await res.json();
-            setPreviewError(err.error || 'Stream unavailable');
+            const message = err.error || 'Stream is not avaliable. Check your URL or network.';
+            setPreviewError(message);
+            showAlert(message, 'error');
             }
         } catch {
             setPreviewError('Network error');
+            showAlert('Network error while trying to connect to stream.', 'error');
         } finally {
             setPreviewLoading(false);
         }
@@ -81,7 +86,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     };
 
     const closePolygon = () => {
-        if (points.length < 3) return alert('Min 3 points');
+        if (points.length < 3) return showAlert('Min 3 points.', 'warning');
         setPolygons([...polygons, { type: 'polygon', points: [...points] }]);
         setPoints([]);
     };
@@ -95,8 +100,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.name?.trim()) return alert('Name required');
-        if (!form.url?.trim()) return alert('CCTV URL required');
+        if (!form.name?.trim()) return showAlert('CCTV Name is required.', 'warning'); 
+        if (!form.location?.trim()) return showAlert('CCTV Location is required.', 'warning'); 
+        if (!form.url?.trim()) return showAlert('CCTV URL is required.', 'warning');
 
         setSubmitting(true);
 
@@ -118,7 +124,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             if (isNaN(port) || port < 1 || port > 65535) throw new Error('Invalid port');
         } catch (err) {
             setSubmitting(false);
-            return alert(err.message || 'Invalid URL format');
+            return showAlert(err.message || 'Invalid URL format.', 'error');
         }
 
         // === PROSES ROI ===
@@ -138,7 +144,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             }
         } catch {
             setSubmitting(false);
-            return alert('Invalid ROI JSON');
+            return showAlert('Invalid ROI JSON format. Please check the file content.', 'error');
         }
 
         // === KIRIM KE BACKEND ===
@@ -147,7 +153,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             ip_address: ip,
             port: port,
             token: token,
-            location: form.location?.trim() || null,
+            location: form.location?.trim(),
             enabled: form.enabled,
             area
         };
@@ -163,12 +169,13 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             const newCctv = await res.json();
             onSuccess(newCctv);
             onClose();
+            showAlert(`CCTV '${newCctv.name}' successfully added.`, 'success');
             } else {
             const err = await res.json();
-            alert(err.error || 'Failed');
+            showAlert(err.error || 'Failed to add CCTV.', 'error');
             }
         } catch {
-            alert('Network error');
+            showAlert('Network error: Could not connect to the server.', 'error');
         } finally {
             setSubmitting(false);
         }
@@ -197,6 +204,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
                     <input
                     type="text"
+                    required
                     value={form.location}
                     onChange={(e) => setForm({ ...form, location: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -210,7 +218,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     </label>
                     <input
                         type="text"
-                        required
                         placeholder="rtsps://[ip]:[port]/[token]?enableSrtp"
                         value={form.url}
                         onChange={(e) => setForm({ ...form, url: e.target.value })}
@@ -252,6 +259,18 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 {/* Upload Mode */}
                 {roiMethod === 'upload' && (
                     <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                        {/* Status File */}
+                        {roiFile && !uploadError && (
+                            <p className="text-sm text-green-600 bg-green-100 p-2 mb-2 rounded border border-green-300">File uploaded: <strong>{roiFile.name}</strong></p>
+                        )}
+                        
+                        {/* Error jika bukan JSON */}
+                        {uploadError && (
+                            <p className="text-sm text-red-600 bg-red-50 p-2 mb-2 rounded border border-red-200">
+                            {uploadError}
+                            </p>
+                        )}
+
                         <div
                         {...getRootProps()}
                         className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition bg-white"
@@ -281,20 +300,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                             Drag & drop <strong>ROI JSON file</strong> or click to select file.
                             </p>
                         )}
-                        
-                        {/* Status File */}
-                        {roiFile && !uploadError && (
-                            <p className="mt-3 text-sm font-medium text-green-600">
-                            File: {roiFile.name}
-                            </p>
-                        )}
-                        
-                        {/* Error jika bukan JSON */}
-                        {uploadError && (
-                            <p className="mt-3 text-sm font-medium text-red-600 bg-red-50 px-3 py-1 rounded border border-red-200">
-                            {uploadError}
-                            </p>
-                        )}
                         </div>
                     </div>
                 )}
@@ -303,23 +308,20 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 {roiMethod === 'draw' && (
                     <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
                         {/* Tombol Load Preview */}
-                        <div className="flex justify-end items-center">
+                        <div className="flex justify-between items-center">
+                            <p>Input CCTV URL first for drawing ROI!</p>
                             <button
-                            type="button"
-                            onClick={loadStreamPreview}
-                            disabled={previewLoading || !form.ip || !form.port}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            type="button" 
+                            onClick={loadStreamPreview} 
+                            disabled={previewLoading || !form.ip || !form.port} 
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                             >
                             <FaCamera />
                             {previewLoading ? 'Loading...' : 'Take picture from stream'}
                             </button>
                         </div>
 
-                        {previewError && (
-                            <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                            {previewError}
-                            </p>
-                        )}
+                        {previewError && <p className="text-sm text-red-600 bg-red-50 p-2 mb-2 rounded border border-red-200">{previewError}</p>}
 
                         {/* Canvas untuk Gambar */}
                         {imageUrl ? (
@@ -344,7 +346,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                                     onClick={clearDrawing}
                                     className="px-3 py-1 bg-red-600 text-white text-xs rounded"
                                     >
-                                    Erase
+                                    Delete
                                     </button>
                                 </div>
 

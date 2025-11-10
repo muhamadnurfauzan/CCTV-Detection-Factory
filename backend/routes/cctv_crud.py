@@ -22,6 +22,12 @@ def save_roi_to_file(roi_data, cctv_id):
     filename = f"cctv_{cctv_id}.json"
     filepath = os.path.join(ROI_DIR, filename)
     try:
+        if roi_data is None: # Case: Clear ROI
+             if os.path.exists(filepath):
+                os.remove(filepath)
+                logging.info(f"[ROI] Removed file {filepath}")
+             return None
+
         with open(filepath, 'w') as f:
             json.dump(roi_data, f, indent=2)
         logging.info(f"[ROI] Saved to {filepath}")
@@ -29,6 +35,23 @@ def save_roi_to_file(roi_data, cctv_id):
     except Exception as e:
         logging.error(f"[ROI SAVE ERROR]: {e}")
         return None
+
+@cctv_bp.route('/roi/<filename>', methods=['GET'])
+def get_roi_file(filename):
+    """Mengirim file JSON ROI berdasarkan nama file yang disimpan."""
+    filepath = os.path.join(ROI_DIR, filename)
+    
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "ROI file not found"}), 404
+    
+    if not filename.endswith('.json'):
+        return jsonify({"error": "Invalid file type requested"}), 400
+
+    try:
+        return send_file(filepath, mimetype='application/json')
+    except Exception as e:
+        logging.error(f"[ROI GET ERROR]: {e}")
+        return jsonify({"error": "Failed to read ROI file"}), 500
 
 @cctv_bp.route('/cctv_add', methods=['POST'])
 def add_cctv():
@@ -157,9 +180,16 @@ def update_cctv(cctv_id):
         if 'port' in data:
             update_fields.append("port = %s")
             update_values.append(data['port'])
+        
+        token = data.get('token')
+        # MODIFIKASI KELUHAN 2: Hapus '?enableSrtp' dari token sebelum disimpan
+        if  token and '?enableSrtp' in token:
+            token = token.split('?enableSrtp')[0]
+            data['token'] = token
         if 'token' in data:
             update_fields.append("token = %s")
             update_values.append(data['token'])
+
         if 'location' in data:
             update_fields.append("location = %s")
             update_values.append(data['location'])
@@ -167,17 +197,29 @@ def update_cctv(cctv_id):
             update_fields.append("enabled = %s")
             update_values.append(data['enabled'])
 
-        # Handle ROI update
+        # Handle ROI update (Keluhan 3)
         area_path = None
         if 'area' in data:
-            roi_json = json.loads(data['area'])
-            filename = save_roi_to_file(roi_json, cctv_id)
-            if filename:
-                update_fields.append("area = %s")
-                update_values.append(filename)
-                area_path = filename
+            if data['area'] is None:
+                roi_json = None
             else:
-                raise Exception("Failed to update ROI")
+                try:
+                    raw_area_string = data['area'].strip() 
+                    
+                    roi_json = json.loads(raw_area_string) 
+                    
+                    if not isinstance(roi_json, dict) or 'items' not in roi_json:
+                        raise ValueError("Invalid ROI format")
+                except (json.JSONDecodeError, ValueError) as e:
+                    logging.error(f"[ROI PARSE ERROR]: {e}")
+                    return jsonify({"error": f"Invalid ROI JSON: {str(e)}"}), 400
+
+            filename = save_roi_to_file(roi_json, cctv_id)
+            
+            update_fields.append("area = %s")
+            update_values.append(filename)
+            area_path = filename
+
 
         if not update_fields:
             return jsonify({"error": "No fields to update"}), 400
@@ -190,7 +232,7 @@ def update_cctv(cctv_id):
 
         # Update config jika perlu
         if updated_cctv:
-            rtsps_url = f"rtsps://{updated_cctv['ip_address']}:{updated_cctv['port']}/{updated_cctv['token']}"
+            rtsps_url = f"rtsps://{updated_cctv['ip_address']}:{updated_cctv['port']}/{updated_cctv['token']}?enableSrtp"
             config.cctv_streams[cctv_id] = {
                 'url': rtsps_url,
                 'enabled': updated_cctv['enabled'],

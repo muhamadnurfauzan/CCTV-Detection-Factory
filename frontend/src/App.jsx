@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import CCTVList from './pages/CCTVList';
 import ImagesShow from './pages/ImagesShow'; 
 import Reports from './pages/Reports';
+import { AlertProvider } from './components/AlertProvider';
 import ErrorBoundary from './components/ErrorBoundary'; 
 
 function App() {
@@ -33,12 +34,14 @@ function App() {
           style={{ paddingLeft: isSidebarExpanded ? '80px' : '80px' }}
         >
           <ErrorBoundary>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/cctv/*" element={<CCTVList />} /> 
-              <Route path="/images" element={<ImagesShow />} />
-              <Route path="/reports" element={<Reports />} />
-            </Routes>
+            <AlertProvider>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/cctv/*" element={<CCTVList />} /> 
+                <Route path="/images" element={<ImagesShow />} />
+                <Route path="/reports" element={<Reports />} />
+              </Routes>
+            </AlertProvider>
           </ErrorBoundary>
         </div>
       </div>
