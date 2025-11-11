@@ -257,7 +257,6 @@ def weekly_trend():
         if cursor: cursor.close()
         if conn: conn.close()
 
-# Tambah API untuk object_class jika perlu
 @app.route('/api/object_classes', methods=['GET'])
 def get_object_classes():
     conn = get_connection()
@@ -329,6 +328,98 @@ def refresh_config():
     import config
     config.refresh_active_violations()
     return jsonify({"success": True})
+
+# --- API UNTUK LAPORAN PELANGGARAN ---
+@app.route('/api/reports', methods=['GET'])
+def get_reports():
+    conn = None
+    cur = None
+    try:
+        # Ambil parameter dari request
+        search_query = request.args.get('search', '')
+        sort_order = request.args.get('sort', 'desc').upper() # Default DESC
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        
+        # Validasi parameter
+        if sort_order not in ('ASC', 'DESC'): sort_order = 'DESC'
+        if page < 1: page = 1
+        if limit not in (10, 25, 50): limit = 10
+            
+        offset = (page - 1) * limit
+        
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # --- Base Query dengan JOIN ---
+        base_query = """
+            FROM violation_detection vd
+            JOIN cctv_data cd ON vd.id_cctv = cd.id
+            JOIN object_class oc ON vd.id_violation = oc.id
+            WHERE 1=1
+        """
+        
+        # --- List Parameter dan Kondisi ---
+        where_conditions = []
+        query_params = []
+
+        # 1. Search Filter (berdasarkan Nama CCTV)
+        if search_query:
+            where_conditions.append("cd.name ILIKE %s")
+            query_params.append(f"%{search_query}%")
+        
+        # Gabungkan semua kondisi WHERE
+        where_clause = "AND " + " AND ".join(where_conditions) if where_conditions else ""
+            
+        # --- 2. Query Total Item (untuk Pagination) ---
+        count_query = f"SELECT COUNT(*) AS total {base_query} {where_clause}"
+        cur.execute(count_query, query_params)
+        total_items = cur.fetchone()['total']
+        
+        # --- 3. Query Data Laporan ---
+        data_query = f"""
+            SELECT
+                vd.id,
+                cd.name AS cctv_name,
+                oc.name AS violation_name,
+                vd.image AS image_url,  
+                vd.timestamp
+            {base_query}
+            {where_clause}
+            ORDER BY
+                vd.timestamp {sort_order}
+            LIMIT %s OFFSET %s
+        """
+        
+        data_params = query_params + [limit, offset]
+        cur.execute(data_query, data_params)
+        reports = cur.fetchall()
+
+        # --- Format data akhir ---
+        final_reports = []
+        for report in reports:
+            # Gunakan URL gambar yang sudah lengkap
+            final_reports.append({
+                'id': report['id'],
+                'cctv_name': report['cctv_name'],
+                'violation_name': report['violation_name'],
+                'timestamp': report['timestamp'].isoformat() if report['timestamp'] else None,
+                'image': report['image_url'], 
+            })
+            
+        return jsonify({
+            "reports": final_reports,
+            "totalItems": total_items,
+            "currentPage": page,
+            "itemsPerPage": limit
+        }), 200
+
+    except Exception as e:
+        logging.error(f"[REPORTS API ERROR]: {e}")
+        return jsonify({"error": "Failed to retrieve reports data."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
 
 if __name__ == "__main__":
     config.annotated_frames = {}

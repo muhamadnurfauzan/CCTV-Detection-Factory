@@ -1,12 +1,11 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaSlidersH, FaBullhorn } from 'react-icons/fa';
+import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 
 const navItemsData = [
     { path: "/", label: "Dashboard", Icon: FaHome },
     { path: "/cctv", label: "CCTVs", Icon: FaVideo },
-    // { path: "/#", label: "Camera Setting", Icon: FaSlidersH},
     { path: "/images", label: "Violations", Icon: FaImages},
     { path: "/reports", label: "Reports", Icon: FaBullhorn},
 ];

@@ -27,7 +27,7 @@ export default function Pagination({
   if (totalItems === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-between p-4 mt-1 bg-white border-t rounded-b-lg">
+    <div className="flex flex-wrap items-center justify-between p-4 mt-4 bg-white border-t rounded-lg shadow-md">
       
       {/* Kontrol Halaman */}
       <div className="flex items-center space-x-2 text-sm">
@@ -40,9 +40,9 @@ export default function Pagination({
           <FaAngleLeft className="w-4 h-4" />
         </button>
 
-        <span className="font-semibold text-gray-700 whitespace-nowrap">
-          Page {currentPage} of {totalPages}
-        </span>
+        <p className="text-gray-600 whitespace-nowrap">
+          Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+        </p>
         
         <button
           onClick={() => onPageChange(currentPage + 1)}

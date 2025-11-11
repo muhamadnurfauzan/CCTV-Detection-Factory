@@ -3,7 +3,7 @@ import os
 import io
 import cv2
 import json
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, redirect
 from psycopg2.extras import RealDictCursor
 import logging
 import backend.config as config
@@ -13,27 +13,37 @@ from backend import config
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
 
-# --- PATH LOKAL ---
-ROI_DIR = os.path.join(os.path.dirname(__file__), '..', 'JSON')
-os.makedirs(ROI_DIR, exist_ok=True)  # Buat folder jika belum ada
+# --- Supabase Storage Configuration ---
+SUPABASE_BUCKET_NAME = config.SUPABASE_BUCKET # Asumsi SUPABASE_BUCKET = "violations"
+SUPABASE_ROI_DIR = "roi_json"
 
-# --- Helper: Simpan JSON ke file ---
+# --- Helper: Simpan JSON ke Supabase Bucket ---
 def save_roi_to_file(roi_data, cctv_id):
+    """Mengunggah data ROI JSON ke Supabase Storage."""
     filename = f"cctv_{cctv_id}.json"
-    filepath = os.path.join(ROI_DIR, filename)
+    storage_path = f"{SUPABASE_ROI_DIR}/{filename}"
+    
     try:
-        if roi_data is None: # Case: Clear ROI
-             if os.path.exists(filepath):
-                os.remove(filepath)
-                logging.info(f"[ROI] Removed file {filepath}")
-             return None
+        if roi_data is None: # Case: Clear ROI (Hapus file dari Supabase)
+            config.supabase.storage.from_(SUPABASE_BUCKET_NAME).remove([storage_path])
+            logging.info(f"[ROI] Removed file from Supabase: {storage_path}")
+            return None # Return None untuk update DB area=NULL
 
-        with open(filepath, 'w') as f:
-            json.dump(roi_data, f, indent=2)
-        logging.info(f"[ROI] Saved to {filepath}")
+        # Konversi JSON ke string Bytes untuk diunggah
+        json_string = json.dumps(roi_data, indent=2)
+        json_bytes = json_string.encode('utf-8')
+        
+        # Upload file dengan opsi upsert=True (menimpa jika sudah ada)
+        res = config.supabase.storage.from_(SUPABASE_BUCKET_NAME).upload(
+            file=json_bytes,
+            path=storage_path,
+            file_options={"content-type": "application/json", "upsert": "true"}
+        )
+        
+        logging.info(f"[ROI] Saved to Supabase: {storage_path}")
         return filename  # Hanya return nama file
     except Exception as e:
-        logging.error(f"[ROI SAVE ERROR]: {e}")
+        logging.error(f"[ROI SAVE ERROR TO SUPABASE]: {e}")
         return None
     
 # --- Helper: Validasi IP Address ---
@@ -55,20 +65,23 @@ def is_valid_ip(ip_address):
 
 @cctv_bp.route('/roi/<filename>', methods=['GET'])
 def get_roi_file(filename):
-    """Mengirim file JSON ROI berdasarkan nama file yang disimpan."""
-    filepath = os.path.join(ROI_DIR, filename)
-    
-    if not os.path.isfile(filepath):
-        return jsonify({"error": "ROI file not found"}), 404
+    """Mengambil dan mengirim file JSON ROI dari Supabase."""
+    storage_path = f"{SUPABASE_ROI_DIR}/{filename}"
     
     if not filename.endswith('.json'):
         return jsonify({"error": "Invalid file type requested"}), 400
-
+        
     try:
-        return send_file(filepath, mimetype='application/json')
+        public_url = config.supabase.storage.from_(SUPABASE_BUCKET_NAME).get_public_url(storage_path)
+        
+        if not public_url:
+             return jsonify({"error": "ROI file not found or URL not generated"}), 404
+             
+        return redirect(public_url)
+        
     except Exception as e:
-        logging.error(f"[ROI GET ERROR]: {e}")
-        return jsonify({"error": "Failed to read ROI file"}), 500
+        logging.error(f"[ROI GET ERROR FROM SUPABASE]: {e}")
+        return jsonify({"error": "Failed to retrieve ROI file from storage"}), 500
 
 @cctv_bp.route('/cctv_add', methods=['POST'])
 def add_cctv():
@@ -103,6 +116,7 @@ def add_cctv():
         conn = get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
+        # 1. INSERT DATA KE DB (dengan area=NULL sementara)
         cur.execute("""
             INSERT INTO cctv_data (name, ip_address, port, token, location, area, enabled)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -113,14 +127,15 @@ def add_cctv():
         ))
         cctv_id = cur.fetchone()['id']
 
-        # Simpan ROI
-        if data.get('area'):
-            filename = save_roi_to_file(roi_json, cctv_id)
+        # 2. SIMPAN ROI KE SUPABASE (jika ada)
+        if roi_json is not None:
+            filename = save_roi_to_file(roi_json, cctv_id) # <-- Upload ke Supabase
             if filename:
+                # 3. UPDATE DB dengan nama file dari Supabase
                 cur.execute("UPDATE cctv_data SET area = %s WHERE id = %s", (filename, cctv_id))
                 area_path = filename
             else:
-                raise Exception("Failed to save ROI file")
+                raise Exception("Failed to save ROI file to Supabase")
 
         conn.commit()
 
@@ -290,14 +305,13 @@ def delete_cctv(cctv_id):
         conn = get_connection()
         cur = conn.cursor()
 
-        # Hapus ROI file jika ada
+        # Hapus ROI file dari SUPABASE
         cur.execute("SELECT area FROM cctv_data WHERE id = %s", (cctv_id,))
         area = cur.fetchone()
         if area and area[0]:
-            filepath = os.path.join(ROI_DIR, area[0])
-            if os.path.exists(filepath):
-                os.remove(filepath)
-                logging.info(f"[DELETE] Removed ROI file: {filepath}")
+            storage_path = f"{SUPABASE_ROI_DIR}/{area[0]}"
+            config.supabase.storage.from_(SUPABASE_BUCKET_NAME).remove([storage_path])
+            logging.info(f"[DELETE] Removed ROI file from Supabase: {storage_path}")
 
         # Hapus dari DB
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))

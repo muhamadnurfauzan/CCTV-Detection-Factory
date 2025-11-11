@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
+import { FaAngleLeft, FaAngleRight } from 'react-icons/fa';
 import '../styles/MasonryGrid.css';
 
 const ImagesShow = () => {
@@ -265,7 +266,7 @@ const ImagesShow = () => {
                   disabled={currentPage === 1}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >
-                  Prev
+                  <FaAngleLeft className='h-5 w-5'/>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -278,7 +279,7 @@ const ImagesShow = () => {
                   disabled={!hasMore}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >
-                  Next
+                  <FaAngleRight className='h-5 w-5'/>
                 </button>
               </div>
             </>

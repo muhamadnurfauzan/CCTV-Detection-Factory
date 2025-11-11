@@ -1,5 +1,5 @@
 // components/Alert.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaTimesCircle } from 'react-icons/fa';
 
 const Alert = ({ message, type, id, removeAlert }) => {
@@ -64,7 +64,7 @@ const Alert = ({ message, type, id, removeAlert }) => {
                 </div>
                 <button
                     onClick={() => removeAlert(id)}
-                    className="p-1 rounded-full hover:bg-opacity-20 transition duration-300 ease-in-out"
+                    className="p-1 rounded-full hover:bg-opacity-20"
                     aria-label="Close alert"
                 >
                     <FaTimes className="text-sm" />

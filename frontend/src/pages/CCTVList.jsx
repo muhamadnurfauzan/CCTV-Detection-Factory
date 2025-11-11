@@ -1,6 +1,6 @@
 // CCTVList.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaSlidersH, FaArrowLeft } from 'react-icons/fa';
+import { FaPlus, FaSlidersH, FaArrowLeft, FaSearch } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
@@ -126,10 +126,8 @@ const CCTVList = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredCctvs.slice(indexOfFirstItem, indexOfLastItem);
-  // --- END LOGIKA PAGINATION ---
 
-
-  // --- Handler Lainnya (Tidak berubah) ---
+  // --- Handler Lainnya ---
   const handleSelect = (id) => {
     setSelectedCCTV(id);
     setView('stream');
@@ -221,14 +219,14 @@ const CCTVList = () => {
         {view === 'violation' && "Violation Configurations"}
         </h2>
 
-        <div className='grid grid-flow-col gap-2 justify-stretch items-center mb-2'>
+        <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md'>
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
                 <div className="flex justify-start" >
                     <button
                         onClick={handleBack}
                         title="Back to CCTV List"
-                        className="bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
+                        className="flex items-center gap-2 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                     >
                         <FaArrowLeft className='h-4 w-4'/>
                     </button>
@@ -238,81 +236,77 @@ const CCTVList = () => {
             {/* Toolbar - hanya di table & violation */}
             {(view === 'table' || view === 'violation') && (
                 <div className="flex items-center justify-end gap-2">
-                    <div className="flex gap-2">
-                        {view === 'table' && (
-                        <>
-                            <button
-                            onClick={handleOpenViolation}
-                            className="bg-indigo-600 text-white px-2 p-2 rounded-lg hover:bg-indigo-700 transition"
-                            title="Configure Violations"
-                            >
-                            <FaSlidersH className='h-4 w-4'/>
-                            </button>
-                            <button
-                              onClick={() => setShowAddModal(true)}
-                              className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition"
-                              title="Add New CCTV"
-                            >
-                              <FaPlus className='h-4 w-4'/>
-                            </button>
-                        </>
-                        )}
-                        <>
-                          <input
-                              type="text"
-                              placeholder="Type Name, IP, or Loc..."
-                              value={search}
-                              onChange={(e) => setSearch(e.target.value)}
-                              className="flex w-full min-w-[200px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </>
-                    </div>
+                  {view === 'table' && (
+                  <div className='flex gap-2'>
+                      <button
+                      onClick={handleOpenViolation}
+                      className="flex items-center gap-2 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                      title="Configure Violations"
+                      >
+                      <FaSlidersH className='h-4 w-4'/>
+                      </button>
+                      <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex items-center gap-2 p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                        title="Add New CCTV"
+                      >
+                        <FaPlus className='h-4 w-4'/>
+                      </button>
+                  </div>
+                  )}
+                  <div className='flex items-center relative w-full max-w-sm'>
+                    <input
+                        type="text"
+                        placeholder="Type Name, IP, or Location..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
+                    />
+                    <FaSearch className="absolute left-3 text-gray-400 w-4 h-4" />
+                  </div>
                 </div>
             )}
         </div>
 
-      {/* Main Content */}
-      <div className="overflow-x-auto">
+        {/* Main Content */}
         {view !== 'stream' ? (
-          <div>
-            <div className='bg-white rounded-t-lg'>
-                {view === 'table' && (
-                    <CCTVTable
-                        cctvs={currentItems} 
-                        onSelect={handleSelect}
-                        onEdit={handleEdit}     
-                        onDelete={handleDelete}
-                        startNo={indexOfFirstItem + 1} 
-                    />
-                )}
-                {view === 'violation' && (
-                    <CCTVViolation
-                        cctvs={currentItems} 
-                        violations={violations}
-                        configs={configs}
-                        onToggle={handleToggleViolation}
-                        startNo={indexOfFirstItem + 1} 
-                    />
-                )}
+          <>
+            <div className='bg-white rounded-lg shadow-lg overflow-x-auto'>
+              {view === 'table' && (
+                  <CCTVTable
+                      cctvs={currentItems} 
+                      onSelect={handleSelect}
+                      onEdit={handleEdit}     
+                      onDelete={handleDelete}
+                      startNo={indexOfFirstItem + 1} 
+                  />
+              )}
+              {view === 'violation' && (
+                  <CCTVViolation
+                      cctvs={currentItems} 
+                      violations={violations}
+                      configs={configs}
+                      onToggle={handleToggleViolation}
+                      startNo={indexOfFirstItem + 1} 
+                  />
+              )}
             </div>
-            <div>
-              {/* Komponen Pagination */}
-                {(view === 'table' || view === 'violation') && (
-                    <Pagination
-                        totalItems={filteredCctvs.length}
-                        itemsPerPage={itemsPerPage}
-                        currentPage={currentPage}
-                        onPageChange={handlePageChange}
-                        onItemsPerPageChange={handleItemsPerPageChange}
-                    />
-                )}
-            </div>
-          </div>
+            {/* Komponen Pagination */}
+            {(view === 'table' || view === 'violation') && (
+                <Pagination
+                    totalItems={filteredCctvs.length}
+                    itemsPerPage={itemsPerPage}
+                    currentPage={currentPage}
+                    onPageChange={handlePageChange}
+                    onItemsPerPageChange={handleItemsPerPageChange}
+                />
+            )}
+          </>
         )
          : selectedCCTV && (
             <CCTVStream cctvId={selectedCCTV} />
          )}
-      </div>
+      
       {/* MODAL */}
       <ModalAddCCTV
           open={showAddModal}

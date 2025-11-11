@@ -6,19 +6,19 @@ import { FaEye, FaEyeSlash, FaPenSquare, FaTrash } from 'react-icons/fa';
 function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
   // Hapus div rounded-lg shadow-lg di sini karena sudah dipindahkan ke parent
   return (
-    <div className="overflow-x-auto rounded-t-lg"> 
-      <table className="w-full border-collapse text-sm">
+    <> 
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-indigo-200 text-center">
           <tr>
-            <th className="border p-2 text-indigo-800">No</th>
-            <th className="border p-2 text-indigo-800">Name</th>
-            <th className="border p-2 text-indigo-800">IP Address</th>
-            <th className="border p-2 text-indigo-800">Location</th>
-            <th className="border p-2 text-indigo-800">Status</th>
-            <th className="border p-2 text-indigo-800">Action</th>
+            <th className="border-r p-2 text-indigo-800">No</th>
+            <th className="border-r p-2 text-indigo-800">Name</th>
+            <th className="border-r p-2 text-indigo-800">IP Address</th>
+            <th className="border-r p-2 text-indigo-800">Location</th>
+            <th className="border-r p-2 text-indigo-800">Status</th>
+            <th className="p-2 text-indigo-800">Action</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className='divide-y divide-gray-200'>
           {cctvs.length === 0 ? (
             <tr>
               <td colSpan="6" className="text-center text-gray-500 p-4">
@@ -29,11 +29,11 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
             cctvs.map((cctv, i) => (
               <tr key={cctv.id} className="hover:bg-gray-50 transition">
                 {/* Penomoran berdasarkan startNo */}
-                <td className="border p-2 text-center text-gray-600">{startNo + i}</td>
-                <td className="border p-2 text-gray-700">{cctv.name}</td>
-                <td className="border p-2 text-center text-gray-600">{cctv.ip_address}</td>
-                <td className="border p-2 text-gray-600">{cctv.location || '-'}</td>
-                <td className="border p-2 text-center items-center">
+                <td className="border-r p-2 text-center text-gray-600">{startNo + i}</td>
+                <td className="border-r p-2 text-gray-700">{cctv.name}</td>
+                <td className="border-r p-2 text-center text-gray-600">{cctv.ip_address}</td>
+                <td className="border-r p-2 text-gray-600">{cctv.location || '-'}</td>
+                <td className="border-r p-2 text-center items-center">
                   <span
                     className={`px-2 py-1 rounded-full text-white text-xs font-medium ${
                       cctv.enabled ? 'bg-green-600' : 'bg-red-600'
@@ -42,7 +42,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                     {cctv.enabled ? 'Active' : 'Nonactive'}
                   </span>
                 </td>
-                <td className="grid border p-2 sm:grid-flow-col grid-flow-row justify-items-center gap-1">
+                <td className="grid p-2 sm:grid-flow-col grid-flow-row justify-items-center gap-1">
                   {cctv.enabled ? (
                     <button
                       onClick={() => onSelect(cctv.id)}
@@ -73,7 +73,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
           )}
         </tbody>
       </table>
-    </div>
+    </>
   );
 }
 
