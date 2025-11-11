@@ -1,13 +1,14 @@
 // CCTVList.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaSlidersH, FaArrowLeft } from 'react-icons/fa';
+import { useAlert } from '../components/AlertProvider';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
 import CCTVViolation from '../components/CCTVViolation';
 import ModalAddCCTV from '../components/ModalAddCCTV';
 import ModalEditCCTV from '../components/ModalEditCCTV';
 import ModalDeleteCCTV from '../components/ModalDeleteCCTV';
-import { useAlert } from '../components/AlertProvider';
+import Pagination from '../components/Pagination';
 
 const CCTVList = () => {
   const [view, setView] = useState('table');
@@ -19,11 +20,15 @@ const CCTVList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEditCCTV, setSelectedEditCCTV] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
   const { showAlert } = useAlert();
+  
+  // --- STATE PAGINATION BARU ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  // -----------------------------
 
   // --- Fetch semua data sekali di parent ---
   useEffect(() => {
@@ -37,7 +42,11 @@ const CCTVList = () => {
         ]);
 
         const filteredViolations = violRes.filter(v => v.is_violation);
-        setCctvs(cctvRes);
+        
+        // Sorting awal untuk menjaga urutan (misalnya berdasarkan ID)
+        const sortedCctvs = cctvRes.sort((a, b) => a.id - b.id); 
+        
+        setCctvs(sortedCctvs);
         setViolations(filteredViolations);
 
         // Ambil semua config sekaligus
@@ -59,8 +68,68 @@ const CCTVList = () => {
 
     fetchAllData();
   }, []);
+  
+  // --- Handler Pagination ---
+  const handlePageChange = useCallback((page) => {
+      setCurrentPage(page);
+  }, []);
 
-  // --- Handler ---
+  const handleItemsPerPageChange = useCallback((items) => {
+      setItemsPerPage(items);
+      setCurrentPage(1); // Reset ke halaman 1 saat items per page berubah
+  }, []);
+
+  // --- Handler Update Data (Tambahkan sorting) ---
+  const handleUpdate = useCallback(async (id, data) => {
+    try {
+      const res = await fetch(`/api/cctv_update/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        let updated;
+        try {
+            updated = await res.json();
+        } catch (jsonError) {
+            updated = { ...data, id: id };
+        }
+        
+        // Update dan Sort ulang agar item yang diedit tidak pindah posisi
+        setCctvs(prev => {
+            const updatedList = prev.map(c => c.id === id ? updated : c);
+            return updatedList.sort((a, b) => a.id - b.id); // Sorting konsisten
+        });
+        setShowEditModal(false);
+      } else {
+        let errorMessage = 'Update failed';
+        try {
+            const err = await res.json();
+            errorMessage = err.error || errorMessage;
+        } catch {}
+        showAlert(errorMessage, 'error');
+      }
+    } catch {
+      showAlert('Network error during update.', 'error');
+    }
+  }, [showAlert]);
+
+
+  // --- Filter CCTV ---
+  const filteredCctvs = cctvs.filter(cctv =>
+    cctv.name.toLowerCase().includes(search.toLowerCase()) ||
+    (cctv.location && cctv.location.toLowerCase().includes(search.toLowerCase())) ||
+    cctv.ip_address.toLowerCase().includes(search.toLowerCase())
+  );
+  
+  // --- LOGIKA PAGINATION ---
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredCctvs.slice(indexOfFirstItem, indexOfLastItem);
+  // --- END LOGIKA PAGINATION ---
+
+
+  // --- Handler Lainnya (Tidak berubah) ---
   const handleSelect = (id) => {
     setSelectedCCTV(id);
     setView('stream');
@@ -76,7 +145,6 @@ const CCTVList = () => {
   };
 
   const handleToggleViolation = async (cctv_id, class_id) => {
-    const key = `${cctv_id}-${class_id}`;
     const current = configs[cctv_id] || [];
     const newEnabled = current.includes(Number(class_id))
       ? current.filter(id => id !== Number(class_id))
@@ -101,100 +169,44 @@ const CCTVList = () => {
     }
   };
 
-  const handleAddCCTV = async (data) => {
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/cctv_add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (res.ok) {
-        const newCctv = await res.json();
-        setCctvs(prev => [...prev, newCctv]); 
-        setShowAddModal(false);
-        // Note: Success alert dipanggil di ModalAddCCTV.jsx
-      } else {
-        const err = await res.json();
-        showAlert(err.error || 'Failed to add CCTV', 'error'); 
-      }
-    } catch (e) {
-        showAlert('Network error. Please try again.', 'error'); 
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleEdit = useCallback(async (id) => {
     const cctv = cctvs.find(c => c.id === id);
-    
-    if (cctv && (!cctv.port || !cctv.token)) { 
-      try {
-        const res = await fetch(`/api/cctv_details/${id}`); 
-        if (!res.ok) throw new Error("Failed to fetch CCTV details.");
-        const details = await res.json();
-        
-        const fullCctvData = { ...cctv, ...details };
-        setCctvs(prev => prev.map(c => c.id === id ? fullCctvData : c));
-        setSelectedEditCCTV(fullCctvData);
-        setShowEditModal(true);
-      } catch (err) {
-        showAlert(err.message || 'Error fetching CCTV details.', 'error');
-        return;
-      }
-    } else if (cctv) {
+    if (cctv) {
         setSelectedEditCCTV(cctv);
         setShowEditModal(true);
+    } else {
+        showAlert(`CCTV ID ${id} not found. Please refresh the list.`, 'warning');
     }
-
   }, [cctvs, showAlert]);
 
-  const handleUpdate = useCallback(async (id, data) => {
-    try {
-      const res = await fetch(`/api/cctv_update/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (res.ok) {
-        let updated;
-        try {
-            updated = await res.json();
-        } catch (jsonError) {
-            updated = { ...data, id: id };
-        }
-        
-        setCctvs(prev => prev.map(c => c.id === id ? updated : c));
-        setShowEditModal(false);
-      } else {
-        let errorMessage = 'Update failed';
-        try {
-            const err = await res.json();
-            errorMessage = err.error || errorMessage;
-        } catch {}
-        showAlert(errorMessage, 'error');
-      }
-    } catch {
-      showAlert('Network error during update.', 'error');
-    }
-  }, [showAlert]);
 
   const handleDelete = useCallback((id) => {
     setShowDeleteModal(id);
   }, []);
 
-const handleDeleteConfirm = useCallback((id) => {
-    setCctvs(prev => prev.filter(c => c.id !== id));
-    setShowDeleteModal(null);
+  const handleDeleteConfirm = useCallback((id) => {
+      setCctvs(prev => prev.filter(c => c.id !== id));
+      setShowDeleteModal(null);
   }, []);
+  
+  // Perbarui handler onSuccess ModalAddCCTV untuk sorting
+  const handleAddSuccess = useCallback((newCctv) => {
+      setCctvs(prev => {
+          const updatedList = [...prev, newCctv];
+          return updatedList.sort((a, b) => a.id - b.id); 
+      });
+      setShowAddModal(false);
+  }, []);
+  
+  // Efek untuk reset halaman jika hasil filter kosong
+  useEffect(() => {
+    if (filteredCctvs.length > 0 && currentPage > Math.ceil(filteredCctvs.length / itemsPerPage)) {
+        setCurrentPage(Math.ceil(filteredCctvs.length / itemsPerPage));
+    } else if (filteredCctvs.length === 0 && currentPage !== 1) {
+        setCurrentPage(1);
+    }
+  }, [filteredCctvs.length, itemsPerPage, currentPage]);
 
-  // --- Filter CCTV ---
-  const filteredCctvs = cctvs.filter(cctv =>
-    cctv.name.toLowerCase().includes(search.toLowerCase()) ||
-    (cctv.location && cctv.location.toLowerCase().includes(search.toLowerCase())) ||
-    cctv.ip_address.toLowerCase().includes(search.toLowerCase())
-  );
 
   // --- Render ---
   if (loading) return <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading CCTV Datas...</p></div>;
@@ -245,13 +257,15 @@ const handleDeleteConfirm = useCallback((id) => {
                             </button>
                         </>
                         )}
-                        <input
-                            type="text"
-                            placeholder="Type Name, IP, or Location..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="flex w-full min-w-[100px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
+                        <>
+                          <input
+                              type="text"
+                              placeholder="Type Name, IP, or Loc..."
+                              value={search}
+                              onChange={(e) => setSearch(e.target.value)}
+                              className="flex w-full min-w-[200px] px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </>
                     </div>
                 </div>
             )}
@@ -260,34 +274,50 @@ const handleDeleteConfirm = useCallback((id) => {
       {/* Main Content */}
       <div className="overflow-x-auto">
         {view !== 'stream' ? (
-            <div className='bg-white'>
+          <div>
+            <div className='bg-white rounded-t-lg'>
                 {view === 'table' && (
                     <CCTVTable
-                        cctvs={filteredCctvs}
+                        cctvs={currentItems} 
                         onSelect={handleSelect}
                         onEdit={handleEdit}     
                         onDelete={handleDelete}
+                        startNo={indexOfFirstItem + 1} 
                     />
                 )}
                 {view === 'violation' && (
                     <CCTVViolation
-                        cctvs={filteredCctvs}
+                        cctvs={currentItems} 
                         violations={violations}
                         configs={configs}
                         onToggle={handleToggleViolation}
+                        startNo={indexOfFirstItem + 1} 
                     />
                 )}
             </div>
+            <div>
+              {/* Komponen Pagination */}
+                {(view === 'table' || view === 'violation') && (
+                    <Pagination
+                        totalItems={filteredCctvs.length}
+                        itemsPerPage={itemsPerPage}
+                        currentPage={currentPage}
+                        onPageChange={handlePageChange}
+                        onItemsPerPageChange={handleItemsPerPageChange}
+                    />
+                )}
+            </div>
+          </div>
         )
          : selectedCCTV && (
             <CCTVStream cctvId={selectedCCTV} />
          )}
       </div>
+      {/* MODAL */}
       <ModalAddCCTV
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSubmit={handleAddCCTV}
-        isSubmitting={isSubmitting}
+          open={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
       />
       <ModalEditCCTV
         open={showEditModal}

@@ -25,7 +25,7 @@ def get_all_cctv():
     conn = get_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     # cursor.execute("SELECT id, name, ip_address, location, enabled FROM cctv_data;")
-    cursor.execute("SELECT * FROM cctv_data;")
+    cursor.execute("SELECT * FROM cctv_data ORDER BY id ASC;")
     rows = cursor.fetchall()
     cursor.close()
     conn.close()

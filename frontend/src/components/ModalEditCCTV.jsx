@@ -11,7 +11,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     ip: '',
     port: '',
     token: '',
-    enabled: true,
+    enabled: false,
     url: ''
   });
   const [roiMethod, setRoiMethod] = useState('upload');
@@ -51,7 +51,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
             ip: ip,
             port: port,
             token: token, 
-            enabled: cctvData.enabled ?? true,
+            enabled: cctvData.enabled ?? false,
             url: autoUrl
         });
 
@@ -90,7 +90,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
         try {
         const u = new URL(url.replace('rtsps://', 'rtsp://')); 
         if (!['rtsp:', 'rtsps:'].includes(u.protocol)) {
-            throw new Error('Harus rtsp:// atau rtsps://');
+            throw new Error('Input rtsp:// or rtsps://');
         }
 
         const ip = u.hostname;
@@ -99,12 +99,20 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
         
         const token = tokenWithQuery.replace('?enableSrtp', ''); 
 
-        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-        if (!ipRegex.test(ip)) throw new Error('Invalid IP');
+        const ipSegments = ip.split('.');
+        if (ipSegments.length !== 4 || ipSegments.some(seg => {
+            const num = parseInt(seg, 10);
+            return isNaN(num) || num < 0 || num > 255;
+        })) {
+            throw new Error('Invalid IP value (each segment must be 0-255).');
+        }
+
+        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/; 
+        if (!ipRegex.test(ip)) throw new Error('Invalid IP structure.');
 
         setForm(prev => ({ ...prev, ip, port, token, url }));
         } catch (err) {
-        setUrlError(err.message || 'Invalid URL');
+        setUrlError(err.message || 'Invalid URL'); // <-- Memicu tampilan error
         }
     };
 
@@ -137,7 +145,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
   // === 5. Load Stream Preview ===
   const loadStreamPreview = async () => {
     const urlToUse = form.url || generateUrl(form.ip, form.port, form.token);
-    if (!form.url) return showAlert('URL required for stream preview.', 'warning'); 
+    if (!form.url) return showAlert('URL required for stream preview.', 'warning');
 
     setPreviewLoading(true);
     setPreviewError(null);
@@ -240,14 +248,17 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
     try {
         if (roiMethod === 'upload') {
-            if (roiFile) {
-                area = await roiFile.text();
-                area = String(area).trim(); 
-                JSON.parse(area);
+            if (roiFile && roiFile.text) { 
+                area = await roiFile.text(); 
                 isAreaChanged = true;
-            } else if (cctvData?.area) {
+            } else if (cctvData?.area && roiFile?.name === cctvData.area) {
+            } else if (roiFile && !roiFile.text) {
                 area = undefined; 
-            } 
+            } else {
+                area = null;
+                isAreaChanged = true;
+            }
+
         } else if (roiMethod === 'draw') {
             if (polygons.length > 0) {
                 area = JSON.stringify({
@@ -262,7 +273,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
                 area = null; 
                 isAreaChanged = true;
             } else {
-                area = undefined;
+                area = undefined; 
             }
         }
     } catch {
@@ -271,12 +282,12 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     }
 
     const payload = {
-      name: form.name.trim(),
-      location: form.location.trim(),
-      ip_address: String(form.ip).trim(),
-      port: String(form.port).trim(),
-      token: String(form.token).trim(),
-      enabled: form.enabled,
+        name: form.name.trim(),
+        location: form.location.trim(),
+        ip_address: String(form.ip).trim(),
+        port: String(form.port).trim(),
+        token: String(form.token).trim(),
+        enabled: form.enabled,
     };
     
     if (isAreaChanged) { 
@@ -304,7 +315,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
         onUpdate(cctvData.id, updated); 
         onClose();
-        showAlert(`CCTV '${updated.name}' successfully updated.`, 'success'); 
+        showAlert(`CCTV '${updated.name}' successfully updated.`, 'success');
     } catch (err) {
         showAlert(err.message || 'Network error.', 'error'); 
     } finally {
@@ -312,11 +323,10 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     }
     }
 
-  // === RENDER (Keluhan 4 & 1 & 3) ===
+  // === RENDER ===
   return (
     <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
       <div className="flex justify-between items-center mb-6">
-        {/* Keluhan 4: Judul modal */}
         <h2 className="text-2xl font-bold">Update CCTV #{cctvData?.name}</h2>
         <button onClick={onClose} className="text-2xl"><FaTimes /></button>
       </div>
@@ -324,6 +334,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
+            {/* === Name === */}
             <label className="block text-sm font-medium text-gray-700 mb-1">CCTV Name *</label>
             <input
               required
@@ -333,6 +344,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
             />
           </div>
           <div>
+            {/* === Location === */}
             <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
             <input
                 required
@@ -368,7 +380,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
         {/* === ROI === */}
         <div className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
+          <label className="block text-sm font-medium text-gray-700">ROI Area</label>
 
           <div className="flex gap-2 border-b border-gray-200">
             <button type="button" onClick={() => setRoiMethod('upload')} className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${roiMethod === 'upload' ? 'bg-white text-indigo-600 border border-b-0 border-gray-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Upload JSON File</button>
@@ -406,12 +418,15 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
             <div className="p-4 bg-gray-50 rounded-lg border space-y-3">
               <div className="flex justify-between">
                 <p>Input CCTV URL first for drawing ROI!</p>
-                <button type="button" onClick={loadStreamPreview} disabled={previewLoading || !form.ip || !form.port} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                <button 
+                type="button" 
+                onClick={loadStreamPreview} 
+                disabled={previewLoading || !form.ip || !form.port || !form.token} 
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
                   <FaCamera /> {previewLoading ? 'Loading...' : 'Take picture from stream'}
                 </button>
               </div>
               
-              {/* Keluhan ROI: Tampilkan nama file lama di mode Draw */}
               {cctvData?.area && (
                   <p className="text-sm text-yellow-700 bg-yellow-100 p-2 mb-2 rounded border border-yellow-300">
                       <strong>Warning</strong>: This CCTV already has an existing ROI file: <strong>{cctvData.area}</strong>. Drawing a new ROI will <strong>overwrite</strong> it. If you click <strong>Delete</strong> (Clear Drawing), the file will be removed.
@@ -441,11 +456,13 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
         {/* === Footer === */}
         <div className="flex items-center justify-between">
+            {/* === Enabled Checkbox === */}
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={form.enabled} onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))} className="w-4 h-4 text-indigo-600 rounded" />
             <span className="text-sm font-medium">Enabled</span>
           </label>
           <div className="flex gap-3">
+            {/* === Submit Button === */}
             <button type="button" onClick={onClose} className="px-5 py-2 border rounded-lg">Cancel</button>
             <button type="submit" disabled={submitting} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50">
               {submitting ? 'Updating...' : 'Update CCTV'}

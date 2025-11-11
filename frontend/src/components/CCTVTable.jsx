@@ -2,9 +2,11 @@
 import React from 'react';
 import { FaEye, FaEyeSlash, FaPenSquare, FaTrash } from 'react-icons/fa';
 
-function CCTVTable({ cctvs, onSelect, onEdit, onDelete }) {
+// Tambahkan prop startNo
+function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
+  // Hapus div rounded-lg shadow-lg di sini karena sudah dipindahkan ke parent
   return (
-    <div className="rounded-lg shadow-lg"> 
+    <div className="overflow-x-auto rounded-t-lg"> 
       <table className="w-full border-collapse text-sm">
         <thead className="bg-indigo-200 text-center">
           <tr>
@@ -26,7 +28,8 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete }) {
           ) : (
             cctvs.map((cctv, i) => (
               <tr key={cctv.id} className="hover:bg-gray-50 transition">
-                <td className="border p-2 text-center text-gray-600">{i + 1}</td>
+                {/* Penomoran berdasarkan startNo */}
+                <td className="border p-2 text-center text-gray-600">{startNo + i}</td>
                 <td className="border p-2 text-gray-700">{cctv.name}</td>
                 <td className="border p-2 text-center text-gray-600">{cctv.ip_address}</td>
                 <td className="border p-2 text-gray-600">{cctv.location || '-'}</td>

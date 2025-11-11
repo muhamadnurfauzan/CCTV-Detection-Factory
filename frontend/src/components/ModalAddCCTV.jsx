@@ -5,7 +5,7 @@ import { useAlert } from './AlertProvider';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [form, setForm] = useState({
-        name: '', location: '', ip: '', port: '', token: '', enabled: true
+        name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' // Tambah url di state
     });
     const [roiMethod, setRoiMethod] = useState('upload');
     const [roiFile, setRoiFile] = useState(null);
@@ -18,16 +18,65 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState(null);
     const [uploadError, setUploadError] = useState(null);
+    const [urlError, setUrlError] = useState(''); 
     const { showAlert } = useAlert();
 
     // Reset on open
     useEffect(() => {
         if (open) {
-        setForm({ name: '', location: '', ip: '', port: '', token: '', enabled: true });
+        setForm({ name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' });
         setRoiMethod('upload'); setRoiFile(null); setPoints([]); setPolygons([]); setImageUrl(null); setDrawing(false);
         setPreviewError(null);
+        setUrlError(''); // <-- Reset error URL
         }
     }, [open]);
+    
+    // === Helper: Parse URL dan Validasi IP/Port/Token (Mirip ModalEditCCTV) ===
+    const updateFieldsFromUrl = (rawUrl) => {
+        const url = rawUrl.trim();
+        setUrlError('');
+        
+        // Update URL di state utama
+        setForm(prev => ({ ...prev, url: url }));
+
+        if (!url) {
+            setForm(prev => ({ ...prev, ip: '', port: '', token: '' }));
+            return;
+        }
+
+        try {
+            const u = new URL(url.replace('rtsps://', 'rtsp://')); 
+            if (!['rtsp:', 'rtsps:'].includes(u.protocol)) {
+                throw new Error('Protocol must be rtsp:// or rtsps://.');
+            }
+
+            const ip = u.hostname;
+            const port = u.port || '7447'; 
+            const tokenWithQuery = u.pathname.slice(1) + u.search;
+            const token = tokenWithQuery.replace('?enableSrtp', ''); 
+
+            // Validasi IP Ketat (0-255 per segmen)
+            const ipSegments = ip.split('.');
+            if (ipSegments.length !== 4 || ipSegments.some(seg => {
+                const num = parseInt(seg, 10);
+                return isNaN(num) || num < 0 || num > 255;
+            })) {
+                throw new Error('Invalid IP value (each segment must be 0-255).');
+            }
+            
+            // Validasi Port
+            if (isNaN(parseInt(port, 10)) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535) {
+                 throw new Error('Invalid port number.');
+            }
+            
+            // Jika valid, update ip/port/token di state
+            setForm(prev => ({ ...prev, ip, port, token }));
+        } catch (err) {
+            setUrlError(err.message || 'Invalid URL format.'); // <-- Memicu tampilan error inline
+            setForm(prev => ({ ...prev, ip: '', port: '', token: '' })); // Kosongkan komponen jika gagal
+        }
+    };
+    // =========================================================================
 
     const onDrop = useCallback((files) => {
         const file = files[0];
@@ -40,14 +89,17 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         reader.readAsText(file);
         setRoiFile(file);
         } else if (file.type.startsWith('image/')) {
-        setImageUrl(URL.createObjectURL(file));
-        setDrawing(true);
+            // Logika ini untuk load preview, tapi kita akan pakai loadStreamPreview
+            showAlert('Use "Draw on Stream" tab and "Take picture" button instead.', 'warning');
         }
     }, []);
 
     // Fungsi load preview dari stream
     const loadStreamPreview = async () => {
-        if (!form.url) return showAlert('URL required for stream preview.', 'warning');
+        // Cek kembali dari state form yang sudah divalidasi oleh updateFieldsFromUrl
+        if (!form.url || urlError) {
+             return showAlert('URL required and must be valid for stream preview.', 'warning');
+        }
         setPreviewLoading(true);
         setPreviewError(null);
         try {
@@ -57,10 +109,10 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             body: JSON.stringify({ url: form.url })
             });
             if (res.ok) {
-            const blob = await res.blob();
-            setImageUrl(URL.createObjectURL(blob));
-            setDrawing(true);
-            setRoiMethod('draw');
+                const blob = await res.blob();
+                setImageUrl(URL.createObjectURL(blob));
+                setDrawing(true);
+                setRoiMethod('draw');
             } else {
             const err = await res.json();
             const message = err.error || 'Stream is not avaliable. Check your URL or network.';
@@ -100,32 +152,23 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        // VALIDASI TERAKHIR: Pastikan tidak ada error inline yang tersisa
+        if (urlError) return showAlert(urlError, 'error');
+        
         if (!form.name?.trim()) return showAlert('CCTV Name is required.', 'warning'); 
         if (!form.location?.trim()) return showAlert('CCTV Location is required.', 'warning'); 
         if (!form.url?.trim()) return showAlert('CCTV URL is required.', 'warning');
+        
+        // Karena ip/port/token sudah diisi/divalidasi di updateFieldsFromUrl, kita bisa langsung pakai
+        if (!form.ip || !form.port || !form.token) return showAlert('IP, Port, and Token must be extracted from a valid URL.', 'error');
 
         setSubmitting(true);
 
-        // === PARSE URL ===
-        let ip, port, token;
-        try {
-            const url = new URL(form.url.trim());
-            if (!['rtsp:', 'rtsps:'].includes(url.protocol)) {
-            throw new Error('Protocol must be rtsp or rtsps');
-            }
-
-            ip = url.hostname;
-            port = url.port || (url.protocol === 'rtsps:' ? '7441' : '554');
-            token = url.pathname.slice(1); 
-
-            // Validasi IP
-            const ipRegex = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/;
-            if (!ipRegex.test(ip)) throw new Error('Invalid IP');
-            if (isNaN(port) || port < 1 || port > 65535) throw new Error('Invalid port');
-        } catch (err) {
-            setSubmitting(false);
-            return showAlert(err.message || 'Invalid URL format.', 'error');
-        }
+        // === PARSE URL FINAL (Hanya untuk konsistensi) ===
+        // IP, port, token sudah ada di state form
+        const ip = form.ip;
+        const port = form.port;
+        const token = form.token;
 
         // === PROSES ROI ===
         let area = null;
@@ -166,10 +209,10 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             });
 
             if (res.ok) {
-            const newCctv = await res.json();
-            onSuccess(newCctv);
-            onClose();
-            showAlert(`CCTV '${newCctv.name}' successfully added.`, 'success');
+                const newCctv = await res.json();
+                onSuccess(newCctv); // Memperbarui state di parent
+                onClose();
+                showAlert(`CCTV '${newCctv.name}' successfully added.`, 'success'); // Success Alert Saja
             } else {
             const err = await res.json();
             showAlert(err.error || 'Failed to add CCTV.', 'error');
@@ -191,6 +234,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                    {/* === Name === */}
                     <label className="block text-sm font-medium text-gray-700 mb-1">CCTV Name *</label>
                     <input
                     type="text"
@@ -201,6 +245,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     />
                 </div>
                 <div>
+                    {/* === Location === */}
                     <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
                     <input
                     type="text"
@@ -212,6 +257,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 </div>
                 </div>
 
+                {/* === URL === */}
                 <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         CCTV URL (RTSP/S) *
@@ -220,15 +266,18 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                         type="text"
                         placeholder="rtsps://[ip]:[port]/[token]?enableSrtp"
                         value={form.url}
-                        onChange={(e) => setForm({ ...form, url: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        onChange={(e) => updateFieldsFromUrl(e.target.value)}  
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            urlError ? 'border-red-500' : 'border-gray-300'
+                        }`}
                     />
+                    {urlError && <p className="text-xs text-red-600 mt-1">{urlError}</p>}
                     <p className="text-xs text-gray-500 mt-1">Example: rtsps://192.168.x.x:xxxx/aBcdEfGhIj123456?enableSrtp</p>
                 </div>
 
                 {/* ROI Section */}
                 <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
+                <label className="block text-sm font-medium text-gray-700">ROI Area</label>
 
                 {/* Tab Pilihan Metode */}
                 <div className="flex gap-2 border-b border-gray-200">
@@ -313,7 +362,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                             <button
                             type="button" 
                             onClick={loadStreamPreview} 
-                            disabled={previewLoading || !form.ip || !form.port} 
+                            disabled={previewLoading || !form.ip || !form.port || !form.token || !!urlError}  
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                             >
                             <FaCamera />
@@ -343,7 +392,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                                     </button>
                                     <button
                                     type="button"
-                                    onClick={clearDrawing}
+                                    onClick={clearCanvas}
                                     className="px-3 py-1 bg-red-600 text-white text-xs rounded"
                                     >
                                     Delete
@@ -367,7 +416,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 )}
                 </div>
 
+                {/* === Footer === */}
                 <div className="flex items-center justify-between">
+                    {/* === Enabled Checkbox === */}
                     <label className="flex items-center gap-2">
                         <input
                         type="checkbox"
@@ -379,8 +430,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     </label>
 
                     <div className="flex justify-end gap-3">
+                        {/* === Submit Button === */}
                         <button type="button" onClick={onClose} className="px-5 py-2 border rounded-lg">Cancel</button>
-                        <button type="submit" disabled={submitting} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50">
+                        <button type="submit" disabled={submitting || !!urlError} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50"> {/* <-- Tombol submit disabled jika ada error URL */}
                             {submitting ? 'Adding...' : 'Add CCTV'}
                         </button>
                     </div>

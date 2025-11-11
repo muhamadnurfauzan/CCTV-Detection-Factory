@@ -35,6 +35,23 @@ def save_roi_to_file(roi_data, cctv_id):
     except Exception as e:
         logging.error(f"[ROI SAVE ERROR]: {e}")
         return None
+    
+# --- Helper: Validasi IP Address ---
+def is_valid_ip(ip_address):
+    """Memeriksa apakah IP address memiliki 4 segmen, dan setiap segmen 0-255."""
+    try:
+        segments = ip_address.split('.')
+        if len(segments) != 4:
+            return False
+        for segment in segments:
+            if not segment.isdigit():
+                return False
+            num = int(segment)
+            if num < 0 or num > 255:
+                return False
+        return True
+    except:
+        return False
 
 @cctv_bp.route('/roi/<filename>', methods=['GET'])
 def get_roi_file(filename):
@@ -65,6 +82,10 @@ def add_cctv():
     # --- Validasi sederhana ---
     if not data['ip_address'] or not data['port'] or not data['token']:
         return jsonify({"error": "IP, Port, and Token cannot be empty"}), 400
+    
+    # --- Validasi IP Address Ketat ---
+    if not is_valid_ip(data['ip_address']):
+        return jsonify({"error": "Invalid IP Address value (must be 0.0.0.0 to 255.255.255.255)"}), 400
 
     # --- Simpan ROI ke file ---
     area_path = None
@@ -88,7 +109,7 @@ def add_cctv():
             RETURNING id
         """, (
             data['name'], data['ip_address'], data['port'], data['token'],
-            data.get('location'), None, data.get('enabled', True)
+            data.get('location'), None, data.get('enabled', False)
         ))
         cctv_id = cur.fetchone()['id']
 
@@ -109,7 +130,7 @@ def add_cctv():
         # Simpan ke config tanpa memulai deteksi
         config.cctv_streams[cctv_id] = {
             'url': rtsps_url,
-            'enabled': data.get('enabled', True),
+            'enabled': data.get('enabled', False),
             'name': data['name']
         }
 
@@ -119,8 +140,10 @@ def add_cctv():
             "id": cctv_id,
             "name": data['name'],
             "ip_address": data['ip_address'],
+            "port": data['port'],    
+            "token": data['token'],
             "location": data.get('location'),
-            "enabled": data.get('enabled', True),
+            "enabled": data.get('enabled', False),
             "area": area_path
         }), 201
 
@@ -175,6 +198,8 @@ def update_cctv(cctv_id):
             update_fields.append("name = %s")
             update_values.append(data['name'])
         if 'ip_address' in data:
+            if not is_valid_ip(data['ip_address']):
+                return jsonify({"error": "Invalid IP Address value (must be 0.0.0.0 to 255.255.255.255)"}), 400
             update_fields.append("ip_address = %s")
             update_values.append(data['ip_address'])
         if 'port' in data:
@@ -182,9 +207,8 @@ def update_cctv(cctv_id):
             update_values.append(data['port'])
         
         token = data.get('token')
-        # MODIFIKASI KELUHAN 2: Hapus '?enableSrtp' dari token sebelum disimpan
-        if  token and '?enableSrtp' in token:
-            token = token.split('?enableSrtp')[0]
+        if token and '?' in token:
+            token = token.split('?')[0]
             data['token'] = token
         if 'token' in data:
             update_fields.append("token = %s")
@@ -197,28 +221,37 @@ def update_cctv(cctv_id):
             update_fields.append("enabled = %s")
             update_values.append(data['enabled'])
 
-        # Handle ROI update (Keluhan 3)
         area_path = None
         if 'area' in data:
             if data['area'] is None:
                 roi_json = None
+                raw_area_string = None 
             else:
                 try:
                     raw_area_string = data['area'].strip() 
                     
-                    roi_json = json.loads(raw_area_string) 
-                    
-                    if not isinstance(roi_json, dict) or 'items' not in roi_json:
-                        raise ValueError("Invalid ROI format")
+                    if not raw_area_string.startswith('{'):
+                         logging.warning(f"[ROI PARSE WARNING]: Ignoring invalid area string (looks like filename): {raw_area_string}")
+                         raw_area_string = None 
+                         roi_json = None
+
+                    if raw_area_string: 
+                        roi_json = json.loads(raw_area_string) 
+                        
+                        if not isinstance(roi_json, dict) or 'items' not in roi_json:
+                            raise ValueError("Invalid ROI format: Missing 'items' key or not a dictionary.")
+                
                 except (json.JSONDecodeError, ValueError) as e:
                     logging.error(f"[ROI PARSE ERROR]: {e}")
-                    return jsonify({"error": f"Invalid ROI JSON: {str(e)}"}), 400
+                    if raw_area_string:
+                        return jsonify({"error": f"Invalid ROI JSON format: {str(e)}"}), 400
 
-            filename = save_roi_to_file(roi_json, cctv_id)
-            
-            update_fields.append("area = %s")
-            update_values.append(filename)
-            area_path = filename
+            if roi_json is not None or (data['area'] is None and 'area' in data):
+                filename = save_roi_to_file(roi_json, cctv_id)
+                
+                update_fields.append("area = %s")
+                update_values.append(filename)
+                area_path = filename
 
 
         if not update_fields:
