@@ -49,8 +49,6 @@ const Dashboard = () => {
   return () => { mounted = false; };
   }, []);
 
-  if (loading) return <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading...</p></div>;
-
   // --- Color Map (hanya violation) ---
   const colorMap = objectClasses
     .filter(cls => cls.is_violation)
@@ -152,6 +150,7 @@ const Dashboard = () => {
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
       <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Dashboard PPE Detection</h2>
+      {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading...</p></div> : <>
 
       {/* Bagian 1: Summary Cards */}
       <div className="mb-8">
@@ -291,6 +290,7 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 };

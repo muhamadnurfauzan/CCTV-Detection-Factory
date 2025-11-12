@@ -207,7 +207,6 @@ const CCTVList = () => {
 
 
   // --- Render ---
-  if (loading) return <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading CCTV Datas...</p></div>;
   if (error) return <p className="text-center py-8 text-red-500">{error}</p>;
 
   return (
@@ -219,7 +218,9 @@ const CCTVList = () => {
         {view === 'violation' && "Violation Configurations"}
         </h2>
 
-        <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md'>
+        {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading CCTV Datas...</p></div>: <>
+
+        <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2'>
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
                 <div className="flex justify-start" >
@@ -325,6 +326,7 @@ const CCTVList = () => {
         onConfirm={handleDeleteConfirm}
         cctvId={showDeleteModal}
       />
+      </>}
     </div>
   );
 };

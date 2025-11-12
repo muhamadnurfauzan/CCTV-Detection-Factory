@@ -1,17 +1,37 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, FaTimes } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import Pagination from '../components/Pagination';
 
-// Helper component untuk menampilkan gambar (Anda perlu membuat ini di folder components)
-const ReportImagePreview = ({ imageUrl }) => (
-    // Gunakan URL aktual dari database
-    <img 
-        src={imageUrl} 
-        alt="Violation" 
-        className="w-16 h-12 object-cover rounded-md shadow-sm border" 
-    />
-);
+// --- Helper Modal Preview Gambar ---
+const ImagePreviewModal = ({ imageUrl, onClose }) => {
+    if (!imageUrl) return null;
+
+    return (
+        <div
+            className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <div
+                className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-2 right-2 text-2xl text-gray-800 hover:text-red-600 z-10"
+                >
+                    <FaTimes />
+                </button>
+                <img
+                    src={imageUrl}
+                    alt="Violation Preview"
+                    className="max-w-full max-h-[85vh] object-contain"
+                    loading="lazy"
+                />
+            </div>
+        </div>
+    );
+};
 
 export default function Reports() {
     const { showAlert } = useAlert();
@@ -21,20 +41,40 @@ export default function Reports() {
     
     // State Filter & Search
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(''); 
     const [sortOrder, setSortOrder] = useState('desc');
     
     // State Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [totalItems, setTotalItems] = useState(0); // <-- State untuk total item
+    const [totalItems, setTotalItems] = useState(0); 
 
+    // --- State Modal Preview Image ---
+    const [showImageModal, setShowImageModal] = useState(false);
+    const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+
+    // --- Efek 1: Debouncing Search Input ---
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 500);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [searchQuery]); 
+    
     // --- Data Fetching Menggunakan API Asli ---
     const fetchReports = useCallback(async () => {
         setLoading(true);
         setError(null);
+        
+        if (debouncedSearchQuery.length < 3 && debouncedSearchQuery.length > 0) {
+        }
+
         try {
             const params = new URLSearchParams({
-                search: searchQuery,
+                search: debouncedSearchQuery,
                 sort: sortOrder,
                 page: currentPage,
                 limit: itemsPerPage
@@ -45,30 +85,30 @@ export default function Reports() {
             
             const data = await res.json();
             
-            // 1. Simpan data laporan halaman saat ini
             setReports(data.reports || []); 
-            
-            // 2. Simpan total item dari backend untuk pagination
             setTotalItems(data.totalItems || 0); 
 
         } catch (err) {
-            // Jika backend mengembalikan 0 totalItems, pastikan data list juga kosong.
             setReports([]);
             setTotalItems(0);
             setError(err.message || 'Error loading reports.');
         } finally {
             setLoading(false);
         }
-    }, [searchQuery, sortOrder, currentPage, itemsPerPage]);
+    }, [debouncedSearchQuery, sortOrder, currentPage, itemsPerPage]);
 
     useEffect(() => {
-        // Panggil fetchReports setiap kali parameter filter/pagination berubah
         fetchReports();
     }, [fetchReports]); 
 
-    // --- Handler Aksi (Manual Report) ---
+    // --- Handler Aksi ---
     const handleReport = (reportId) => {
         showAlert(`Manually reporting violation ID ${reportId}... (Logic to send email here)`, 'info');
+    };
+
+    const handlePreviewImage = (imageUrl) => {
+        setSelectedImageUrl(imageUrl);
+        setShowImageModal(true);
     };
     
     // --- Handler Pagination ---
@@ -79,15 +119,17 @@ export default function Reports() {
     };
     
     // --- Render ---
-    if (loading) return <div className="p-6 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Reports...</p></div>;
     if (error) return <p className="text-center py-8 text-red-500">{error}</p>;
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
             <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Reports</h2>
             
+            {(loading) ? <div className="p-6 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Reports...</p></div> :
+
+            <>
             {/* Filter dan Search Bar */}
-            <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
                 <div className="flex space-x-3">
                     {/* Tombol Filter (Sort Order) */}
                     <button
@@ -108,7 +150,7 @@ export default function Reports() {
                         value={searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value);
-                            setCurrentPage(1); // Reset halaman saat search
+                            setCurrentPage(1); 
                         }}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
                     />
@@ -124,7 +166,6 @@ export default function Reports() {
                             <th className="p-2 text-indigo-800 border-r">No</th>
                             <th className="p-2 text-indigo-800 border-r">CCTV</th>
                             <th className="p-2 text-indigo-800 border-r">Violation</th>
-                            <th className="p-2 text-indigo-800 border-r">Picture</th>
                             <th className="p-2 text-indigo-800 border-r whitespace-nowrap">Date</th>
                             <th className="p-2 text-indigo-800">Action</th>
                         </tr>
@@ -144,13 +185,18 @@ export default function Reports() {
                                     </td>
                                     <td className="border-r p-2 text-gray-700 whitespace-nowrap">{report.cctv_name}</td>
                                     <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">{report.violation_name}</td>
-                                    <td className="border-r p-2 text-center justify-center flex">
-                                        <ReportImagePreview imageUrl={report.image_url} />
-                                    </td>
                                     <td className="border-r p-2 text-gray-600 text-center whitespace-nowrap">
-                                        {new Date(report.timestamp).toLocaleString()}
+                                        {new Date(report.timestamp).toLocaleString("id-ID", {timeZone: "UTC"})}
+                                        {/* {new Date(report.timestamp).toLocaleString()} */}
                                     </td>
-                                    <td className="p-2 text-center">
+                                    <td className="grid p-2 sm:grid-flow-col grid-flow-row justify-items-center gap-1">
+                                        <button
+                                            onClick={() => handlePreviewImage(report.image_url)}
+                                            className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
+                                            title="Preview Violation Image"
+                                        >
+                                            <FaFileImage className="w-5 h-5" />
+                                        </button>
                                         <button
                                             onClick={() => handleReport(report.id)}
                                             className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100"
@@ -166,7 +212,7 @@ export default function Reports() {
                 </table>
             </div>
             
-            {/* Komponen Pagination */}
+            {/* Pagination */}
             {totalItems > 0 && (
                 <Pagination
                     totalItems={totalItems}
@@ -176,6 +222,15 @@ export default function Reports() {
                     onItemsPerPageChange={handleItemsPerPageChange}
                 />
             )}
+
+            {/* Modal Gambar */}
+            {showImageModal && (
+                <ImagePreviewModal 
+                    imageUrl={selectedImageUrl}
+                    onClose={() => setShowImageModal(false)}
+                />
+            )}
+            </>}
         </div>
     );
 }

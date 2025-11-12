@@ -13,19 +13,15 @@ from backend import config
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
 
-# --- Supabase Storage Configuration ---
-SUPABASE_BUCKET_NAME = config.SUPABASE_BUCKET # Asumsi SUPABASE_BUCKET = "violations"
-SUPABASE_ROI_DIR = "roi_json"
-
 # --- Helper: Simpan JSON ke Supabase Bucket ---
 def save_roi_to_file(roi_data, cctv_id):
     """Mengunggah data ROI JSON ke Supabase Storage."""
     filename = f"cctv_{cctv_id}.json"
-    storage_path = f"{SUPABASE_ROI_DIR}/{filename}"
+    storage_path = f"{config.SUPABASE_ROI_DIR}/{filename}"
     
     try:
         if roi_data is None: # Case: Clear ROI (Hapus file dari Supabase)
-            config.supabase.storage.from_(SUPABASE_BUCKET_NAME).remove([storage_path])
+            config.supabase.storage.from_(config.SUPABASE_BUCKET).remove([storage_path])
             logging.info(f"[ROI] Removed file from Supabase: {storage_path}")
             return None # Return None untuk update DB area=NULL
 
@@ -34,7 +30,7 @@ def save_roi_to_file(roi_data, cctv_id):
         json_bytes = json_string.encode('utf-8')
         
         # Upload file dengan opsi upsert=True (menimpa jika sudah ada)
-        res = config.supabase.storage.from_(SUPABASE_BUCKET_NAME).upload(
+        res = config.supabase.storage.from_(config.SUPABASE_BUCKET).upload(
             file=json_bytes,
             path=storage_path,
             file_options={"content-type": "application/json", "upsert": "true"}
@@ -66,13 +62,13 @@ def is_valid_ip(ip_address):
 @cctv_bp.route('/roi/<filename>', methods=['GET'])
 def get_roi_file(filename):
     """Mengambil dan mengirim file JSON ROI dari Supabase."""
-    storage_path = f"{SUPABASE_ROI_DIR}/{filename}"
+    storage_path = f"{config.SUPABASE_ROI_DIR}/{filename}"
     
     if not filename.endswith('.json'):
         return jsonify({"error": "Invalid file type requested"}), 400
         
     try:
-        public_url = config.supabase.storage.from_(SUPABASE_BUCKET_NAME).get_public_url(storage_path)
+        public_url = config.supabase.storage.from_(config.SUPABASE_BUCKET).get_public_url(storage_path)
         
         if not public_url:
              return jsonify({"error": "ROI file not found or URL not generated"}), 404
@@ -309,8 +305,8 @@ def delete_cctv(cctv_id):
         cur.execute("SELECT area FROM cctv_data WHERE id = %s", (cctv_id,))
         area = cur.fetchone()
         if area and area[0]:
-            storage_path = f"{SUPABASE_ROI_DIR}/{area[0]}"
-            config.supabase.storage.from_(SUPABASE_BUCKET_NAME).remove([storage_path])
+            storage_path = f"{config.SUPABASE_ROI_DIR}/{area[0]}"
+            config.supabase.storage.from_(config.SUPABASE_BUCKET).remove([storage_path])
             logging.info(f"[DELETE] Removed ROI file from Supabase: {storage_path}")
 
         # Hapus dari DB

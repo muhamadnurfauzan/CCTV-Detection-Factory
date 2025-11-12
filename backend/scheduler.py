@@ -37,12 +37,12 @@ def update_daily_log():
         conn.close()
 
 def cleanup_old_data():
-    """Menghapus log & gambar yang lebih dari 7 hari."""
+    """Menghapus log & gambar yang lebih dari 14 hari."""
     conn = get_connection()
     cur = conn.cursor()
-    # datetime.datetime.now() - datetime.timedelta(days=7) menghasilkan objek datetime yang dapat 
+    # datetime.datetime.now() - datetime.timedelta(days=14) menghasilkan objek datetime yang dapat 
     # di-*pass* sebagai parameter %s ke PostgreSQL/Psycopg2 dengan aman.
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=7) 
+    cutoff = datetime.datetime.now() - datetime.timedelta(days=14) 
 
     try:
         cur.execute("SELECT image FROM violation_detection WHERE timestamp < %s", (cutoff,))
@@ -52,7 +52,7 @@ def cleanup_old_data():
         # Hapus dari DB
         cur.execute("DELETE FROM violation_detection WHERE timestamp < %s", (cutoff,))
         conn.commit()
-        logging.info(f"[SCHEDULER] Data dan gambar >7 hari dihapus.")
+        logging.info(f"[SCHEDULER] Data dan gambar >14 hari dihapus.")
     except Exception as e:
         logging.error(f"[SCHEDULER] Gagal hapus data lama: {e}")
     finally:

@@ -379,8 +379,8 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
         </div>
 
         {/* === ROI === */}
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700">ROI Area</label>
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
 
           <div className="flex gap-2 border-b border-gray-200">
             <button type="button" onClick={() => setRoiMethod('upload')} className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${roiMethod === 'upload' ? 'bg-white text-indigo-600 border border-b-0 border-gray-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Upload JSON File</button>

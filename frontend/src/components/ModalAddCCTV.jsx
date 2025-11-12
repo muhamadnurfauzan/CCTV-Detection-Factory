@@ -276,8 +276,8 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 </div>
 
                 {/* ROI Section */}
-                <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-700">ROI Area</label>
+                <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
 
                 {/* Tab Pilihan Metode */}
                 <div className="flex gap-2 border-b border-gray-200">

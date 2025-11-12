@@ -27,10 +27,10 @@ export default function Pagination({
   if (totalItems === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-between p-4 mt-4 bg-white border-t rounded-lg shadow-md">
+    <div className="grid grid-flow-row justify-center sm:flex sm:flex-wrap sm:justify-between items-center p-4 mt-4 bg-white border-t rounded-lg shadow-md">
       
       {/* Kontrol Halaman */}
-      <div className="flex items-center space-x-2 text-sm">
+      <div className="flex items-center space-x-2 text-sm justify-center">
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
@@ -54,12 +54,13 @@ export default function Pagination({
         </button>
       </div>
 
-      {/* Info Item dan Kontrol Items Per Page */}
-      <div className="flex items-center space-x-4 text-sm mt-2 md:mt-0">
-        <span className="text-gray-600 whitespace-nowrap">
-          Showing {startItem} to {endItem} of {totalItems} entries
-        </span>
-        
+      {/* Info Item */}
+      <div className="justify-center text-sm">
+        <p className="text-gray-600 whitespace-nowrap">Showing {startItem} to {endItem} of {totalItems} entries</p>
+      </div>
+
+      {/* Kontrol Items Per Page */}
+      <div className="flex items-center space-x-4 text-sm justify-center">
         <label className="flex items-center space-x-2 text-gray-600">
           <span className="font-medium whitespace-nowrap">Show:</span>
           <select
@@ -73,7 +74,7 @@ export default function Pagination({
               </option>
             ))}
           </select>
-          <span className="font-medium whitespace-nowrap">data per page</span>
+          <span className="font-medium whitespace-nowrap">data</span>
         </label>
       </div>
     </div>

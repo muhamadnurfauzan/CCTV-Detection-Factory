@@ -187,6 +187,7 @@ const ImagesShow = () => {
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
       <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Images</h2>
+      {loading ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Violation Images...</p></div> : <>
 
       <p className="mb-1 text-gray-600">
         {options
@@ -232,8 +233,6 @@ const ImagesShow = () => {
       {/* HALAMAN GAMBAR */}
       {!options && (
         <>
-          {loading && <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Violation Images...</p></div>}
-
           {images.length === 0 && !loading && (
             <p className="text-center text-gray-500">No pictures can be found.</p>
           )}
@@ -316,6 +315,7 @@ const ImagesShow = () => {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 };

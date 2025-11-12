@@ -40,6 +40,7 @@ _CACHE_TTL = 30  # detik
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "violations")
+SUPABASE_ROI_DIR = "roi_json"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -97,39 +98,50 @@ def get_all_active_cctv():
         raise RuntimeError("No CCTV Active")
     return results
 
-# --- ROI Loader ---
+# --- ROI Loader (Diubah untuk Supabase Storage) ---
 def load_roi_from_json(area_field):
     if not area_field:
         return [], 0, 0
-    filepath = os.path.join("JSON", area_field) 
-    if not os.path.exists(filepath):
-        print(f"[ROI] File not found: {filepath}")
-        return [], 0, 0
+        
+    storage_path = f"{SUPABASE_ROI_DIR}/{area_field}" # area_field adalah nama file (e.g., cctv_1.json)
+    
     try:
-        with open(filepath, "r") as f:
-            data = json.load(f)
-            width = data.get("image_width", 0)
-            height = data.get("image_height", 0)
-            regions = []
-            for item in data.get("items", []):
-                if "points" in item:
-                    regions.append({
-                        "type": item.get("type", "polygon"),
-                        "points": np.array(item["points"], dtype=np.float32),
-                    })
-            return regions, width, height
+        # 1. Unduh konten file dari Supabase
+        # Gunakan klien Supabase untuk mengunduh konten biner file
+        res = supabase.storage.from_(SUPABASE_BUCKET).download(storage_path)
+        
+        # 2. Decode konten biner menjadi string JSON
+        json_content = res.decode('utf-8')
+        
+        # 3. Parse JSON dari string
+        data = json.loads(json_content)
+        
+        # ... (Logika parsing yang tersisa)
+        width = data.get("image_width", 0)
+        height = data.get("image_height", 0)
+        regions = []
+        for item in data.get("items", []):
+            if "points" in item:
+                # np.array import dari numpy
+                regions.append({
+                    "type": item.get("type", "polygon"),
+                    "points": np.array(item["points"], dtype=np.float32),
+                })
+        print(f"[ROI] Loaded from Supabase: {storage_path}")
+        return regions, width, height
     except Exception as e:
-        print(f"[ROI LOAD ERROR]: {e}")
+        # Jika file tidak ditemukan (404 dari Supabase) atau gagal di-parse
+        print(f"[ROI LOAD ERROR from Supabase]: {e}")
         return [], 0, 0
 
-# --- Muat konfigurasi semua CCTV aktif ---
+# --- Muat konfigurasi semua CCTV aktif (tidak berubah) ---
 def load_all_cctv_configs():
     configs = {}
     try:
         active_cctvs = get_all_active_cctv()
         for cctv in active_cctvs:
             cctv_id = cctv["id"]
-            roi, w, h = load_roi_from_json(cctv.get("area"))
+            roi, w, h = load_roi_from_json(cctv.get("area")) 
             configs[cctv_id] = {
                 "name": cctv.get("name", f"CCTV {cctv_id}"),
                 "location": cctv.get("location", "Unknown"),
