@@ -1,15 +1,15 @@
 # routes/cctv_crud.py
-import os
 import io
 import cv2
 import json
-from flask import Blueprint, request, jsonify, send_file, redirect
-from psycopg2.extras import RealDictCursor
 import logging
-import backend.config as config
+
 from db.db_config import get_connection
 from backend import cctv_detection
 from backend import config
+
+from flask import Blueprint, request, jsonify, send_file, redirect
+from psycopg2.extras import RealDictCursor
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
 
@@ -98,6 +98,7 @@ def add_cctv():
 
     # --- Simpan ROI ke file ---
     area_path = None
+    roi_json = None
     if data.get('area'):
         try:
             roi_json = json.loads(data['area'])
@@ -135,21 +136,18 @@ def add_cctv():
 
         conn.commit()
 
-        # --- BANGUN URL RTSPS ---
-        rtsps_url = f"rtsps://{data['ip_address']}:{data['port']}/{data['token']}?enableSrtp"
-
-        # Simpan ke config tanpa memulai deteksi
-        config.cctv_streams[cctv_id] = {
-            'url': rtsps_url,
-            'enabled': data.get('enabled', False),
-            'name': data['name']
-        }
+        # --- LANGKAH PENTING: REFRESH CONFIG ---
+        config.refresh_all_cctv_configs()
 
         if data.get('enabled', False):
             # Jika enabled=True, mulai thread deteksi
             cctv_detection.start_detection_for_cctv(cctv_id)
+            logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to adding as enabled.")
 
         config.refresh_active_violations()
+        
+        # NOTE: rtsps_url hanya untuk info, tidak perlu disimpan ke config.cctv_streams di sini
+        # karena sudah ditangani oleh refresh_all_cctv_configs().
 
         return jsonify({
             "id": cctv_id,
@@ -219,9 +217,22 @@ def update_cctv(cctv_id):
         conn = get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
+        # 1. FIX: Ambil data CCTV lama sebelum update (untuk cek perubahan enabled status)
+        cur.execute("SELECT id, name, ip_address, port, token, location, area, enabled FROM cctv_data WHERE id = %s", (cctv_id,))
+        old_cctv = cur.fetchone()
+        if not old_cctv:
+            return jsonify({"error": "CCTV not found"}), 404
+            
+        old_enabled_status = old_cctv['enabled']
+        old_area_filename = old_cctv['area']
+
         # Update fields yang ada
         update_fields = []
         update_values = []
+        
+        # Tentukan apakah ada perubahan yang memerlukan restart thread
+        needs_restart = False
+
         if 'name' in data:
             update_fields.append("name = %s")
             update_values.append(data['name'])
@@ -230,26 +241,34 @@ def update_cctv(cctv_id):
                 return jsonify({"error": "Invalid IP Address value (must be 0.0.0.0 to 255.255.255.255)"}), 400
             update_fields.append("ip_address = %s")
             update_values.append(data['ip_address'])
+            if data['ip_address'] != old_cctv['ip_address']: needs_restart = True
+            
         if 'port' in data:
             update_fields.append("port = %s")
             update_values.append(data['port'])
-        
+            if data['port'] != old_cctv['port']: needs_restart = True
+            
         token = data.get('token')
         if token and '?' in token:
             token = token.split('?')[0]
             data['token'] = token
+            
         if 'token' in data:
             update_fields.append("token = %s")
             update_values.append(data['token'])
+            if data['token'] != old_cctv['token']: needs_restart = True
 
         if 'location' in data:
             update_fields.append("location = %s")
             update_values.append(data['location'])
+            
+        # Status enabled
+        new_enabled_status = data.get('enabled', old_enabled_status)
         if 'enabled' in data:
             update_fields.append("enabled = %s")
-            update_values.append(data['enabled'])
-
-        area_path = None
+            update_values.append(new_enabled_status)
+        
+        area_path = old_area_filename
         if 'area' in data:
             if data['area'] is None:
                 roi_json = None
@@ -280,6 +299,9 @@ def update_cctv(cctv_id):
                 update_fields.append("area = %s")
                 update_values.append(filename)
                 area_path = filename
+                # Cek apakah nama file ROI berubah (indikasi ROI baru/dihapus)
+                if filename != old_area_filename:
+                    needs_restart = True
 
 
         if not update_fields:
@@ -291,14 +313,29 @@ def update_cctv(cctv_id):
         updated_cctv = cur.fetchone()
         conn.commit()
 
-        # Update config jika perlu
+        # 2. FIX UTAMA: Refresh config untuk memuat data lengkap (termasuk ROI)
+        config.refresh_all_cctv_configs() 
+
+        # 3. FIX: Start/Stop Detection berdasarkan perubahan status
         if updated_cctv:
-            rtsps_url = f"rtsps://{updated_cctv['ip_address']}:{updated_cctv['port']}/{updated_cctv['token']}?enableSrtp"
-            config.cctv_streams[cctv_id] = {
-                'url': rtsps_url,
-                'enabled': updated_cctv['enabled'],
-                'name': updated_cctv['name']
-            }
+            
+            # Jika status berubah dari non-aktif ke aktif: START
+            if new_enabled_status and not old_enabled_status:
+                cctv_detection.start_detection_for_cctv(cctv_id)
+                logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to enabling.")
+                
+            # Jika status berubah dari aktif ke non-aktif: STOP
+            elif not new_enabled_status and old_enabled_status:
+                cctv_detection.stop_detection_for_cctv(cctv_id)
+                logging.info(f"[THREAD] Stopped detection for CCTV {cctv_id} due to disabling.")
+                
+            # Jika status tetap aktif, tapi ada perubahan konfigurasi koneksi/model
+            elif new_enabled_status and old_enabled_status and needs_restart:
+                logging.info(f"[THREAD] Restarting detection for CCTV {cctv_id} due to config change.")
+                cctv_detection.stop_detection_for_cctv(cctv_id)
+                cctv_detection.start_detection_for_cctv(cctv_id)
+
+
             config.refresh_active_violations()
 
         return jsonify(updated_cctv), 200
@@ -349,8 +386,8 @@ def delete_cctv(cctv_id):
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))
         conn.commit()
 
-        # 4. Hapus dari config cache
-        config.cctv_streams.pop(cctv_id, None)
+        # 4. FIX UTAMA: Refresh config setelah penghapusan
+        config.refresh_all_cctv_configs() 
         config.refresh_active_violations()
 
         return jsonify({"success": True}), 200

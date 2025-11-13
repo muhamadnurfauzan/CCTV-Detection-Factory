@@ -45,7 +45,6 @@ def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str
             raise RuntimeError(f"Gagal upload (status={res.status_code}): {error_detail}")
 
         public_url = supabase.storage.from_(config.SUPABASE_BUCKET).get_public_url(file_path)
-        print(f"[Supabase] Upload berhasil: {public_url}")
         return public_url
 
     except Exception as e:

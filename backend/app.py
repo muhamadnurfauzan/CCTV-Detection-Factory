@@ -550,4 +550,4 @@ if __name__ == "__main__":
     app.register_blueprint(cctv_crud.cctv_bp)
 
     # Jalankan Flask server
-    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

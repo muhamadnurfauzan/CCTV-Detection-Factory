@@ -71,15 +71,18 @@ reset_table_sequence('cctv_data')
 
 def open_stream(cctv, max_retries=5, retry_delay=1):
     video_path = f"rtsps://{cctv['ip_address']}:{cctv['port']}/{cctv['token']}?enableSrtp"
+    logging.info(f"[{cctv['name']}] Attempting RTSPS stream: {video_path}")
     cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
-        print(f"[{cctv['name']}] Gagal RTSPS, fallback RTSP...")
+        logging.warning(f"[{cctv['name']}] Gagal RTSPS, fallback RTSP...")
         rtsp_url = video_path.replace("rtsps://", "rtsp://").replace(":7441", ":7447")
+        logging.info(f"[{cctv['name']}] Attempting RTSP stream: {rtsp_url}")
         cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
-            print(f"[{cctv['name']}] Tidak dapat membuka stream.")
+            logging.error(f"[{cctv['name']}] TIDAK DAPAT MEMBUKA STREAM. Check URL/Firewall.")
             return None
+    logging.info(f"[{cctv['name']}] Stream successfully opened.")
     return cap
 
 def reconnect_cap(cctv, max_retries=5, retry_delay=1):
@@ -170,7 +173,6 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     # --- 8. Upload ke Supabase ---
     try:
         public_url = upload_violation_image(image_bytes, cctv_id, class_name)
-        # print(f"[CCTV {cctv_id}] UPLOAD → {class_name} berhasil: {public_url}")
     except Exception as e:
         print(f"[CCTV {cctv_id}] UPLOAD GAGAL → {e}")
         return
@@ -296,11 +298,13 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
 
 def capture_thread(cctv_id, frame_queue, stop_event):
     cctv = config.cctv_configs[cctv_id]
+    logging.info(f"[{cctv_id}] Capture thread STARTED (Core). Calling open_stream...")
     cap = open_stream(cctv)
     if not cap:
         logging.error(f"[{cctv_id}] Thread exit: Initial stream failed.")
         return 
-
+    
+    logging.info(f"[{cctv_id}] Stream object acquired, starting read loop.")
     fail_count = 0
     max_fails = 10
     frame_count = 0
@@ -313,14 +317,28 @@ def capture_thread(cctv_id, frame_queue, stop_event):
             print(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
             
             if fail_count >= max_fails:
-                cap.release() 
-                cap = reconnect_cap(cctv)
-        
-                if not cap:
+                cap.release() # Cap yang terdefinisi di capture_thread
+                
+                # --- LOGIKA RECONNECT DIBUAT LOKAL ---
+                reconnected_cap = None
+                max_retries = 5
+                retry_delay = 1
+                for attempt in range(max_retries):
+                    print(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(retry_delay * (2 ** attempt)) 
+                    reconnected_cap = open_stream(cctv)
+                    if reconnected_cap and reconnected_cap.isOpened():
+                        print(f"[{cctv['name']}] Reconnected successfully.")
+                        break
+                # --- AKHIR LOGIKA RECONNECT DIBUAT LOKAL ---
+
+                if not reconnected_cap:
                     if stop_event.is_set(): break
                     time.sleep(5) 
                     continue
                 
+                # Berhasil reconnect, ganti cap lama dengan yang baru
+                cap = reconnected_cap 
                 fail_count = 0
             continue 
 
@@ -470,21 +488,33 @@ def process_thread(cctv_id, frame_queue, stop_event):
         config.annotated_frames[cctv_id] = annotated
         gc.collect()
 
-def start_detection_for_cctv(cctv_id):
-    """Memulai thread deteksi untuk CCTV ID tertentu."""
-    # Hentikan yang lama dulu (jika thread restart)
-    stop_detection_for_cctv(cctv_id) 
-
-    if cctv_id not in config.cctv_configs or not config.cctv_configs[cctv_id].get('enabled'):
+def _start_capture_wrapper(cctv_id): # <-- HAPUS ARGUMEN SNAPSHOT
+    """Wrapper thread untuk memastikan thread dimulai setelah API selesai."""
+    
+    logging.info(f"[{cctv_id}] Wrapper thread starting. Delaying 3 seconds before main start.")
+    time.sleep(1) # Jeda awal 1 detik
+    
+    # --- PENTING: FORCE REFRESH DI DALAM WRAPPER ---
+    # Memastikan cctv_configs diisi sebelum mencoba memulai stream
+    config.refresh_all_cctv_configs() 
+    
+    time.sleep(2) # Sisa jeda 2 detik
+    
+    logging.info(f"[{cctv_id}] Wrapper delay finished. Attempting to initiate core threads...")
+    
+    # Ambil config BARU
+    cctv_config = config.cctv_configs.get(cctv_id) 
+    if not cctv_config or not cctv_config.get('enabled'):
+        # JIKA INI MASIH GAGAL, artinya DB/Aplikasi benar-benar tidak stabil.
+        logging.error(f"[{cctv_id}] Wrapper FATAL FAILED: Config not available even after internal refresh.")
         return
 
-    cctv_config = config.cctv_configs[cctv_id]
-    
-    # --- TAMBAHAN BARU ---
+    # Walaupun validasi menggunakan snapshot, thread core tetap membaca dari global config.cctv_configs
+    # Kita asumsikan config global sudah stabil setelah 3 detik.
+
+    # Inisialisasi thread utama (t1 dan t2)
     stop_event = Event()
     config.detection_threads[cctv_id] = {'stop_event': stop_event, 'threads': []}
-    # --------------------
-
     config.annotated_frames[cctv_id] = np.zeros((480, 640, 3), dtype=np.uint8)
     frame_queue = deque(maxlen=config.QUEUE_SIZE)
     
@@ -494,8 +524,24 @@ def start_detection_for_cctv(cctv_id):
     t1.start(); t2.start()
     
     config.detection_threads[cctv_id]['threads'].extend([t1, t2])
-    logging.info(f"[THREAD] Started detection threads for CCTV {cctv_id}.")
+    logging.info(f"[{cctv_id}] Core detection threads started successfully via wrapper.")
 
+def start_detection_for_cctv(cctv_id):
+    """Memulai thread deteksi untuk CCTV ID tertentu menggunakan wrapper."""
+    
+    logging.info(f"[THREAD] Stopping existing detection for {cctv_id}...")
+    stop_detection_for_cctv(cctv_id) 
+    
+    # Beri jeda agar stop_detection selesai
+    time.sleep(2) 
+    
+    # --- PENGUBAHAN: Hapus pengecekan snapshot yang gagal dan pass argumen ---
+    
+    # MEMULAI WRAPPER THREAD (tanpa argumen snapshot)
+    wrapper_thread = Thread(target=_start_capture_wrapper, args=(cctv_id,), daemon=True) 
+    wrapper_thread.start()
+    
+    logging.info(f"[THREAD] Wrapper thread initiated for CCTV {cctv_id}.")
 
 def stop_detection_for_cctv(cctv_id):
     """Menghentikan thread deteksi untuk CCTV ID tertentu."""

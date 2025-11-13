@@ -95,10 +95,10 @@ def get_all_active_cctv():
     cursor.close()
     conn.close()
     if not results:
-        raise RuntimeError("No CCTV Active")
+        return [] 
     return results
 
-# --- ROI Loader (Diubah untuk Supabase Storage) ---
+# --- ROI Loader ) ---
 def load_roi_from_json(area_field):
     if not area_field:
         return [], 0, 0
@@ -134,7 +134,7 @@ def load_roi_from_json(area_field):
         print(f"[ROI LOAD ERROR from Supabase]: {e}")
         return [], 0, 0
 
-# --- Muat konfigurasi semua CCTV aktif (tidak berubah) ---
+# --- Muat konfigurasi semua CCTV aktif ---
 def load_all_cctv_configs():
     configs = {}
     try:
@@ -157,6 +157,13 @@ def load_all_cctv_configs():
         print(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")
     return configs
 
+# --- Fungsi baru untuk merefresh cache konfigurasi CCTV secara penuh ---
+def refresh_all_cctv_configs():
+    global cctv_configs
+    print("[CONFIG] Refreshing all CCTV configurations from DB...")
+    cctv_configs = load_all_cctv_configs()
+    print(f"[CONFIG] Loaded {len(cctv_configs)} active CCTV configs.")
+    
 # --- Fetch jenis violation yang aktif dari CCTV secara custom ---
 def get_active_violation_ids_for_cctv(cctv_id):
     conn = get_connection()
