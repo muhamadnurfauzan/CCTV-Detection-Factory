@@ -1,33 +1,36 @@
-// components/ModalDeleteCCTV.jsx
 import React, { useState } from 'react';
 import { FaTimes, FaTrash } from 'react-icons/fa';
-import { useAlert } from './AlertProvider';
+import { useAlert } from './AlertProvider'; 
 
-export default function ModalDeleteCCTV({ open, onClose, onConfirm, cctvId }) {
+export default function ModalDeleteUser({ open, onClose, onConfirm, userData }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const { showAlert } = useAlert();
+  
+  const userId = userData?.id;
 
   const handleDelete = async () => {
+    if (!userId) return;
+
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/cctv_delete/${cctvId}`, {
+      const res = await fetch(`/api/user_delete/${userId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        onConfirm(cctvId); 
+        onConfirm(userId); 
         onClose();
-        showAlert(`CCTV ID ${cctvId} successfully deleted.`, 'success');
+        showAlert(`User '${userData.full_name}' successfully deleted.`, 'success');
       } else {
         const err = await res.json();
-        const errorMessage = err.error || 'Failed to delete CCTV';
+        const errorMessage = err.error || 'Gagal menghapus user';
         setError(errorMessage);
-        showAlert(`Deletion Failed: ${errorMessage}`, 'error');
+        showAlert(`Failed to delete: ${errorMessage}`, 'error');
       }
     } catch {
-      setError('Network error');
-      showAlert('Network error: Could not connect to the server.', 'error');
+      setError('Error jaringan');
+      showAlert('Network error: Unable to connect to server.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -35,15 +38,15 @@ export default function ModalDeleteCCTV({ open, onClose, onConfirm, cctvId }) {
 
   return (
     <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-md w-full">
-      <div className="flex justify-between items-center mb-6 border-b pb-2">
+      <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2">
-            <FaTrash className="w-6 h-6" /> Delete CCTV?
+            <FaTrash className="w-6 h-6" /> Delete User?
         </h2>
-        <button onClick={onClose} className="text-2xl"><FaTimes /></button>
+        <button onClick={onClose} className="text-2xl text-gray-500 hover:text-red-500"><FaTimes className="w-6 h-6" /></button>
       </div>
 
       <p className="text-sm text-gray-600 mb-6">
-        Are you sure want to delete this CCTV? This action cannot be cancelled.
+        Are you sure want to delete user <strong>{userData?.full_name}</strong> ({userData?.email} | {userData?.username})? This action cannot be cancelled.
       </p>
 
       {error && (
@@ -67,7 +70,7 @@ export default function ModalDeleteCCTV({ open, onClose, onConfirm, cctvId }) {
           className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
           disabled={submitting}
         >
-          {submitting ? 'Delete...' : 'Delete'}
+          {submitting ? 'Deleting...' : 'Delete'}
         </button>
       </div>
     </dialog>

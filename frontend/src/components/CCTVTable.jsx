@@ -42,32 +42,39 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                     {cctv.enabled ? 'Active' : 'Nonactive'}
                   </span>
                 </td>
-                <td className="grid p-2 sm:grid-flow-col grid-flow-row justify-items-center gap-1">
-                  {cctv.enabled ? (
-                    <button
-                      onClick={() => onSelect(cctv.id)}
-                      className="text-indigo-600 hover:text-indigo-800 transition"
-                    >
-                      <FaEye className="w-5 h-5" />
-                    </button>
-                  ) : (
-                    <button disabled>
-                      <FaEyeSlash className="w-5 h-5 text-gray-400" />
-                    </button>
-                  )}
-                  <button
-                  onClick={() => onEdit(cctv.id)}
-                  className="text-green-600 hover:text-green-800 transition"
-                  >
-                    <FaPenSquare className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => onDelete(cctv.id)}
-                    className="text-red-600 hover:text-red-800 transition"
-                  >
-                    <FaTrash className="w-5 h-5" />
-                  </button>
-                </td>
+                <td className="p-2 text-center space-x-2 whitespace-nowrap">
+                  <div className="flex flex-col sm:flex-row justify-center items-center gap-1">
+                      {/* Tombol View/Enabled */}
+                      {cctv.enabled ? (
+                          <button
+                              onClick={() => onSelect(cctv.id)}
+                              className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded hover:bg-indigo-50" 
+                          >
+                              <FaEye className="w-5 h-5" />
+                          </button>
+                      ) : (
+                          <button disabled className="p-1">
+                              <FaEyeSlash className="w-5 h-5 text-gray-400" />
+                          </button>
+                      )}
+                      
+                      {/* Tombol Edit */}
+                      <button
+                          onClick={() => onEdit(cctv.id)}
+                          className="text-green-600 hover:text-green-800 transition p-1 rounded hover:bg-green-50"
+                      >
+                          <FaPenSquare className="w-5 h-5" />
+                      </button>
+                      
+                      {/* Tombol Delete */}
+                      <button
+                          onClick={() => onDelete(cctv.id)}
+                          className="text-red-600 hover:text-red-800 transition p-1 rounded hover:bg-red-50"
+                      >
+                          <FaTrash className="w-5 h-5" />
+                      </button>
+                  </div>
+              </td>
               </tr>
             ))
           )}

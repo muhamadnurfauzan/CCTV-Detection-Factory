@@ -409,9 +409,9 @@ def process_thread(cctv_id, frame_queue, stop_event):
         # --- Gambar ROI ---
         for region in roi_regions:
             pts = np.array(region["points"], np.int32).reshape((-1, 1, 2))
-            cv2.polylines(annotated, [pts], True, (0, 255, 255), 2)
+            cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
             cv2.putText(annotated, region.get("name", "ROI"), tuple(pts[0][0]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         # --- Ambil active violation IDs ---
         active_ids = config.get_active_violation_ids_for_cctv(cctv_id)

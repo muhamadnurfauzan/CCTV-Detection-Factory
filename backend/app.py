@@ -7,6 +7,7 @@ import config
 import cctv_detection
 import scheduler  
 import backend.routes.cctv_crud as cctv_crud
+import backend.routes.user_crud as user_crud
 import sys
 
 from flask import Flask, Response, jsonify, request
@@ -455,26 +456,29 @@ def get_users_with_cctvs():
         
         # Validasi parameter
         if page < 1: page = 1
-        if limit not in (10, 25, 50): limit = 10
+        # Set limit tetap 10 jika tidak valid
+        if limit not in (10, 25, 50): limit = 10 
             
         offset = (page - 1) * limit
         
         conn = get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        # --- Base Query untuk Filter Pencarian ---
-        search_filter_query = """
-            SELECT DISTINCT u.id
-            FROM users u
-            LEFT JOIN user_cctv_map ucm ON u.id = ucm.user_id
-            LEFT JOIN cctv_data cd ON ucm.cctv_id = cd.id
-            WHERE 1=1
+        # 1. Tentukan CTE untuk Filtering (Ini menggantikan search_filter_query)
+        # filtered_user_ids akan berisi daftar ID user yang cocok dengan search_query
+        cte_query = """
+            WITH filtered_user_ids AS (
+                SELECT DISTINCT u.id
+                FROM users u
+                LEFT JOIN user_cctv_map ucm ON u.id = ucm.user_id
+                LEFT JOIN cctv_data cd ON ucm.cctv_id = cd.id
+                WHERE 1=1 
         """
         search_params = []
         if search_query:
             search_term = f"%{search_query}%"
             # Pencarian di Name, Email, Nama CCTV, atau Lokasi CCTV
-            search_filter_query += """
+            cte_query += """
                 AND (
                     u.full_name ILIKE %s OR 
                     u.email ILIKE %s OR 
@@ -482,18 +486,25 @@ def get_users_with_cctvs():
                     cd.location ILIKE %s
                 )
             """
+            # Empat parameter untuk empat %s
             search_params.extend([search_term, search_term, search_term, search_term])
         
-        # --- 1. Query Total Item (untuk Pagination) ---
-        count_query = f"SELECT COUNT(DISTINCT u.id) AS total FROM users u WHERE u.id IN ({search_filter_query})"
+        cte_query += ")" # Penutup CTE
+
         
-        cur.execute(count_query, search_params)
+        # 2. Query Total Item (untuk Pagination) menggunakan CTE
+        # Jumlah parameter: Sama dengan search_params
+        count_query = cte_query + " SELECT COUNT(id) AS total FROM filtered_user_ids"
+        
+        cur.execute(count_query, search_params) # Eksekusi dengan parameter pencarian
         total_items = cur.fetchone()['total']
         
-        # --- 2. Query Data User dengan Aggregasi CCTV ---
-        data_query = f"""
+        # 3. Query Data User dengan Aggregasi CCTV menggunakan CTE
+        # Jumlah parameter: Sama dengan search_params + [limit, offset]
+        data_query = cte_query + """
             SELECT
                 u.id,
+                u.username, 
                 u.full_name,
                 u.email,
                 u.role,
@@ -506,16 +517,16 @@ def get_users_with_cctvs():
                     '[]'::json
                 ) AS cctvs
             FROM users u
+            INNER JOIN filtered_user_ids fuid ON u.id = fuid.id -- Filter hanya ID yang ada di CTE
             LEFT JOIN user_cctv_map ucm ON u.id = ucm.user_id
             LEFT JOIN cctv_data cd ON ucm.cctv_id = cd.id
-            WHERE u.id IN ({search_filter_query})
             GROUP BY u.id, u.full_name, u.email, u.role
             ORDER BY u.full_name ASC
             LIMIT %s OFFSET %s
         """
         
-        data_params = search_params * 2 # Parameter pencarian digunakan dua kali
-        data_params.extend([limit, offset])
+        # Parameter untuk data_query: (parameter pencarian) + (limit) + (offset)
+        data_params = search_params + [limit, offset] 
         
         cur.execute(data_query, data_params)
         users = cur.fetchall()
@@ -528,8 +539,9 @@ def get_users_with_cctvs():
         }), 200
 
     except Exception as e:
+        # PENTING: Log detail error (f-string) agar bisa di-debug di server
         logging.error(f"[USER API ERROR]: {e}")
-        return jsonify({"error": "Failed to retrieve user data."}), 500
+        return jsonify({"error": f"Failed to retrieve user data. Detail: {e}"}), 500
     finally:
         if cur: cur.close()
         if conn: conn.close()
@@ -548,6 +560,7 @@ if __name__ == "__main__":
     logging.info("Scheduler thread started (daily log + cleanup).")
 
     app.register_blueprint(cctv_crud.cctv_bp)
+    app.register_blueprint(user_crud.user_bp)
 
     # Jalankan Flask server
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

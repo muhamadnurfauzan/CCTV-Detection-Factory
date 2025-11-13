@@ -335,7 +335,6 @@ def update_cctv(cctv_id):
                 cctv_detection.stop_detection_for_cctv(cctv_id)
                 cctv_detection.start_detection_for_cctv(cctv_id)
 
-
             config.refresh_active_violations()
 
         return jsonify(updated_cctv), 200

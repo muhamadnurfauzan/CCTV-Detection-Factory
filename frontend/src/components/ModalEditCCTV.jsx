@@ -1,7 +1,7 @@
 // components/ModalEditCCTV.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FaTimes, FaUpload, FaCamera } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaCamera, FaPenSquare } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
 
 export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
@@ -246,32 +246,41 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
           ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
           ctx.lineWidth = 5;
           ctx.stroke();
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
           ctx.fill();
         });
         
         // --- Gambar garis yang sedang dibuat (current points) ---
         if (drawing && points.length > 0) {
             ctx.beginPath();
+            
+            // 1. Gambar garis penghubung antar titik
             points.forEach((pt, i) => {
                 if (i === 0) ctx.moveTo(pt.x, pt.y);
                 else ctx.lineTo(pt.x, pt.y);
-                
-                // Gambar titik (dot)
-                ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
-                ctx.fillStyle = 'blue';
-                ctx.fill();
-                ctx.beginPath();
             });
-            // Gambar garis putus-putus ke titik awal (jika polygon)
+            
+            // 2. Gambar garis putus-putus ke titik awal (untuk menutup polygon)
             if (points.length > 1) {
+                // Atur garis menjadi putus-putus untuk visualisasi yang lebih jelas 
                 ctx.moveTo(points[points.length - 1].x, points[points.length - 1].y);
                 ctx.lineTo(points[0].x, points[0].y);
             }
 
             ctx.strokeStyle = 'red';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 5; // Ganti menjadi 2 agar tidak terlalu tebal
             ctx.stroke();
+            
+            // Hapus mode putus-putus untuk gambar selanjutnya
+            ctx.setLineDash([]); 
+
+            // 3. Gambar titik (dot) di atas garis
+            points.forEach((pt) => {
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = 'blue';
+                ctx.fill();
+            });
         }
       };
       img.src = imageUrl;
@@ -370,8 +379,10 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
   // === RENDER ===
   return (
     <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Update CCTV #{cctvData?.name}</h2>
+      <div className="flex justify-between items-center mb-6 border-b pb-2">
+        <h2 className="text-2xl font-bold flex items-center gap-2 text-indigo-700">
+            <FaPenSquare className="w-6 h-6" /> Update CCTV #{cctvData?.name}
+        </h2>
         <button onClick={onClose} className="text-2xl"><FaTimes /></button>
       </div>
 

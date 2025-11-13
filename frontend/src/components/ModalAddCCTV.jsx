@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FaTimes, FaUpload, FaCamera } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaCamera, FaPlusCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess }) {
@@ -114,7 +114,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             if (res.ok) {
                 const blob = await res.blob();
                 setImageUrl(URL.createObjectURL(blob));
-                setDrawing(true);
+                setDrawing(false);
                 setRoiMethod('draw');
             } else {
             const err = await res.json();
@@ -195,9 +195,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     });
                     ctx.closePath();
                     ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 5;
                     ctx.stroke();
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
                     ctx.fill();
                 });
                 
@@ -316,8 +316,10 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
     return (
         <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Add New CCTV</h2>
+            <div className="flex justify-between items-center mb-6 border-b pb-2">
+                <h2 className="text-2xl font-bold flex items-center gap-2 text-green-700">
+                    <FaPlusCircle className="w-6 h-6" /> Add New CCTV
+                </h2>
                 <button onClick={onClose} className="text-2xl"><FaTimes /></button>
             </div>
 
