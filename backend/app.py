@@ -442,6 +442,98 @@ def get_reports():
         if cur: cur.close()
         if conn: conn.close()
 
+# --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
+@app.route('/api/users_with_cctvs', methods=['GET'])
+def get_users_with_cctvs():
+    conn = None
+    cur = None
+    try:
+        # Ambil parameter dari request
+        search_query = request.args.get('search', '')
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        
+        # Validasi parameter
+        if page < 1: page = 1
+        if limit not in (10, 25, 50): limit = 10
+            
+        offset = (page - 1) * limit
+        
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # --- Base Query untuk Filter Pencarian ---
+        search_filter_query = """
+            SELECT DISTINCT u.id
+            FROM users u
+            LEFT JOIN user_cctv_map ucm ON u.id = ucm.user_id
+            LEFT JOIN cctv_data cd ON ucm.cctv_id = cd.id
+            WHERE 1=1
+        """
+        search_params = []
+        if search_query:
+            search_term = f"%{search_query}%"
+            # Pencarian di Name, Email, Nama CCTV, atau Lokasi CCTV
+            search_filter_query += """
+                AND (
+                    u.full_name ILIKE %s OR 
+                    u.email ILIKE %s OR 
+                    cd.name ILIKE %s OR
+                    cd.location ILIKE %s
+                )
+            """
+            search_params.extend([search_term, search_term, search_term, search_term])
+        
+        # --- 1. Query Total Item (untuk Pagination) ---
+        count_query = f"SELECT COUNT(DISTINCT u.id) AS total FROM users u WHERE u.id IN ({search_filter_query})"
+        
+        cur.execute(count_query, search_params)
+        total_items = cur.fetchone()['total']
+        
+        # --- 2. Query Data User dengan Aggregasi CCTV ---
+        data_query = f"""
+            SELECT
+                u.id,
+                u.full_name,
+                u.email,
+                u.role,
+                -- Aggregasi data CCTV yang diampu menjadi array JSON
+                COALESCE(
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT('id', cd.id, 'name', cd.name, 'location', cd.location)
+                        ORDER BY cd.id
+                    ) FILTER (WHERE cd.id IS NOT NULL), 
+                    '[]'::json
+                ) AS cctvs
+            FROM users u
+            LEFT JOIN user_cctv_map ucm ON u.id = ucm.user_id
+            LEFT JOIN cctv_data cd ON ucm.cctv_id = cd.id
+            WHERE u.id IN ({search_filter_query})
+            GROUP BY u.id, u.full_name, u.email, u.role
+            ORDER BY u.full_name ASC
+            LIMIT %s OFFSET %s
+        """
+        
+        data_params = search_params * 2 # Parameter pencarian digunakan dua kali
+        data_params.extend([limit, offset])
+        
+        cur.execute(data_query, data_params)
+        users = cur.fetchall()
+
+        return jsonify({
+            "users": users,
+            "totalItems": total_items,
+            "currentPage": page,
+            "itemsPerPage": limit
+        }), 200
+
+    except Exception as e:
+        logging.error(f"[USER API ERROR]: {e}")
+        return jsonify({"error": "Failed to retrieve user data."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
 if __name__ == "__main__":
     config.annotated_frames = {}
 

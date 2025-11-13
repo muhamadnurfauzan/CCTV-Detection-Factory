@@ -144,18 +144,22 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
   // === 5. Load Stream Preview ===
   const loadStreamPreview = async () => {
-    const urlToUse = form.url || generateUrl(form.ip, form.port, form.token);
-    if (!form.url) return showAlert('URL required for stream preview.', 'warning');
-
+    if (!form.url || urlError) {
+          return showAlert('URL required and must be valid for stream preview.', 'warning');
+    }
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const res = await fetch('/api/rtsp_snapshot', {
+        const res = await fetch('/api/rtsp_snapshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlToUse })
-      });
-      if (res.ok) { 
+        body: JSON.stringify({ 
+            ip_address: form.ip, 
+            port: form.port, 
+            token: form.token 
+        })
+        });
+        if (res.ok) {
         const blob = await res.blob();
         setImageUrl(URL.createObjectURL(blob));
         setDrawing(false);
@@ -185,15 +189,32 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     setPoints([]);
     setPolygons([]);
-    // Saat menghapus gambar, hapus juga file ROI yang lama secara virtual
+    // Saat menghapus gambar, hapus juga URL gambar agar tampilan reset total
+    setImageUrl(null); 
     if (cctvData?.area) setRoiFile(null); 
   };
 
   const handleCanvasClick = (e) => {
     if (!drawing) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const canvas = canvasRef.current;
+    
+    // 1. Dapatkan dimensi canvas yang ditampilkan di browser
+    const rect = canvas.getBoundingClientRect();
+    
+    // 2. Hitung posisi klik relatif terhadap elemen canvas (tanpa skala)
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // 3. Hitung faktor skala: (Resolusi Internal / Resolusi Tampilan)
+    // canvas.width/height diisi oleh img.onload (Resolusi Asli)
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    // 4. Konversi koordinat tampilan ke koordinat resolusi asli
+    const x = clickX * scaleX;
+    const y = clickY * scaleY;
+    
+    // Tambahkan titik dengan koordinat yang sudah diskala
     setPoints(prev => [...prev, { x, y }]);
   };
 
@@ -205,7 +226,6 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
   // === 7. Gambar ROI Existing di Canvas ===
   useEffect(() => {
-    // ... (Logika tidak berubah)
     if (imageUrl && canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -215,7 +235,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        // Gambar semua polygon
+        // --- Gambar semua polygon yang sudah tersimpan ---
         polygons.forEach(poly => {
           ctx.beginPath();
           poly.points.forEach((pt, i) => {
@@ -224,15 +244,39 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
           });
           ctx.closePath();
           ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 5;
           ctx.stroke();
           ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
           ctx.fill();
         });
+        
+        // --- Gambar garis yang sedang dibuat (current points) ---
+        if (drawing && points.length > 0) {
+            ctx.beginPath();
+            points.forEach((pt, i) => {
+                if (i === 0) ctx.moveTo(pt.x, pt.y);
+                else ctx.lineTo(pt.x, pt.y);
+                
+                // Gambar titik (dot)
+                ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = 'blue';
+                ctx.fill();
+                ctx.beginPath();
+            });
+            // Gambar garis putus-putus ke titik awal (jika polygon)
+            if (points.length > 1) {
+                ctx.moveTo(points[points.length - 1].x, points[points.length - 1].y);
+                ctx.lineTo(points[0].x, points[0].y);
+            }
+
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
       };
       img.src = imageUrl;
     }
-  }, [imageUrl, polygons]);
+  }, [imageUrl, polygons, points, drawing]);
 
   // === 8. Submit ===
   const handleSubmit = async (e) => {
@@ -442,7 +486,16 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
                     <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
                     <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
                   </div>
-                  <canvas ref={canvasRef} onClick={handleCanvasClick} className="w-full border border-gray-300 rounded-lg shadow-sm" style={{ maxHeight: '420px' }} />
+
+                  <canvas 
+                    ref={canvasRef} 
+                    onClick={handleCanvasClick} 
+                    className="w-full border border-gray-300 rounded-lg shadow-sm" 
+                    style={{ 
+                        maxHeight: '420px', 
+                        cursor: drawing ? 'crosshair' : 'default' // <-- Tambah cursor
+                    }} 
+                  />
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-lg bg-white p-8 text-center">

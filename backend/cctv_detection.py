@@ -6,6 +6,7 @@ import numpy as np
 from ultralytics import YOLO
 from threading import Thread
 from collections import deque
+from threading import Event
 import logging
 import config
 from cloud_storage import upload_violation_image
@@ -81,7 +82,7 @@ def open_stream(cctv, max_retries=5, retry_delay=1):
             return None
     return cap
 
-def reconnect_cap(cctv, cap, max_retries=5, retry_delay=1):
+def reconnect_cap(cctv, max_retries=5, retry_delay=1):
     """Reconnect cap dengan backoff"""
     for attempt in range(max_retries):
         print(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
@@ -293,31 +294,45 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
 
     data["last_times"][class_name] = now
 
-def capture_thread(cctv_id, frame_queue):
+def capture_thread(cctv_id, frame_queue, stop_event):
     cctv = config.cctv_configs[cctv_id]
     cap = open_stream(cctv)
     if not cap:
-        return
+        logging.error(f"[{cctv_id}] Thread exit: Initial stream failed.")
+        return 
+
     fail_count = 0
     max_fails = 10
     frame_count = 0
-    while True:
+    
+    while not stop_event.is_set():
         ret, frame = cap.read()
+        
         if not ret:
             fail_count += 1
             print(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
+            
             if fail_count >= max_fails:
-                cap = reconnect_cap(cctv, cap)
+                cap.release() 
+                cap = reconnect_cap(cctv)
+        
                 if not cap:
-                    time.sleep(5)  # Wait sebelum retry full
+                    if stop_event.is_set(): break
+                    time.sleep(5) 
                     continue
+                
                 fail_count = 0
-            time.sleep(0.5)
-            continue
-        fail_count = 0  # Reset fail count kalau sukses
+            continue 
+
+        if stop_event.is_set(): break
+
+        fail_count = 0        
         if frame_count % config.FRAME_SKIP == 0:
             frame_queue.append(frame)
         frame_count += 1
+
+    cap.release()
+    logging.info(f"[{cctv_id}] Capture thread finished.")
 
 def cleanup_thread(tracked_violations):
     """Membersihkan data pelanggaran lama yang tidak aktif."""
@@ -353,7 +368,7 @@ def cleanup_thread(tracked_violations):
             print(f"[CLEANUP] Total {removed_count} track lama dihapus.")
         time.sleep(config.CLEANUP_INTERVAL)
 
-def process_thread(cctv_id, frame_queue):
+def process_thread(cctv_id, frame_queue, stop_event):
     """
     Thread utama: ambil frame → deteksi → gambar anotasi → proses violation.
     """
@@ -365,11 +380,11 @@ def process_thread(cctv_id, frame_queue):
 
     roi_regions = config.cctv_configs[cctv_id]["roi"]
 
-    while True:
+    while not stop_event.is_set():
         if not frame_queue:
             time.sleep(0.02)
             continue
-
+        if stop_event.is_set(): break
         frame = frame_queue.pop()
         annotated = frame.copy()
 
@@ -455,13 +470,76 @@ def process_thread(cctv_id, frame_queue):
         config.annotated_frames[cctv_id] = annotated
         gc.collect()
 
+def start_detection_for_cctv(cctv_id):
+    """Memulai thread deteksi untuk CCTV ID tertentu."""
+    # Hentikan yang lama dulu (jika thread restart)
+    stop_detection_for_cctv(cctv_id) 
+
+    if cctv_id not in config.cctv_configs or not config.cctv_configs[cctv_id].get('enabled'):
+        return
+
+    cctv_config = config.cctv_configs[cctv_id]
+    
+    # --- TAMBAHAN BARU ---
+    stop_event = Event()
+    config.detection_threads[cctv_id] = {'stop_event': stop_event, 'threads': []}
+    # --------------------
+
+    config.annotated_frames[cctv_id] = np.zeros((480, 640, 3), dtype=np.uint8)
+    frame_queue = deque(maxlen=config.QUEUE_SIZE)
+    
+    t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
+    t2 = Thread(target=process_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
+
+    t1.start(); t2.start()
+    
+    config.detection_threads[cctv_id]['threads'].extend([t1, t2])
+    logging.info(f"[THREAD] Started detection threads for CCTV {cctv_id}.")
+
+
+def stop_detection_for_cctv(cctv_id):
+    """Menghentikan thread deteksi untuk CCTV ID tertentu."""
+    if cctv_id in config.detection_threads:
+        info = config.detection_threads.pop(cctv_id)
+        info['stop_event'].set() # Mengirim sinyal stop
+        logging.info(f"[THREAD] Stopped detection threads for CCTV {cctv_id}.")
+        # Note: Thread akan selesai setelah sinyal set dan loop-nya di-cek.
+
+def stop_all_detections():
+    """Mengirim sinyal penghentian ke semua thread deteksi yang aktif."""
+    # Iterasi melalui salinan keys karena detection_threads akan dimodifikasi
+    for cctv_id in list(config.detection_threads.keys()):
+        # Memanggil fungsi stop untuk setiap CCTV ID
+        stop_detection_for_cctv(cctv_id)
+    
+    # Tunggu sebentar (opsional) agar thread memiliki waktu untuk berhenti
+    time.sleep(0.5)
+    logging.info("[THREAD] All detection threads signaled to stop.")
+
 def start_all_detections():
+    """Memulai semua thread deteksi untuk CCTV aktif saat startup."""
     threads = []
-    for cctv_id in config.cctv_configs.keys():
-        config.annotated_frames[cctv_id] = np.zeros((480, 640, 3), dtype=np.uint8)  # placeholder frame hitam
-        frame_queue = deque(maxlen=config.QUEUE_SIZE)
-        t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue), daemon=True)
-        t2 = Thread(target=process_thread, args=(cctv_id, frame_queue), daemon=True)
-        t1.start(); t2.start()
-        threads.append((t1, t2))
+    
+    # Bersihkan thread lama jika ada
+    # Lakukan stop thread yang masih berjalan jika ada, meskipun ini dipanggil saat startup
+    stop_all_detections() 
+    
+    for cctv_id, cctv_config in config.cctv_configs.items():
+        if cctv_config['enabled']:
+            # --- TAMBAHAN BARU ---
+            stop_event = Event() # Buat sinyal penghentian
+            config.detection_threads[cctv_id] = {'stop_event': stop_event, 'threads': []}
+            # --------------------
+            
+            config.annotated_frames[cctv_id] = np.zeros((480, 640, 3), dtype=np.uint8) 
+            frame_queue = deque(maxlen=config.QUEUE_SIZE)
+            
+            t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue, stop_event), daemon=True) # <-- Kirim stop_event
+            t2 = Thread(target=process_thread, args=(cctv_id, frame_queue, stop_event), daemon=True) # <-- Kirim stop_event
+            
+            t1.start(); t2.start()
+            
+            config.detection_threads[cctv_id]['threads'].extend([t1, t2])
+            threads.append((t1, t2))
+            
     return threads

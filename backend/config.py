@@ -151,6 +151,7 @@ def load_all_cctv_configs():
                 "roi": roi,
                 "json_width": w,
                 "json_height": h,
+                "enabled": cctv.get("enabled", False)
             }
     except Exception as e:
         print(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")

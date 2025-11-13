@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard';
 import CCTVList from './pages/CCTVList';
 import ImagesShow from './pages/ImagesShow'; 
 import Reports from './pages/Reports';
+import Users from './pages/Users';
+import Settings from './pages/Settings';
 import { AlertProvider } from './components/AlertProvider';
 import ErrorBoundary from './components/ErrorBoundary'; 
 
@@ -40,6 +42,8 @@ function App() {
                 <Route path="/cctv/*" element={<CCTVList />} /> 
                 <Route path="/images" element={<ImagesShow />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/users" element={<Users />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </AlertProvider>
           </ErrorBoundary>

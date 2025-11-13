@@ -145,6 +145,10 @@ def add_cctv():
             'name': data['name']
         }
 
+        if data.get('enabled', False):
+            # Jika enabled=True, mulai thread deteksi
+            cctv_detection.start_detection_for_cctv(cctv_id)
+
         config.refresh_active_violations()
 
         return jsonify({
@@ -169,27 +173,40 @@ def add_cctv():
 @cctv_bp.route('/rtsp_snapshot', methods=['POST'])
 def rtsp_snapshot():
     data = request.get_json()
-    url = data.get('url')
-    if not url or not url.startswith(('rtsp://', 'rtsps://')):
-        return jsonify({"error": "Valid URL required"}), 400
+    # SINTAKS PERUBAHAN: Menerima komponen
+    ip = data.get('ip_address') 
+    port = data.get('port')     
+    token = data.get('token')   
+
+    # Validasi komponen
+    if not ip or not port or not token:
+        # Kembalikan pesan error yang lebih jelas
+        return jsonify({"error": "IP, Port, or Token components are missing or invalid"}), 400
 
     try:
-        # Gunakan open_stream dari cctv_detection untuk handle RTSPS/fallback
-        temp_cctv = {'name': 'preview', 'url': url}
-        cap = cctv_detection.open_stream(temp_cctv)
+        # Gunakan komponen yang diterima untuk membuat config sementara
+        temp_cctv = {
+            'name': 'preview', 
+            'ip_address': ip,
+            'port': port,
+            'token': token
+        }
+        
+        # open_stream akan berhasil karena strukturnya kini benar
+        cap = cctv_detection.open_stream(temp_cctv) 
         if not cap:
-            return jsonify({"error": "Cannot open stream"}), 500
+            return jsonify({"error": "Cannot open stream. Check URL or network connection."}), 500
 
         ret, frame = cap.read()
         cap.release()
         if not ret:
-            return jsonify({"error": "No frame captured"}), 500
+            return jsonify({"error": "No frame captured. Stream likely disconnected immediately."}), 500
 
         _, buffer = cv2.imencode('.jpg', frame)
         return send_file(io.BytesIO(buffer), mimetype='image/jpeg')
     except Exception as e:
         logging.error(f"[SNAPSHOT ERROR]: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to connect to stream due to server error."}), 500
 
 @cctv_bp.route('/cctv_update/<int:cctv_id>', methods=['PUT'])
 def update_cctv(cctv_id):
@@ -298,22 +315,41 @@ def delete_cctv(cctv_id):
     conn = None
     cur = None
     try:
+        # 1. Hentikan thread deteksi (jika berjalan)
+        cctv_detection.stop_detection_for_cctv(cctv_id) 
+
         conn = get_connection()
         cur = conn.cursor()
 
-        # Hapus ROI file dari SUPABASE
+        # --- LANGKAH PENTING: CASCADE DELETION MANUAL ---
+        logging.info(f"[DELETE] Deleting cascade data for CCTV {cctv_id}")
+
+        # Hapus konfigurasi violation (cctv_violation_config)
+        cur.execute("DELETE FROM cctv_violation_config WHERE cctv_id = %s", (cctv_id,))
+
+        # Hapus log harian (violation_daily_log)
+        cur.execute("DELETE FROM violation_daily_log WHERE id_cctv = %s", (cctv_id,))
+
+        # Hapus data pelanggaran (violation_detection)
+        cur.execute("DELETE FROM violation_detection WHERE id_cctv = %s", (cctv_id,))
+        
+        # Hapus mapping user (jika user_cctv_map sudah diterapkan)
+        # cur.execute("DELETE FROM user_cctv_map WHERE cctv_id = %s", (cctv_id,)) 
+        
+        # 2. Hapus ROI file dari SUPABASE (Ambil nama file dari DB sebelum dihapus)
         cur.execute("SELECT area FROM cctv_data WHERE id = %s", (cctv_id,))
         area = cur.fetchone()
         if area and area[0]:
             storage_path = f"{config.SUPABASE_ROI_DIR}/{area[0]}"
+            # Panggil Supabase client untuk menghapus file
             config.supabase.storage.from_(config.SUPABASE_BUCKET).remove([storage_path])
             logging.info(f"[DELETE] Removed ROI file from Supabase: {storage_path}")
 
-        # Hapus dari DB
+        # 3. Hapus dari DB (Tabel Induk)
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))
         conn.commit()
 
-        # Hapus dari config
+        # 4. Hapus dari config cache
         config.cctv_streams.pop(cctv_id, None)
         config.refresh_active_violations()
 

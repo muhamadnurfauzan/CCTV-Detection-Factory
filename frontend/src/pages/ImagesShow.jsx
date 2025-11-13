@@ -288,29 +288,21 @@ const ImagesShow = () => {
       {/* MODAL */}
       {selectedImage && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center"
           onClick={() => setSelectedImage(null)}
         >
-          {/* KOTAK TETAP: 90% lebar, max 900px, rasio 4:3 */}
           <div 
-            className="relative overflow-hidden mx-auto"
-            style={{ 
-              width: 'min(90vw, 800px)', 
-              height: 'min(70vh, 600px)' 
-            }}
+            className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            {/* GAMBAR: UTUH, TENGAH, TANPA CROP */}
-            <div className="w-full h-full flex items-center justify-center p-4">
-              <img
+            <img
                 src={selectedImage.signedUrl}
                 alt={selectedImage.violation || 'Violation'}
-                className="max-w-full max-h-full object-contain"
+                className="max-w-full max-h-[85vh] object-contain"
               />
-            </div>
           </div>
           {/* INFO DI BAWAH */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
             <p className='text-base'>Clik here to close the image.</p>
           </div>
         </div>

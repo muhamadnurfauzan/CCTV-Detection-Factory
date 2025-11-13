@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, FaTimes } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import Pagination from '../components/Pagination';
 
@@ -8,6 +8,7 @@ const ImagePreviewModal = ({ imageUrl, onClose }) => {
     if (!imageUrl) return null;
 
     return (
+        // MODAL 
         <div
             className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4"
             onClick={onClose}
@@ -16,18 +17,16 @@ const ImagePreviewModal = ({ imageUrl, onClose }) => {
                 className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
-                <button
-                    onClick={onClose}
-                    className="absolute top-2 right-2 text-2xl text-gray-800 hover:text-red-600 z-10"
-                >
-                    <FaTimes />
-                </button>
                 <img
                     src={imageUrl}
                     alt="Violation Preview"
                     className="max-w-full max-h-[85vh] object-contain"
                     loading="lazy"
                 />
+            </div>
+            {/* INFO DI BAWAH */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
+                <p className='text-base'>Clik here to close the image.</p>
             </div>
         </div>
     );

@@ -96,9 +96,8 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
     // Fungsi load preview dari stream
     const loadStreamPreview = async () => {
-        // Cek kembali dari state form yang sudah divalidasi oleh updateFieldsFromUrl
         if (!form.url || urlError) {
-             return showAlert('URL required and must be valid for stream preview.', 'warning');
+            return showAlert('URL required and must be valid for stream preview.', 'warning');
         }
         setPreviewLoading(true);
         setPreviewError(null);
@@ -106,7 +105,11 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             const res = await fetch('/api/rtsp_snapshot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: form.url })
+            body: JSON.stringify({ 
+                ip_address: form.ip, 
+                port: form.port, 
+                token: form.token 
+            })
             });
             if (res.ok) {
                 const blob = await res.blob();
@@ -129,12 +132,38 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
+    // === 6. Canvas Helpers ===
+    const startDrawing = () => setDrawing(true);
+    const clearDrawing = () => {
+        const ctx = canvasRef.current?.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        setPoints([]);
+        setPolygons([]); 
+        setImageUrl(null); 
+    };
+
     const handleCanvasClick = (e) => {
         if (!drawing) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        setPoints([...points, { x, y }]);
+        const canvas = canvasRef.current;
+        
+        // 1. Dapatkan dimensi canvas yang ditampilkan di browser
+        const rect = canvas.getBoundingClientRect();
+        
+        // 2. Hitung posisi klik relatif terhadap elemen canvas (tanpa skala)
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // 3. Hitung faktor skala: (Resolusi Internal / Resolusi Tampilan)
+        // canvas.width/height diisi oleh img.onload (Resolusi Asli)
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        // 4. Konversi koordinat tampilan ke koordinat resolusi asli
+        const x = clickX * scaleX;
+        const y = clickY * scaleY;
+        
+        // Tambahkan titik dengan koordinat yang sudah diskala
+        setPoints(prev => [...prev, { x, y }]);
     };
 
     const closePolygon = () => {
@@ -143,12 +172,73 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         setPoints([]);
     };
 
-    const clearCanvas = () => {
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        setPoints([]);
-    };
+    // === 7. Gambar ROI Existing di Canvas ===
+    useEffect(() => {
+        // Logika ini dipanggil setiap kali imageUrl, polygons, atau points berubah
+        if (imageUrl && canvasRef.current) {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+                // 1. Gambar latar belakang (frame CCTV)
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
 
+                // 2. Gambar semua polygon yang sudah tersimpan
+                polygons.forEach(poly => {
+                    ctx.beginPath();
+                    poly.points.forEach((pt, i) => {
+                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                    });
+                    ctx.closePath();
+                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                    ctx.fill();
+                });
+                
+                // 3. Gambar garis yang sedang dibuat (current points)
+                if (drawing && points.length > 0) {
+                    ctx.beginPath();
+                    
+                    // Gambar garis penghubung
+                    points.forEach((pt, i) => {
+                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                    });
+                    
+                    // Gambar garis putus-putus ke titik awal (untuk menutup polygon)
+                    if (points.length > 1) {
+                        ctx.moveTo(points[points.length - 1].x, points[points.length - 1].y);
+                        ctx.lineTo(points[0].x, points[0].y);
+                    }
+
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+
+                    // Gambar titik (dot) di atas garis
+                    points.forEach((pt) => {
+                        ctx.beginPath();
+                        ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'blue';
+                        ctx.fill();
+                    });
+                }
+            };
+            img.src = imageUrl;
+        } else if (!imageUrl && canvasRef.current) {
+            // Jika imageUrl dihapus, bersihkan canvas
+            const ctx = canvasRef.current.getContext('2d');
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+    }, [imageUrl, polygons, points, drawing]);
+
+    // === 8. Handler Submit ===
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -376,33 +466,20 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                         {imageUrl ? (
                             <div className="space-y-2">
                                 <div className="flex gap-2 justify-center">
-                                    <button
-                                    type="button"
-                                    onClick={startDrawing}
-                                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
-                                    >
-                                    Start Drawing
-                                    </button>
-                                    <button
-                                    type="button"
-                                    onClick={closePolygon}
-                                    className="px-3 py-1 bg-green-600 text-white text-xs rounded"
-                                    >
-                                    Close the Polygon
-                                    </button>
-                                    <button
-                                    type="button"
-                                    onClick={clearCanvas}
-                                    className="px-3 py-1 bg-red-600 text-white text-xs rounded"
-                                    >
-                                    Delete
-                                    </button>
+                                    <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">Start Drawing</button>
+                                    <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
+                                    <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
                                 </div>
 
                                 <canvas
                                     ref={canvasRef}
                                     className="w-full border border-gray-300 rounded-lg shadow-sm"
-                                    style={{ maxHeight: '420px', imageRendering: 'pixelated' }}
+                                    style={{ 
+                                        maxHeight: '420px', 
+                                        imageRendering: 'pixelated',
+                                        // --- PERBAIKAN: CURSOR ---
+                                        cursor: drawing ? 'crosshair' : 'default' 
+                                    }} 
                                     onClick={handleCanvasClick}
                                 />
                             </div>

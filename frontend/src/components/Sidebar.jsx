@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn } from 'react-icons/fa';
+import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn, FaUsers } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 
 const navItemsData = [
@@ -78,19 +78,35 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
 
           {/* Bagian bawah */}
 
-          <div className={`mt-auto pt-4 border-t border-indigo-700`}>
-            <a
-              href="/settings"
-              className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
-                ${isExpanded ? 'px-3' : 'justify-center'}
-              `}
-              data-tooltip-id="sidebar-tooltip"
-              data-tooltip-content="Settings"
-              aria-label="Settings"
-            >
-              <FaCog className="w-6 h-6" />
-              {isExpanded && <span className="ml-3 text-sm font-medium">Settings</span>}
-            </a>
+          <div className={`mt-auto`}>
+            <div className='pb-2'>
+              <a
+                href="/users"
+                className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
+                  ${isExpanded ? 'px-3' : 'justify-center'}
+                `}
+                data-tooltip-id="sidebar-tooltip"
+                data-tooltip-content="Users"
+                aria-label="Users"
+              >
+                <FaUsers className="w-6 h-6" />
+                {isExpanded && <span className="ml-3 text-sm font-medium">Users</span>}
+              </a>
+            </div>
+            <div className='pt-2 border-t-2 border-indigo-700'>
+              <a
+                href="/settings"
+                className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
+                  ${isExpanded ? 'px-3' : 'justify-center'}
+                `}
+                data-tooltip-id="sidebar-tooltip"
+                data-tooltip-content="Settings"
+                aria-label="Settings"
+              >
+                <FaCog className="w-6 h-6" />
+                {isExpanded && <span className="ml-3 text-sm font-medium">Settings</span>}
+              </a>
+            </div>
           </div>
         </div>
       </nav>
