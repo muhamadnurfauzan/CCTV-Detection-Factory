@@ -44,6 +44,19 @@ SUPABASE_ROI_DIR = "roi_json"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+# --- Email Configuration ---
+EMAIL_HOST = os.getenv("EMAIL_HOST")  
+EMAIL_PORT = os.getenv("EMAIL_PORT", 587) 
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USER)
+
+# --- Fitur Otomatisasi ---
+# Saat ini DISABLED untuk pengujian manual. 
+# Ubah menjadi True untuk mengaktifkan notifikasi email OTOMATIS.
+# HINT: Ini adalah tempat untuk meng-enable email otomatis.
+ENABLE_AUTO_EMAIL = False
+
 # --- PostgreSQL Connection ---
 def get_connection():
     return psycopg2.connect(
@@ -163,7 +176,7 @@ def refresh_all_cctv_configs():
     print("[CONFIG] Refreshing all CCTV configurations from DB...")
     cctv_configs = load_all_cctv_configs()
     print(f"[CONFIG] Loaded {len(cctv_configs)} active CCTV configs.")
-    
+
 # --- Fetch jenis violation yang aktif dari CCTV secara custom ---
 def get_active_violation_ids_for_cctv(cctv_id):
     conn = get_connection()

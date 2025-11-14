@@ -11,6 +11,7 @@ import logging
 import config
 from cloud_storage import upload_violation_image
 from db.db_config import get_connection
+import backend.services.notification_service as notification_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -203,6 +204,13 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
 
         conn.commit()
         print(f"[DB] SUCCESS → Violation ID: {violation_id} | Daily log updated")
+
+        # Kirim email otomatis
+        if config.ENABLE_AUTO_EMAIL: 
+            Thread(target=notification_service.notify_user_by_violation_id, 
+                   args=(violation_id,), daemon=True).start()
+            print(f"[EMAIL] Notifikasi otomatis dikirim (Violation ID: {violation_id})")
+
     except Exception as e:
         print(f"[DB] GAGAL → {e}")
     finally:

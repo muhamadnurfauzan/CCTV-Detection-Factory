@@ -101,10 +101,28 @@ export default function Reports() {
     }, [fetchReports]); 
 
     // --- Handler Aksi ---
-    const handleReport = (reportId) => {
-        showAlert(`Manually reporting violation ID ${reportId}... (Logic to send email here)`, 'info');
+    // --- Handler Kirim Email ---
+    const handleReport = async (reportId) => {
+        showAlert(`Sending email notification for Violation ID ${reportId}...`, 'info');
+        
+        try {
+            const res = await fetch(`/api/send_email_manual/${reportId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });            
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || "Failed to send email. Check backend log.");
+            }
+            showAlert(data.message || `Email report successfully sent for Violation ID ${reportId}!`, 'success');
+        } catch (err) {
+            showAlert(`Error: ${err.message}`, 'error');
+        }
     };
 
+    // --- Handler Preview Image Violation ---
     const handlePreviewImage = (imageUrl) => {
         setSelectedImageUrl(imageUrl);
         setShowImageModal(true);

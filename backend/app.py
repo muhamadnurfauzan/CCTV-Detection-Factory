@@ -1,14 +1,15 @@
 import numpy as np
 import cv2
+import sys
 import time
 import datetime
 import logging
 import config
 import cctv_detection
 import scheduler  
+import backend.services.notification_service as notification_service
 import backend.routes.cctv_crud as cctv_crud
 import backend.routes.user_crud as user_crud
-import sys
 
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
@@ -545,6 +546,19 @@ def get_users_with_cctvs():
     finally:
         if cur: cur.close()
         if conn: conn.close()
+
+@app.route('/api/send_email_manual/<int:violation_id>', methods=['POST'])
+def send_email_manual(violation_id):
+    """
+    API untuk mengirim email notifikasi secara MANUAL.
+    Menerima ID Pelanggaran sebagai parameter.
+    """
+    logging.info(f"[EMAIL MANUAL] Menerima permintaan kirim email untuk Violation ID: {violation_id}")
+    
+    if notification_service.notify_user_by_violation_id(violation_id):
+        return jsonify({"success": True, "message": "Email notifikasi berhasil dikirim."}), 200
+    else:
+        return jsonify({"success": False, "message": "Gagal mengirim email notifikasi. Cek log server untuk detail."}), 500
 
 if __name__ == "__main__":
     config.annotated_frames = {}
