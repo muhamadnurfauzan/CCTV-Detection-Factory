@@ -547,8 +547,8 @@ def get_users_with_cctvs():
         if cur: cur.close()
         if conn: conn.close()
 
-@app.route('/api/send_email_manual/<int:violation_id>', methods=['POST'])
-def send_email_manual(violation_id):
+@app.route('/api/send_email/<int:violation_id>', methods=['POST'])
+def send_email(violation_id):
     """
     API untuk mengirim email notifikasi secara MANUAL.
     Menerima ID Pelanggaran sebagai parameter.
@@ -559,6 +559,74 @@ def send_email_manual(violation_id):
         return jsonify({"success": True, "message": "Email notifikasi berhasil dikirim."}), 200
     else:
         return jsonify({"success": False, "message": "Gagal mengirim email notifikasi. Cek log server untuk detail."}), 500
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+def handle_settings():
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        if request.method == 'GET':
+            # Ambil satu-satunya baris konfigurasi
+            cur.execute("""
+                SELECT smtp_host, smtp_port, smtp_user, smtp_from, enable_auto_email 
+                FROM email_settings
+                LIMIT 1;
+            """)
+            settings = cur.fetchone() or {}
+            
+            # Jangan kirim smtp_pass ke frontend untuk keamanan, kirim saja placeholder
+            if settings and 'smtp_pass' in settings:
+                settings['smtp_pass'] = '********' 
+                
+            return jsonify(settings)
+
+        elif request.method == 'POST':
+            data = request.json
+            
+            # --- 1. Dapatkan Sandi Lama DULU ---
+            cur.execute("SELECT smtp_pass FROM email_settings WHERE id = 1;")
+            current_pass = cur.fetchone()['smtp_pass']
+            
+            # --- 2. Tentukan Sandi Yang Akan Di-Update ---
+            new_password_to_save = data.get('smtp_pass_new') 
+            password_to_use = new_password_to_save if new_password_to_save else current_pass
+            
+            # --- 3. Lakukan UPDATE ---
+            cur.execute("""
+                UPDATE email_settings 
+                SET 
+                    smtp_host = %s, 
+                    smtp_port = %s, 
+                    smtp_user = %s, 
+                    smtp_pass = %s, 
+                    smtp_from = %s, 
+                    enable_auto_email = %s
+                WHERE id = 1; 
+            """, (
+                data.get('smtp_host'), 
+                data.get('smtp_port'), 
+                data.get('smtp_user'), 
+                password_to_use,  
+                data.get('smtp_from'), 
+                data.get('enable_auto_email', False)
+            ))
+            conn.commit()
+            
+            # Refresh config di memori setelah disimpan ke DB
+            config.load_email_config() 
+            
+            return jsonify({"success": True, "message": "Configuration successfully saved and applied."})
+
+    except Exception as e:
+        conn.rollback()
+        logging.error(f"[SETTINGS API ERROR]: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
 
 if __name__ == "__main__":
     config.annotated_frames = {}

@@ -206,7 +206,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
         print(f"[DB] SUCCESS → Violation ID: {violation_id} | Daily log updated")
 
         # Kirim email otomatis
-        if config.ENABLE_AUTO_EMAIL: 
+        if config.GLOBAL_EMAIL_CONFIG.get('enable_auto_email', False): 
             Thread(target=notification_service.notify_user_by_violation_id, 
                    args=(violation_id,), daemon=True).start()
             print(f"[EMAIL] Notifikasi otomatis dikirim (Violation ID: {violation_id})")

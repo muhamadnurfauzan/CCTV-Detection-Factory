@@ -16,14 +16,17 @@ def send_violation_notification(recipient_email, subject, body_html, image_bytes
     """
     Mengirim email notifikasi dengan opsi melampirkan gambar.
     """
-    if not all([config.EMAIL_HOST, config.EMAIL_USER, config.EMAIL_PASS]):
+    email_cfg = config.GLOBAL_EMAIL_CONFIG
+    if not all([email_cfg['host'], email_cfg['user'], email_cfg['pass']]):
         logging.error("ERROR: Konfigurasi EMAIL (HOST/USER/PASS) belum lengkap!")
         return False
         
     try:
         # Membuat objek MIMEMultipart
         msg = MIMEMultipart('related')
-        msg['From'] = config.EMAIL_FROM
+        
+        # --- PERBAIKAN 1: Ganti EMAIL_FROM yang lama dengan email_cfg['from'] ---
+        msg['From'] = email_cfg['from']
         msg['To'] = recipient_email
         msg['Subject'] = subject
         
@@ -38,10 +41,15 @@ def send_violation_notification(recipient_email, subject, body_html, image_bytes
             msg.attach(img)
             
         # Koneksi dan kirim via SMTP
-        server = smtplib.SMTP(config.EMAIL_HOST, config.EMAIL_PORT)
-        server.starttls()  # Mengamankan koneksi
-        server.login(config.EMAIL_USER, config.EMAIL_PASS)
-        server.sendmail(config.EMAIL_FROM, recipient_email, msg.as_string())
+        if email_cfg['port'] == 587:
+            server = smtplib.SMTP(email_cfg['host'], email_cfg['port'])
+            server.starttls()
+        elif email_cfg['port'] == 465:
+            server = smtplib.SMTP_SSL(email_cfg['host'], email_cfg['port'])
+
+        # --- PERBAIKAN 2: Hapus redundansi server.starttls() yang ada di luar if/else ---        
+        server.login(email_cfg['user'], email_cfg['pass'])
+        server.sendmail(email_cfg['from'], recipient_email, msg.as_string())
         server.quit()
         
         logging.info(f"[EMAIL] SUCCESS: Email terkirim ke {recipient_email} untuk {subject}")
@@ -110,37 +118,37 @@ def notify_user_by_violation_id(violation_id):
             
         # 3. Download Gambar
         image_bytes = download_image_from_url(violation_data[1]) # image_url adalah index ke-1
-        image_filename = f"violation_{violation_id}_{violation_data[4]}.jpg" # violation_name index ke-4
+        image_filename = f"violation_{violation_id}_{violation_data[5]}.jpg" # violation_name index ke-4
 
         # 4. Susun dan Kirim Email ke Semua Penerima
-        
         cctv_name = violation_data[3] # cctv_name index ke-3
-        location = violation_data[5] # location index ke-5
-        violation_name = violation_data[4] # violation_name index ke-4
+        location = violation_data[4] # location index ke-4
+        violation_name = violation_data[5] # violation_name index ke-5
         timestamp = violation_data[0].strftime("%Y-%m-%d %H:%M:%S")
 
         subject = f"[Important] PPE Violation: {violation_name.upper()} at {cctv_name}"
-        
-        # HTML Body
-        html_body = f"""
-        <html>
-            <body>
-                <p>Dear Mr./Mrs.,</p>
-                <p>A <strong>PPE Violation</strong> has been detected in your area of ​​responsibility:</p>
-                <hr>
-                <p><strong>Violation Type:</strong> {violation_name.upper()}</p>
-                <p><strong>CCTV Location:</strong> {cctv_name} ({location})</p>
-                <p><strong>Time of Incident</strong> {timestamp} WIB</p>
-                <hr>
-                <p>Please verify and follow up immediately. Image evidence of the violation is attached to this email.</p>
-                <p>Thank you for your attention.</p>
-                <p><small>This message was sent automatically by the PPE Detection System, please do not reply.</small></p>
-            </body>
-        </html>
-        """
-
         success_count = 0
-        for email, name in recipients:
+
+        # --- LOOP Pengiriman Email (Kirim personal ke setiap penerima) ---
+        for email, full_name in recipients:
+        # HTML Body
+            html_body = f"""
+            <html>
+                <body>
+                    <p>Dear Mr./Ms. {full_name},</p>
+                    <p>A <strong>PPE Violation</strong> has been detected in your area of ​​responsibility:</p>
+                    <hr>
+                    <p><strong>Violation Type:</strong> {violation_name.upper()}</p>
+                    <p><strong>CCTV Location:</strong> {cctv_name} ({location})</p>
+                    <p><strong>Time of Incident</strong> {timestamp} WIB</p>
+                    <hr>
+                    <p>Please verify and follow up immediately. Image evidence of the violation is attached to this email.</p>
+                    <p>Thank you for your attention.</p>
+                    <p><small>This message was sent automatically by the PPE Detection System, please do not reply.</small></p>
+                </body>
+            </html>
+            """
+
             if send_violation_notification(email, subject, html_body, image_bytes, image_filename):
                 success_count += 1
                 

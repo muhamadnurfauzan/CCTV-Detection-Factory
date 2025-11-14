@@ -236,17 +236,17 @@ export default function Users() {
                                             </td>
                                             <td className="p-2 text-center space-x-2 whitespace-nowrap items-center">
                                                 {/* Tombol Aksi */}
-                                                <div className='flex flex-col sm:flex-row justify-center items-center gap-1'>
+                                                <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
                                                     <button
                                                         onClick={() => handleEdit(user)}
-                                                        className="text-green-600 hover:text-green-800 transition"
+                                                        className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                                                         title="Edit User"
                                                     >
                                                         <FaPenSquare className="w-5 h-5" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(user)}
-                                                        className="text-red-600 hover:text-red-800 transition"
+                                                        className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
                                                         title="Delete User"
                                                     >
                                                         <FaTrash className="w-5 h-5" />

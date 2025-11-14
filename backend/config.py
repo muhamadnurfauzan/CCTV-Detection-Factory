@@ -45,17 +45,10 @@ SUPABASE_ROI_DIR = "roi_json"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # --- Email Configuration ---
-EMAIL_HOST = os.getenv("EMAIL_HOST")  
-EMAIL_PORT = os.getenv("EMAIL_PORT", 587) 
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USER)
-
-# --- Fitur Otomatisasi ---
-# Saat ini DISABLED untuk pengujian manual. 
-# Ubah menjadi True untuk mengaktifkan notifikasi email OTOMATIS.
-# HINT: Ini adalah tempat untuk meng-enable email otomatis.
-ENABLE_AUTO_EMAIL = False
+GLOBAL_EMAIL_CONFIG = {
+    "host": None, "port": None, "user": None, "pass": None, "from": None, 
+    "enable_auto_email": False
+}
 
 # --- PostgreSQL Connection ---
 def get_connection():
@@ -67,6 +60,46 @@ def get_connection():
         port=os.getenv("DB_PORT"),
         sslmode=os.getenv("DB_SSLMODE", "require")
     )
+
+# --- Fungsi untuk Memuat Konfigurasi Email dari DB (Tabel email_settings) ---
+def load_email_config():
+    """Memuat dan meng-cache konfigurasi email dari tabel email_settings."""
+    global GLOBAL_EMAIL_CONFIG
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Ambil baris pertama (dan seharusnya satu-satunya)
+        cur.execute("""
+            SELECT smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, enable_auto_email
+            FROM email_settings 
+            ORDER BY id ASC 
+            LIMIT 1;
+        """)
+        
+        row = cur.fetchone()
+        
+        if row:
+            GLOBAL_EMAIL_CONFIG.update({
+                "host": row['smtp_host'],
+                "port": row['smtp_port'],
+                "user": row['smtp_user'],
+                "pass": row['smtp_pass'],
+                "from": row['smtp_from'],
+                "enable_auto_email": row['enable_auto_email']
+            })
+            print("[CONFIG] Email config loaded successfully from DB.")
+        else:
+            print("[CONFIG] WARNING: Tabel email_settings kosong!")
+            
+    except Exception as e:
+        print(f"[CONFIG] ERROR: Gagal memuat email_settings dari DB: {e}")
+        
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
 
 # --- Object PPE Configuration ---
 def load_object_classes(force_refresh=False):
@@ -96,9 +129,6 @@ def load_object_classes(force_refresh=False):
         except Exception as e:
             print(f"[CACHE] ERROR: Gagal load object_classes: {e}")
 
-# Panggil di startup
-load_object_classes()
-
 # --- Fetch CCTV aktif dari database ---
 def get_all_active_cctv():
     conn = get_connection()
@@ -111,7 +141,7 @@ def get_all_active_cctv():
         return [] 
     return results
 
-# --- ROI Loader ) ---
+# --- ROI Loader ---
 def load_roi_from_json(area_field):
     if not area_field:
         return [], 0, 0
@@ -207,9 +237,6 @@ def load_violation_pairs():
     print(f"[PAIR CACHE] Loaded {len(pairs)//2} PPE pairs.")
     return pairs
 
-# Panggil saat startup
-PPE_VIOLATION_PAIRS = load_violation_pairs()
-
 # Fungsi helper untuk color
 def get_color_for_class(class_name):
     return OBJECT_CLASS_CACHE.get(class_name, {}).get("color", (255, 255, 255))
@@ -233,6 +260,12 @@ def refresh_active_violations():
         ACTIVE_VIOLATION_CACHE.setdefault(cctv_id, []).append(class_id)
 
     print(f"[ACTIVE CACHE] Updated: {ACTIVE_VIOLATION_CACHE}")
+
+
+# Panggil saat startup
+load_email_config()
+load_object_classes()
+PPE_VIOLATION_PAIRS = load_violation_pairs()
 
 # --- Inisialisasi konfigurasi global ---
 try:

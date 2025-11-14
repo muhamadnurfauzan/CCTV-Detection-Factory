@@ -106,7 +106,7 @@ export default function Reports() {
         showAlert(`Sending email notification for Violation ID ${reportId}...`, 'info');
         
         try {
-            const res = await fetch(`/api/send_email_manual/${reportId}`, {
+            const res = await fetch(`/api/send_email/${reportId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -207,7 +207,7 @@ export default function Reports() {
                                         {/* {new Date(report.timestamp).toLocaleString()} */}
                                     </td>
                                     <td className="p-2 text-center space-x-2 whitespace-nowrap">
-                                        <div className='flex flex-col sm:flex-row justify-center items-center gap-1'>
+                                        <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
                                             <button
                                                 onClick={() => handlePreviewImage(report.image_url)}
                                                 className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"

@@ -1,11 +1,68 @@
-import React from 'react';
+// Settings.jsx
+import React, { useState, useEffect } from 'react';
+import EmailSetup from '../components/SetupEmail'; 
 
 const Settings = () => {
+    const [settingButton, setSettingButton] = useState('dataset'); 
+
+    // useEffect(() => {
+    //     setSettingButton('dataset'); 
+    // });
+
+    const menuItems = [
+        { key: 'dataset', label: 'Dataset Setup' },
+        { key: 'email', label: 'Email Setup' },
+        { key: 'notification_limits', label: 'Notification Limits' },
+        { key: 'comingsoon', label: 'Coming Soon' },
+    ];
+
+    // Fungsi untuk merender konten berdasarkan tab yang aktif
+    const renderContent = () => {
+        switch (settingButton) {
+            case 'dataset':
+                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Dataset Setup page. Content will be added here later (e.g., model path configuration).</p>;
+            case 'email':
+                return <EmailSetup />;
+            case 'notification_limits':
+                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Notification Limits page. Here you can set the cooldown/frequency limits for automatic emails.</p>;
+            case 'comingsoon':
+                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Coming Soon page. Content will be added here later.</p>;
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
             <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Settings</h2>
-            <div>
-                <p className="text-gray-600">This is the Settings page. Content will be added here later.</p>
+            
+            <div className='space-y-3'>
+                
+                {/* 1. Tab Pilihan Menu Settings (Header & Navigasi) */}
+                <div className='flex gap-2 border-b border-gray-200 overflow-x-auto'>
+                    
+                    {menuItems.map(item => (
+                        <button
+                            key={item.key}
+                            type='button'
+                            onClick={() => setSettingButton(item.key)}
+                            className={`px-4 py-2 font-medium text-sm whitespace-nowrap rounded-t-lg transition ${
+                                settingButton === item.key
+                                ? 'bg-white text-indigo-600 border border-b-0 border-gray-300 shadow-sm'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                    
+                </div>
+                
+                {/* 2. Konten Menu Aktif */}
+                <div className='mt-4'>
+                    {renderContent()}
+                </div>
+
             </div>
         </div>
     );
