@@ -6,7 +6,6 @@ import config
 
 try:
     supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
-    print("[Supabase] Koneksi berhasil dibuat.")
 except Exception as e:
     print(f"[Supabase] Gagal membuat koneksi: {e}")
     supabase = None

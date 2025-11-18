@@ -100,6 +100,24 @@ export default function Reports() {
         fetchReports();
     }, [fetchReports]); 
 
+    // --- NEW: Polling Logic (Refresh data setiap 15 detik) ---
+    useEffect(() => {
+        // Definisikan interval polling
+        const POLLING_INTERVAL = 15000; 
+
+        const intervalId = setInterval(() => {
+            if (!loading) {
+                fetchReports(); 
+                console.log('Reports Polling: Data refreshed.');
+            }
+        }, POLLING_INTERVAL);
+
+        // Cleanup function
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, [fetchReports, loading]);
+
     // --- Handler Aksi ---
     // --- Handler Kirim Email ---
     const handleReport = async (reportId) => {

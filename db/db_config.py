@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables dari file .env
 load_dotenv()
 
+# --- PostgreSQL Connection ---
 def get_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),

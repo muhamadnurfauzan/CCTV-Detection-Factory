@@ -4,9 +4,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 import requests
-import config
 import logging
 from db.db_config import get_connection
+from shared import state
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -16,7 +16,8 @@ def send_violation_notification(recipient_email, subject, body_html, image_bytes
     """
     Mengirim email notifikasi dengan opsi melampirkan gambar.
     """
-    email_cfg = config.GLOBAL_EMAIL_CONFIG
+    email_cfg = state.GLOBAL_EMAIL_CONFIG
+    logging.info(f"[EMAIL DEBUG] Config saat kirim → host={email_cfg.get('host')}, user={email_cfg.get('user')}, from={email_cfg.get('from')}")
     if not all([email_cfg['host'], email_cfg['user'], email_cfg['pass']]):
         logging.error("ERROR: Konfigurasi EMAIL (HOST/USER/PASS) belum lengkap!")
         return False

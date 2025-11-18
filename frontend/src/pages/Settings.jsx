@@ -1,18 +1,13 @@
 // Settings.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import EmailSetup from '../components/SetupEmail'; 
 
 const Settings = () => {
     const [settingButton, setSettingButton] = useState('dataset'); 
 
-    // useEffect(() => {
-    //     setSettingButton('dataset'); 
-    // });
-
     const menuItems = [
         { key: 'dataset', label: 'Dataset Setup' },
         { key: 'email', label: 'Email Setup' },
-        { key: 'notification_limits', label: 'Notification Limits' },
         { key: 'comingsoon', label: 'Coming Soon' },
     ];
 
@@ -23,8 +18,6 @@ const Settings = () => {
                 return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Dataset Setup page. Content will be added here later (e.g., model path configuration).</p>;
             case 'email':
                 return <EmailSetup />;
-            case 'notification_limits':
-                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Notification Limits page. Here you can set the cooldown/frequency limits for automatic emails.</p>;
             case 'comingsoon':
                 return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Coming Soon page. Content will be added here later.</p>;
             default:

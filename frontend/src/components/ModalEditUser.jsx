@@ -61,6 +61,13 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validasi Basic
+        if (!form.username?.trim()) return showAlert('Username is required.', 'warning'); 
+        if (!form.full_name?.trim()) return showAlert('User\'s full name is required.', 'warning'); 
+        if (!form.email?.trim()) return showAlert('Email is required.', 'warning'); 
+        if (!form.role?.trim()) return showAlert('User\' role is required.', 'warning'); 
+
         setSubmitting(true);
 
         const payload = {
@@ -189,23 +196,29 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
                         </select>
                     </div>
 
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Regions CCTV (Optional)</label>
-                    {loadingCctv ? (
-                        <p className="text-gray-500 italic text-sm p-3 border rounded-lg bg-gray-50">Loading CCTVs...</p>
-                    ) : (
-                        <Multiselect
-                            options={cctvList}
-                            selectedValues={form.cctv_ids}
-                            onSelect={(selected) => setForm({ ...form, cctv_ids: selected })}
-                            placeholder="Select CCTV to manage..."
-                        />
+                    {form.role !== 'viewer' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Regions CCTV (Optional)</label>
+                            
+                            {loadingCctv ? (
+                                <p className="text-gray-500 italic text-sm p-3 border rounded-lg bg-gray-50">Loading CCTVs...</p>
+                            ) : (
+                                <Multiselect
+                                    options={cctvList}
+                                    selectedValues={form.cctv_ids}
+                                    onSelect={(selected) => setForm({ ...form, cctv_ids: selected })}
+                                    placeholder="Select CCTV to manage..."
+                                />
+                            )}
+                            
+                            <p className="text-xs text-gray-500 mt-1">Only the 'CCTV Editor' role requires this assignment.</p>
+                        </div>
                     )}
-                    <p className="text-xs text-gray-500 mt-1">Only the 'CCTV Editor' role requires this assignment.</p>
                 </div>
                 
                 {/* Footer */}
                 <div className="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onClick={onClose} className="px-5 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition">Delete</button>
+                    <button type="button" onClick={onClose} className="px-5 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition">Cancel</button>
                     <button type="submit" disabled={submitting} className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">
                         {submitting ? 'Updating...' : 'Update User'}
                     </button>

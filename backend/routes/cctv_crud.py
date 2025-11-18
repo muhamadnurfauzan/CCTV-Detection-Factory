@@ -1,15 +1,19 @@
 # routes/cctv_crud.py
 import io
+import sys
 import cv2
 import json
 import logging
 
-from db.db_config import get_connection
-from backend import cctv_detection
-from backend import config
-
+from psycopg2.extras import RealDictCursor 
 from flask import Blueprint, request, jsonify, send_file, redirect
 from psycopg2.extras import RealDictCursor
+
+from db.db_config import get_connection
+import core.detection as detection
+import config as config
+import services.cctv_services as cctv_service
+import services.config_service as config_service
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
 
@@ -137,17 +141,14 @@ def add_cctv():
         conn.commit()
 
         # --- LANGKAH PENTING: REFRESH CONFIG ---
-        config.refresh_all_cctv_configs()
+        cctv_service.refresh_all_cctv_configs()
 
         if data.get('enabled', False):
             # Jika enabled=True, mulai thread deteksi
-            cctv_detection.start_detection_for_cctv(cctv_id)
+            detection.start_detection_for_cctv(cctv_id)
             logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to adding as enabled.")
 
-        config.refresh_active_violations()
-        
-        # NOTE: rtsps_url hanya untuk info, tidak perlu disimpan ke config.cctv_streams di sini
-        # karena sudah ditangani oleh refresh_all_cctv_configs().
+        config_service.refresh_active_violations()
 
         return jsonify({
             "id": cctv_id,
@@ -191,7 +192,7 @@ def rtsp_snapshot():
         }
         
         # open_stream akan berhasil karena strukturnya kini benar
-        cap = cctv_detection.open_stream(temp_cctv) 
+        cap = detection.open_stream(temp_cctv) 
         if not cap:
             return jsonify({"error": "Cannot open stream. Check URL or network connection."}), 500
 
@@ -314,28 +315,28 @@ def update_cctv(cctv_id):
         conn.commit()
 
         # 2. FIX UTAMA: Refresh config untuk memuat data lengkap (termasuk ROI)
-        config.refresh_all_cctv_configs() 
+        cctv_service.refresh_all_cctv_configs() 
 
         # 3. FIX: Start/Stop Detection berdasarkan perubahan status
         if updated_cctv:
             
             # Jika status berubah dari non-aktif ke aktif: START
             if new_enabled_status and not old_enabled_status:
-                cctv_detection.start_detection_for_cctv(cctv_id)
+                detection.start_detection_for_cctv(cctv_id)
                 logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to enabling.")
                 
             # Jika status berubah dari aktif ke non-aktif: STOP
             elif not new_enabled_status and old_enabled_status:
-                cctv_detection.stop_detection_for_cctv(cctv_id)
+                detection.stop_detection_for_cctv(cctv_id)
                 logging.info(f"[THREAD] Stopped detection for CCTV {cctv_id} due to disabling.")
                 
             # Jika status tetap aktif, tapi ada perubahan konfigurasi koneksi/model
             elif new_enabled_status and old_enabled_status and needs_restart:
                 logging.info(f"[THREAD] Restarting detection for CCTV {cctv_id} due to config change.")
-                cctv_detection.stop_detection_for_cctv(cctv_id)
-                cctv_detection.start_detection_for_cctv(cctv_id)
+                detection.stop_detection_for_cctv(cctv_id)
+                detection.start_detection_for_cctv(cctv_id)
 
-            config.refresh_active_violations()
+            config_service.refresh_active_violations()
 
         return jsonify(updated_cctv), 200
     except Exception as e:
@@ -352,7 +353,7 @@ def delete_cctv(cctv_id):
     cur = None
     try:
         # 1. Hentikan thread deteksi (jika berjalan)
-        cctv_detection.stop_detection_for_cctv(cctv_id) 
+        detection.stop_detection_for_cctv(cctv_id) 
 
         conn = get_connection()
         cur = conn.cursor()
@@ -386,8 +387,8 @@ def delete_cctv(cctv_id):
         conn.commit()
 
         # 4. FIX UTAMA: Refresh config setelah penghapusan
-        config.refresh_all_cctv_configs() 
-        config.refresh_active_violations()
+        cctv_service.refresh_all_cctv_configs() 
+        config_service.refresh_active_violations()
 
         return jsonify({"success": True}), 200
     except Exception as e:
@@ -397,3 +398,71 @@ def delete_cctv(cctv_id):
     finally:
         if cur: cur.close()
         if conn: conn.close()
+
+# --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
+@cctv_bp.route('/cctv_violations/<int:cctv_id>', methods=['GET', 'POST'])
+def cctv_violations(cctv_id):
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'GET':
+        cur.execute("""
+            SELECT class_id
+            FROM cctv_violation_config
+            WHERE cctv_id = %s AND is_active = TRUE
+        """, (cctv_id,))
+        rows = cur.fetchall()
+        result = [row['class_id'] for row in rows]
+        cur.close()
+        conn.close()
+        return jsonify(result)
+
+    data = request.json.get('enabled_class_ids', [])
+    logging.info(f"[POST] /api/cctv_violations/{cctv_id} enabled_class_ids={data}")
+    logging.info(f"===> REQUEST RECEIVED for CCTV {cctv_id}: {data}")
+    sys.stdout.flush()
+
+    try:
+        # Upsert aktif
+        for class_id in data:
+            cur.execute("""
+                INSERT INTO cctv_violation_config (cctv_id, class_id, is_active)
+                VALUES (%s, %s, TRUE)
+                ON CONFLICT (cctv_id, class_id)
+                DO UPDATE SET is_active = TRUE
+            """, (cctv_id, class_id))
+
+        # Nonaktifkan yang tidak dipilih
+        if data:
+            cur.execute("""
+                UPDATE cctv_violation_config
+                SET is_active = FALSE
+                WHERE cctv_id = %s AND NOT (class_id = ANY(%s))
+            """, (cctv_id, data))
+        else:
+            cur.execute("""
+                UPDATE cctv_violation_config
+                SET is_active = FALSE
+                WHERE cctv_id = %s
+            """, (cctv_id,))
+
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        logging.error(f"[POST ERROR] /api/cctv_violations/{cctv_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@cctv_bp.route("/cctv_all", methods=["GET"])
+def get_all_cctv():
+    conn = get_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    # cursor.execute("SELECT id, name, ip_address, location, enabled FROM cctv_data;")
+    cursor.execute("SELECT * FROM cctv_data ORDER BY id ASC;")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(rows)

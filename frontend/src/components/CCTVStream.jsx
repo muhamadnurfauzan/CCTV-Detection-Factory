@@ -31,9 +31,9 @@ function CCTVStream({ cctvId }) {
       setErrorCount(retryCount);
       if (retryCount <= maxRetries) {
         setStatus(`Reconnecting... (${retryCount}/${maxRetries})`);
-        setTimeout(loadImage, 2000 * retryCount);
+        setTimeout(loadImage, 3000);  
       } else {
-        setStatus('Streaming Failed.');
+        setStatus('Stream Unavailable');
       }
     };
 
@@ -57,10 +57,10 @@ function CCTVStream({ cctvId }) {
           alt={`CCTV ${cctvId} Stream`}
           className="w-full h-auto object-cover"
         />
-        {status.includes('Failed') && (
+        {status.includes('Unavailable') && (
           <button
-            onClick={() => window.location.reload()}
-            class  className="absolute top-4 right-4 bg-red-600 text-white p-2 rounded-full hover:bg-red-700"
+            onClick={() => loadImage()} 
+            className="absolute top-4 right-4 bg-red-600 text-white p-2 rounded-full hover:bg-red-700"
           >
             <FaRedo />
           </button>
