@@ -71,15 +71,15 @@ def video_feed():
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@misc_bp.route('/object_classes', methods=['GET'])
-def get_object_classes():
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return jsonify(rows)
+# @misc_bp.route('/object_classes', methods=['GET'])
+# def get_object_classes():
+#     conn = get_connection()
+#     cur = conn.cursor(cursor_factory=RealDictCursor)
+#     cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
+#     rows = cur.fetchall()
+#     cur.close()
+#     conn.close()
+#     return jsonify(rows)
 
 @misc_bp.route('/refresh_config', methods=['POST'])
 def refresh_config():

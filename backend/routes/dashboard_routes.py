@@ -209,3 +209,43 @@ def weekly_trend():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+@dashboard_bp.route('/dashboard/comparison_yesterday')
+def comparison_yesterday():
+    """
+    4. Menghitung total violation hari ini dan kemarin untuk perbandingan persentase.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor() 
+
+        # 1. Kueri untuk mendapatkan total hari ini (Current Date)
+        cursor.execute("""
+            SELECT COALESCE(SUM(total_violation), 0)
+            FROM violation_daily_log
+            WHERE log_date = CURRENT_DATE;
+        """)
+        today_total = cursor.fetchone()[0]
+
+        # 2. Kueri untuk mendapatkan total kemarin (Current Date - 1 day)
+        cursor.execute("""
+            SELECT COALESCE(SUM(total_violation), 0)
+            FROM violation_daily_log
+            WHERE log_date = CURRENT_DATE - INTERVAL '1 day';
+        """)
+        yesterday_total = cursor.fetchone()[0]
+
+        return jsonify({
+            "today_total": today_total,
+            "yesterday_total": yesterday_total
+        })
+
+    except Exception as e:
+        logging.error(f"Error in comparison_yesterday: {str(e)}")
+        return jsonify({"error": "Internal Server Error"}), 500
+        
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()

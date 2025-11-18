@@ -38,7 +38,7 @@ const CCTVList = () => {
       try {
         const [cctvRes, violRes] = await Promise.all([
           fetch('/api/cctv_all').then(r => r.ok ? r.json() : []),
-          fetch('/api/object_classes').then(r => r.ok ? r.json() : [])
+          fetch('/api/object/object_classes').then(r => r.ok ? r.json() : [])
         ]);
 
         const filteredViolations = violRes.filter(v => v.is_violation);

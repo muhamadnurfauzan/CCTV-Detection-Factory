@@ -1,5 +1,6 @@
 // Settings.jsx
 import React, { useState } from 'react';
+import DatasetSetup from '../components/SetupDataset'; 
 import EmailSetup from '../components/SetupEmail'; 
 
 const Settings = () => {
@@ -15,7 +16,7 @@ const Settings = () => {
     const renderContent = () => {
         switch (settingButton) {
             case 'dataset':
-                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Dataset Setup page. Content will be added here later (e.g., model path configuration).</p>;
+                return <DatasetSetup />;
             case 'email':
                 return <EmailSetup />;
             case 'comingsoon':
