@@ -218,7 +218,7 @@ const CCTVList = () => {
         {view === 'violation' && "Violation Configurations"}
         </h2>
 
-        {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading CCTV Datas...</p></div>: <>
+        {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Data...</p></div>: <>
 
         <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2'>
             {/* Back Button - hanya muncul di stream/violation */}

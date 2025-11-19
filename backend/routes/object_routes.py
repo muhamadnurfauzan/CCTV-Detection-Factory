@@ -38,8 +38,7 @@ def get_object_classes():
 @object_bp.route('/object/object_classes/<int:id>', methods=['PUT'])
 def update_object_class(id):
     """
-    Memperbarui object_class dan pasangannya (pair_id) secara atomik.
-    Data yang diterima: { name, is_violation, color_r, color_g, color_b, new_pair_id }
+    Memperbarui object_class dan pasangannya (pair_id) secara atomik, dengan validasi input warna.
     """
     data = request.json
     conn = None
@@ -48,14 +47,30 @@ def update_object_class(id):
     # Nilai yang diperlukan untuk update
     name = data.get('name')
     is_violation = data.get('is_violation')
+    
+    # Ambil nilai warna
     color_r = data.get('color_r')
     color_g = data.get('color_g')
     color_b = data.get('color_b')
-    new_pair_id = data.get('new_pair_id') # ID pasangan yang baru
-    old_pair_id = data.get('old_pair_id') # ID pasangan yang lama (diperlukan untuk reset)
     
+    new_pair_id = data.get('new_pair_id')
+    old_pair_id = data.get('old_pair_id')
+    
+    # 1. Validasi Input Dasar
     if not all([name, color_r is not None, color_g is not None, color_b is not None]):
         return jsonify({"error": "Missing required fields"}), 400
+
+    # 2. Validasi Batas Warna (0-255)
+    try:
+        color_r = int(color_r)
+        color_g = int(color_g)
+        color_b = int(color_b)
+        
+        if not (0 <= color_r <= 255 and 0 <= color_g <= 255 and 0 <= color_b <= 255):
+            return jsonify({"error": "Color values must be between 0 and 255."}), 400
+            
+    except ValueError:
+        return jsonify({"error": "Color values must be integers."}), 400
         
     try:
         conn = get_connection()
@@ -63,10 +78,9 @@ def update_object_class(id):
         
         # --- Mulai Transaksi ---
         
-        # 1. Reset Pair ID Lama (Jika ada pair lama, set pair_id-nya menjadi NULL)
+        # 1. Reset Pair ID Lama
         if old_pair_id and old_pair_id != new_pair_id:
             cursor.execute("UPDATE object_class SET pair_id = NULL WHERE id = %s;", (old_pair_id,))
-            logging.info(f"Resetting pair_id for old pair ID: {old_pair_id}")
 
         # 2. Update Class Utama
         cursor.execute("""
@@ -74,12 +88,10 @@ def update_object_class(id):
             SET name = %s, is_violation = %s, color_r = %s, color_g = %s, color_b = %s, pair_id = %s
             WHERE id = %s;
         """, (name, is_violation, color_r, color_g, color_b, new_pair_id, id))
-        logging.info(f"Updated main class ID: {id} with new pair_id: {new_pair_id}")
         
-        # 3. Update Class Pasangan (Jika ada pasangan baru, set pair_id-nya ke ID class utama)
+        # 3. Update Class Pasangan
         if new_pair_id:
             cursor.execute("UPDATE object_class SET pair_id = %s WHERE id = %s;", (id, new_pair_id))
-            logging.info(f"Updated pair class ID: {new_pair_id} with main class ID: {id}")
         
         conn.commit()
         return jsonify({"message": "Object class and pair updated successfully."})

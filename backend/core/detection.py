@@ -176,8 +176,6 @@ def process_thread(cctv_id, frame_queue, stop_event):
                 pts = scaled_points.astype(np.int32).reshape((-1, 1, 2))
                 
                 cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
-                cv2.putText(annotated, region.get("name", "ROI"), tuple(pts[0][0]),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
             # --- Hitung FPS ---
             fps = 1.0 / max(0.1, current_time - last_frame_time)
