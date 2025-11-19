@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { FaEdit, FaCheckSquare, FaSquare, FaInfoCircle } from 'react-icons/fa';
+import { FaPenSquare, FaCheckSquare, FaSquare, FaInfoCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider'; 
 import ModalEditObjek from './ModalEditObjek'; 
 
@@ -208,7 +208,7 @@ const SetupDataset = () => {
                                                 onClick={() => handleEdit(item)}
                                                 className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                                             >
-                                                <FaEdit className="h-5 w-5" />
+                                                <FaPenSquare className="h-5 w-5" />
                                             </button>
                                         </td>
                                     </tr>
