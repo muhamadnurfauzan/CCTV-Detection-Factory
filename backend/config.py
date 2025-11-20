@@ -1,7 +1,7 @@
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from shared import state
+from shared_state import state
 
 # Load environment variables
 load_dotenv()

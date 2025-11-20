@@ -6,7 +6,7 @@ from email.mime.image import MIMEImage
 import requests
 import logging
 from db.db_config import get_connection
-from shared import state
+from shared_state import state
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

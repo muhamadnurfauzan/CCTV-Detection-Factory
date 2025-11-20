@@ -2,7 +2,7 @@
 import time
 import logging
 from psycopg2.extras import RealDictCursor
-from shared import state
+from shared_state import state
 from db.db_config import get_connection
 
 # --- Fungsi untuk Memuat Konfigurasi Email dari DB (Tabel email_settings) ---

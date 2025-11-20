@@ -8,7 +8,7 @@ from threading import Thread
 from collections import deque
 from threading import Event
 import logging
-from shared import state
+from shared_state import state
 from config import (
     CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, MODEL_PATH, CCTV_RATIO
 )

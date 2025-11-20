@@ -1,6 +1,6 @@
 # backend/utils/geometry.py
 from db.db_config import get_connection
-from shared import state
+from shared_state import state
 
 # --- FUNGSI MEMBACA POLYGON ROI JSON ---
 def point_in_polygon(point, polygon):

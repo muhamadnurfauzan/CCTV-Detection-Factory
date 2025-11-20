@@ -5,7 +5,7 @@ import numpy as np
 from threading import Thread
 import logging
 from services import notification_service
-from shared import state
+from shared_state import state
 from services.cloud_storage import upload_violation_image
 from utils.helpers import point_in_polygon
 from db.db_config import get_connection

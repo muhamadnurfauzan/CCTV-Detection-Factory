@@ -8,7 +8,7 @@ from psycopg2.extras import RealDictCursor
 
 from db.db_config import get_connection
 import services.config_service as config_service
-from shared import state
+from shared_state import state
 
 misc_bp = Blueprint('misc', __name__, url_prefix='/api')
 

@@ -2,7 +2,7 @@ import json
 import numpy as np
 from psycopg2.extras import RealDictCursor 
 import config
-from shared import state
+from shared_state import state
 from db.db_config import get_connection
 from config import ( SUPABASE_ROI_DIR, SUPABASE_BUCKET )
 
