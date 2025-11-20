@@ -115,7 +115,8 @@ const ImagesShow = () => {
       if (currentPath.month) params.append('month', currentPath.month);
       if (currentPath.day) params.append('day', currentPath.day);
 
-      const res = await fetch(`/supabase-api/violations?${params}`, {
+      const API_BASE = import.meta.env.VITE_API_BASE || '/supabase-api';
+      const res = await fetch(`${API_BASE}/violations?${params}`, {
         cache: 'no-store',
       });
 
