@@ -363,7 +363,7 @@ const Dashboard = () => {
         </div>
         {/* Bagian 4: Persentase kenaikan/penurunan */}
         <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4 text-gray-700">Percentage Incr./Decr. Violation</h3>
+          <h3 className="text-xl font-semibold mb-4 text-gray-700">Percentage Violation</h3>
           <div className="p-6 bg-white rounded-xl shadow-lg flex items-center justify-center">
             {comparisonData.data && comparisonData.difference !== 0 ? (
                 <SafeResponsiveContainer width="100%" height={300}>
