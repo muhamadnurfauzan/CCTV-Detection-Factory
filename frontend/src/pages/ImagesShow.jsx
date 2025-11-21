@@ -221,7 +221,7 @@ const ImagesShow = () => {
                 <Link
                   key={val}
                   to={getNextPath(val, options.options)}
-                  className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg"
+                  className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg items-center"
                 >
                   {lbl}
                 </Link>

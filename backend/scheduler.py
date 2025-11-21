@@ -4,6 +4,8 @@ import datetime
 import logging
 from db.db_config import get_connection
 from supabase import create_client
+from core.cctv_scheduler import refresh_scheduler_state
+from services.cctv_services import refresh_all_cctv_configs
 import config
 
 supabase = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
@@ -60,18 +62,25 @@ def cleanup_old_data():
         conn.close()
 
 def scheduler_thread():
-    """Menjalankan update per jam & cleanup harian jam 00:05."""
+    """Menjalankan update per jam & cleanup harian jam 00:05 + CCTV schedule check."""
     while True:
         now = datetime.datetime.now()
         minute = now.minute
         hour = now.hour
 
-        # Jalankan rekap tiap awal jam
+        # 1. Rekap harian tiap awal jam
         if minute == 0:
             update_daily_log()
 
-        # Jalankan pembersihan jam 00:05
+        # 2. Cleanup data lama → jam 00:05
         if hour == 0 and minute == 5:
             cleanup_old_data()
 
-        time.sleep(60)  # cek tiap menit
+        # 3. Cek jadwal CCTV tiap menit
+        refresh_scheduler_state() 
+
+        # 4. Refresh config tiap 10 menit (bukan tiap menit, agar tidak terlalu sering)
+        if minute % 10 == 0:
+            refresh_all_cctv_configs()
+
+        time.sleep(60)

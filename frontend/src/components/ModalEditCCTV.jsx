@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FaTimes, FaUpload, FaCamera, FaPenSquare } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
+import CCTVScheduleInput from './CCTVSheduleInput';
 
 export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
   const [form, setForm] = useState({
@@ -356,17 +357,23 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
         if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.error || 'Update failed');
+            throw new Error(err.error || 'Failed to Update CCTV');
         }
 
-        let updated;
-        try {
-            updated = await res.json();
-        } catch (jsonError) {
-            updated = { name: form.name.trim() }; 
+        let updated = { name: form.name.trim() };
+        try { updated = await res.json(); } catch {}
+
+        // === KIRIM JADWAL BARU (TANPA GANGGU FLOW UTAMA) ===
+        if (form.schedules !== undefined) {
+            await fetch(`/api/cctv_schedules/${cctvData.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ schedules: form.schedules || [] })
+            });
+            fetch('/api/refresh_scheduler', { method: 'POST' });
         }
 
-        onUpdate(cctvData.id, updated); 
+        onUpdate(cctvData.id, updated);
         onClose();
         showAlert(`CCTV '${updated.name}' successfully updated.`, 'success');
     } catch (err) {
@@ -374,7 +381,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     } finally {
         setSubmitting(false);
     }
-    }
+  }
 
   // === RENDER ===
   return (
@@ -516,6 +523,14 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
               )}
             </div>
           )}
+        </div>
+
+        {/* === Field Schedule Input === */}
+        <div className="mt-6">
+            <CCTVScheduleInput 
+                cctvId={cctvData?.id} 
+                onScheduleChange={(schedules) => setForm(prev => ({ ...prev, schedules }))}
+            />
         </div>
 
         {/* === Footer === */}

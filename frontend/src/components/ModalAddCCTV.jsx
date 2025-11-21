@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FaTimes, FaUpload, FaCamera, FaPlusCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
+import CCTVScheduleInput from './CCTVSheduleInput';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [form, setForm] = useState({
@@ -298,15 +299,25 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             body: JSON.stringify(payload)
             });
 
-            if (res.ok) {
-                const newCctv = await res.json();
-                onSuccess(newCctv); // Memperbarui state di parent
-                onClose();
-                showAlert(`CCTV '${newCctv.name}' successfully added.`, 'success'); // Success Alert Saja
-            } else {
-            const err = await res.json();
-            showAlert(err.error || 'Failed to add CCTV.', 'error');
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Failed to Add CCTV");
             }
+
+            const newCctv = await res.json();
+
+            // === KIRIM JADWAL SETELAH DAPAT ID ===
+            if (form.schedules && form.schedules.length > 0) {
+                await fetch(`/api/cctv_schedules/${newCctv.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ schedules: form.schedules })
+                });
+            }
+
+            onSuccess(newCctv);
+            onClose();
+            showAlert(`CCTV '${newCctv.name}' successfully added!`, 'success');
         } catch {
             showAlert('Network error: Could not connect to the server.', 'error');
         } finally {
@@ -493,6 +504,13 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                         )}
                     </div>
                 )}
+                </div>
+
+                {/* === Field Schedule Input === */}
+                <div className="mt-6">
+                    <CCTVScheduleInput 
+                        onScheduleChange={(schedules) => setForm(prev => ({ ...prev, schedules }))}
+                    />
                 </div>
 
                 {/* === Footer === */}

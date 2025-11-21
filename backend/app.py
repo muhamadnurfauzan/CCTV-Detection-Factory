@@ -16,6 +16,7 @@ import config
 from core import detection
 import utils.helpers as helpers
 import scheduler  
+from core import detection
 from services import config_service
 from services import cctv_services
 
@@ -50,12 +51,13 @@ if __name__ == "__main__":
     config_service.load_object_classes()
     config_service.load_violation_pairs() 
 
-    # Jalankan deteksi multi-CCTV
+    # Jalankan deteksi multi-CCTV 
     threads = detection.start_all_detections()
-    logging.info(f"Started {len(threads)} CCTV threads.")
+    # Log di sini sudah termasuk thread scheduler
+    logging.info(f"Started {len(threads)} core/scheduler threads for CCTV management.")
 
     # Jalankan scheduler
     Thread(target=scheduler.scheduler_thread, daemon=True).start()
-    logging.info("Scheduler thread started.")
+    logging.info("DB/Global Scheduler thread started.")
 
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

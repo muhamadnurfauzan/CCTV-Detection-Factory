@@ -131,6 +131,6 @@ def send_email(violation_id):
     logging.info(f"[EMAIL MANUAL] Menerima permintaan kirim email untuk Violation ID: {violation_id}")
     
     if notification_service.notify_user_by_violation_id(violation_id):
-        return jsonify({"success": True, "message": "Email notifikasi berhasil dikirim."}), 200
+        return jsonify({"success": True, "message": "Notification email sent successfully."}), 200
     else:
-        return jsonify({"success": False, "message": "Gagal mengirim email notifikasi. Cek log server untuk detail."}), 500
+        return jsonify({"success": False, "message": "Failed to send notification email. Check server log for details."}), 500

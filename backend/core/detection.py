@@ -232,6 +232,11 @@ def process_thread(cctv_id, frame_queue, stop_event):
                         if class_info["id"] not in active_ids:
                             continue
 
+                        cls_id_int = int(cls_id)
+                        allowed_classes = state.CCTV_ALLOWED_VIOLATIONS.get(cctv_id, set())
+                        if allowed_classes and cls_id_int not in allowed_classes:
+                            continue
+
                         process_detection(
                             cctv_id, frame, annotated, x1, y1, x2, y2,
                             cls_id, conf, track_id, model, tracked_violations

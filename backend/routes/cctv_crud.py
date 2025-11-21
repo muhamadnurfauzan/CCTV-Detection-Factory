@@ -5,9 +5,8 @@ import cv2
 import json
 import logging
 
-from psycopg2.extras import RealDictCursor 
 from flask import Blueprint, request, jsonify, send_file, redirect
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_batch
 
 from db.db_config import get_connection
 import core.detection as detection
@@ -63,6 +62,41 @@ def is_valid_ip(ip_address):
     except:
         return False
 
+# --- Helper: Menghapus dan menyimpan jadwal CCTV ---
+def save_cctv_schedules(conn, cur, cctv_id, schedules):
+    """Menghapus jadwal lama dan menyimpan jadwal baru untuk CCTV ID tertentu."""
+    # 1. Hapus semua jadwal lama
+    cur.execute("DELETE FROM cctv_schedule WHERE cctv_id = %s", (cctv_id,))
+
+    if not schedules:
+        return
+
+    # 2. Siapkan data untuk insert massal
+    insert_data = []
+    for schedule in schedules:
+        days_array = schedule.get('days', [])
+        start_time = schedule.get('start_time')
+        end_time = schedule.get('end_time')
+        active = schedule.get('active', True)
+
+        # Pastikan data lengkap
+        if start_time and end_time and days_array:
+            insert_data.append((
+                cctv_id,
+                start_time,
+                end_time,
+                days_array, # PostgreSQL akan menerima list/array Python untuk kolom text[]
+                active
+            ))
+
+    # 3. Insert massal jadwal baru
+    if insert_data:
+        schedule_query = """
+            INSERT INTO cctv_schedule (cctv_id, start_time, end_time, days, active)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        execute_batch(cur, schedule_query, insert_data)
+
 @cctv_bp.route('/roi/<filename>', methods=['GET'])
 def get_roi_file(filename):
     """Mengambil dan mengirim file JSON ROI dari Supabase."""
@@ -83,9 +117,9 @@ def get_roi_file(filename):
         logging.error(f"[ROI GET ERROR FROM SUPABASE]: {e}")
         return jsonify({"error": "Failed to retrieve ROI file from storage"}), 500
 
-@cctv_bp.route('/cctv_add', methods=['POST'])
-def add_cctv():
-    data = request.get_json()
+@cctv_bp.route("/cctv_add", methods=["POST"])
+def add_new_cctv():
+    data = request.json
     logging.info(f"[ADD CCTV] Received: {data}")
 
     required = ['name', 'ip_address', 'port', 'token']
@@ -110,6 +144,8 @@ def add_cctv():
                 return jsonify({"error": "Invalid ROI format"}), 400
         except json.JSONDecodeError:
             return jsonify({"error": "Invalid JSON in area"}), 400
+        
+    schedules = data.get("schedules", [])
 
     conn = None
     cur = None
@@ -466,3 +502,74 @@ def get_all_cctv():
     cursor.close()
     conn.close()
     return jsonify(rows)
+
+@cctv_bp.route('/cctv_schedules/<int:cctv_id>', methods=['GET', 'POST'])
+def cctv_schedules(cctv_id):
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'GET':
+        cur.execute("""
+            SELECT id, day_of_week, start_time, end_time, is_active
+            FROM cctv_scheduler 
+            WHERE cctv_id = %s 
+            ORDER BY day_of_week, start_time
+        """, (cctv_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify([dict(row) for row in rows])
+
+    if request.method == 'POST':
+        schedules = request.json.get('schedules', [])
+        try:
+            # Hapus semua jadwal lama
+            cur.execute("DELETE FROM cctv_scheduler WHERE cctv_id = %s", (cctv_id,))
+
+            # Insert baru
+            if schedules:
+                insert_query = """
+                    INSERT INTO cctv_scheduler (cctv_id, day_of_week, start_time, end_time, is_active)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                data = []
+                for s in schedules:
+                    # Handle midnight crossover: split jadi 2 row jika end_time < start_time
+                    start = s['start_time']
+                    end = s['end_time']
+                    days = s['days']  # array [1,2,3,4,5]
+                    active = s.get('is_active', True)
+
+                    if end <= start and end != '00:00:00':  # crossover
+                        # Part 1: start → 00:00
+                        for day in days:
+                            data.append((cctv_id, day, start, '00:00:00', active))
+                        # Part 2: 00:00 → end (di hari berikutnya)
+                        next_days = [(d + 1) % 7 for d in days]
+                        for day in next_days:
+                            data.append((cctv_id, day, '00:00:00', end, active))
+                    else:
+                        for day in days:
+                            data.append((cctv_id, day, start, end, active))
+
+                if data:
+                    execute_batch(cur, insert_query, data)
+
+            conn.commit()
+            # Refresh scheduler state setelah ubah jadwal
+            from core.cctv_scheduler import refresh_scheduler_state
+            refresh_scheduler_state()
+            return jsonify({"success": True})
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"[SCHEDULER SAVE ERROR] {e}")
+            return jsonify({"error": str(e)}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+@cctv_bp.route('/refresh_scheduler', methods=['POST'])
+def refresh_scheduler_now():
+    from core.cctv_scheduler import refresh_scheduler_state
+    refresh_scheduler_state()
+    return jsonify({"success": True, "message": "Scheduler refreshed"})
