@@ -509,16 +509,36 @@ def cctv_schedules(cctv_id):
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     if request.method == 'GET':
-        cur.execute("""
-            SELECT id, day_of_week, start_time, end_time, is_active
-            FROM cctv_scheduler 
-            WHERE cctv_id = %s 
-            ORDER BY day_of_week, start_time
-        """, (cctv_id,))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify([dict(row) for row in rows])
+        try:
+            cur.execute("""
+                SELECT id, day_of_week, start_time, end_time, is_active
+                FROM cctv_scheduler 
+                WHERE cctv_id = %s 
+                ORDER BY day_of_week, start_time
+            """, (cctv_id,))
+            rows = cur.fetchall()
+
+            if not rows:
+                return jsonify([])
+
+            # Format time jadi HH:MM tanpa detik
+            serialized_rows = []
+            for row in rows:
+                r = dict(row)
+                if r['start_time']:
+                    r['start_time'] = r['start_time'].strftime('%H:%M')  # ← INI YANG BENER!
+                if r['end_time']:
+                    r['end_time'] = r['end_time'].strftime('%H:%M')
+                serialized_rows.append(r)
+
+            return jsonify(serialized_rows)
+
+        except Exception as e:
+            logging.error(f"[SCHEDULER GET ERROR] CCTV {cctv_id}: {e}")
+            return jsonify({"error": "Failed to load schedule"}), 500
+        finally:
+            cur.close()
+            conn.close()
 
     if request.method == 'POST':
         schedules = request.json.get('schedules', [])

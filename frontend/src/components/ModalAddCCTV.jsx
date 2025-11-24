@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FaTimes, FaUpload, FaCamera, FaPlusCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
-import CCTVScheduleInput from './CCTVSheduleInput';
+import CCTVScheduleInput from './CCTVScheduleInput';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [form, setForm] = useState({

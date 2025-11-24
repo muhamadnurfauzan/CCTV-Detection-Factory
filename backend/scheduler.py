@@ -73,8 +73,8 @@ def scheduler_thread():
             update_daily_log()
 
         # 2. Cleanup data lama → jam 00:05
-        if hour == 0 and minute == 5:
-            cleanup_old_data()
+        # if hour == 0 and minute == 5:
+        #     cleanup_old_data()
 
         # 3. Cek jadwal CCTV tiap menit
         refresh_scheduler_state() 

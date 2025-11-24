@@ -40,9 +40,10 @@ def load_object_classes(force_refresh=False):
             rows = cur.fetchall()
             for row in rows:
                 cid, name, r, g, b, is_viol = row
+                color_bgr = (b, g, r) if r is not None else (255, 255, 255)
                 state.OBJECT_CLASS_CACHE[name] = {
                     "id": cid,
-                    "color": (r, g, b) if r is not None else (255, 255, 255),
+                    "color": color_bgr,
                     "is_violation": is_viol
                 }
                 if is_viol:
