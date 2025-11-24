@@ -17,57 +17,39 @@ def video_feed():
     cctv_id = int(request.args.get("id", 1))
 
     def gen():
-        # Placeholder statis
-        placeholder_reconnecting = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder_reconnecting, "Reconnecting...", (50, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (200, 200, 200), 3)
-
         placeholder_disconnected = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder_disconnected, "Camera Delay/Freeze", (30, 240),
+        cv2.putText(placeholder_disconnected, "Camera Freeze", (30, 240),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 255), 3)
 
-        last_warning_time = 0  # untuk debounce warning
+        last_warning = 0
 
         while True:
             now = time.time()
 
-            # ------------------------------------------------------------
-            # AMBIL FRAME + TIMESTAMP TERBARU (ini yang penting!)
-            # ------------------------------------------------------------
+            # Prioritas: annotated (dengan box) → raw (polos) → placeholder
             with state.ANNOTATED_FRAME_LOCK:
-                data = state.annotated_frames.get(cctv_id)
-                if data and isinstance(data, tuple) and len(data) == 2:
-                    frame, frame_timestamp = data
-                else:
-                    # Belum ada frame sama sekali (pertama kali atau reconnect)
-                    logging.warning(f"[CCTV {cctv_id}] annotated_frames missing (reconnecting). Using placeholder.")
-                    state.annotated_frames[cctv_id] = (placeholder_reconnecting, now)
-                    frame = placeholder_reconnecting
-                    frame_timestamp = now
+                ann = state.annotated_frames.get(cctv_id)
+            with state.RAW_FRAME_LOCK:
+                raw = state.raw_frames.get(cctv_id)
 
-            # ------------------------------------------------------------
-            # CEK FREEZE PAKAI TIMESTAMP YANG BENAR-BENAR TERBARU
-            # ------------------------------------------------------------
-            if now - frame_timestamp > 10: 
-                if now - last_warning_time > 5:  # batasi spam warning
-                    logging.warning(f"[CCTV {cctv_id}] FREEZE → {now - frame_timestamp:.1f}s → placeholder")
-                    last_warning_time = now
-                frame_to_send = placeholder_disconnected
+            if ann and ann[1] > now - 5:
+                frame = ann[0]  
+            elif raw and raw[1] > now - 10:
+                frame = raw[0]  
             else:
-                frame_to_send = frame   # frame deteksi atau placeholder reconnect
+                if now - last_warning > 5:
+                    logging.warning(f"[CCTV {cctv_id}] NO FRAME → using disconnected placeholder")
+                    last_warning = now
+                frame = placeholder_disconnected
 
-            # ------------------------------------------------------------
-            # KIRIM FRAME
-            # ------------------------------------------------------------
-            ret, jpeg = cv2.imencode('.jpg', frame_to_send, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            ret, jpeg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
             if not ret:
                 time.sleep(0.05)
                 continue
 
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-
-            time.sleep(0.03)  # ~30 FPS streaming
+            time.sleep(0.03)
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

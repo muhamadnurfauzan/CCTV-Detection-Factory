@@ -17,6 +17,8 @@ class SharedState:
                 cls._instance.active_violations = {}
                 cls._instance._CACHE_TIMESTAMP = 0
                 cls._instance._CACHE_TTL = 30
+                cls._instance.raw_frames = {}           
+                cls._instance.RAW_FRAME_LOCK = Lock()
                 cls._instance.PPE_VIOLATION_PAIRS = {}
                 cls._instance.CCTV_ALLOWED_VIOLATIONS = {}
                 cls._instance.OBJECT_CLASS_CACHE = {}

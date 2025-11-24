@@ -1,28 +1,41 @@
 module.exports = {
   apps: [
-    // === PYTHON BACKEND (Flask + YOLO) ===
+    // 1. Backend utama (Flask + YOLO detection)
     {
-      name: "cctv-flask",
+      name: "cctv-backend",
       script: "app.py",
       interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
       cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
       watch: false,
-      env: {
-        FLASK_ENV: "production"
-      }
+      autorestart: true,
+      env: { FLASK_ENV: "production" }
     },
 
-    // === NODE.JS EXPRESS (Supabase Proxy) ===
+    // 2. Frontend / Supabase proxy
     {
-      name: "cctv-supabase",
+      name: "cctv-frontend",
       script: "server.mjs",
-      interpreter: "node",                           
+      interpreter: "node",
       cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/frontend",
       watch: false,
-      env: {
-        NODE_ENV: "production",
-        PORT: 3000
-      }
+      env: { NODE_ENV: "production", PORT: 3000 }
     },
+
+    // 3. Monitoring 
+    {
+      name: "cctv-monitor",
+      script: "monitor.py",                                      
+      interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
+      cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
+      watch: false,
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 5000,
+      env: {
+        PYTHONUNBUFFERED: "1"   
+      }
+    }
   ]
 };

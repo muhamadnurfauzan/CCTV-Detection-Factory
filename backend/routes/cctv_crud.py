@@ -9,6 +9,7 @@ from flask import Blueprint, request, jsonify, send_file, redirect
 from psycopg2.extras import RealDictCursor, execute_batch
 
 from db.db_config import get_connection
+from core.cctv_scheduler import refresh_scheduler_state
 import core.detection as detection
 import config as config
 import services.cctv_services as cctv_service
@@ -526,7 +527,7 @@ def cctv_schedules(cctv_id):
             for row in rows:
                 r = dict(row)
                 if r['start_time']:
-                    r['start_time'] = r['start_time'].strftime('%H:%M')  # ← INI YANG BENER!
+                    r['start_time'] = r['start_time'].strftime('%H:%M')  
                 if r['end_time']:
                     r['end_time'] = r['end_time'].strftime('%H:%M')
                 serialized_rows.append(r)
@@ -577,7 +578,6 @@ def cctv_schedules(cctv_id):
 
             conn.commit()
             # Refresh scheduler state setelah ubah jadwal
-            from core.cctv_scheduler import refresh_scheduler_state
             refresh_scheduler_state()
             return jsonify({"success": True})
         except Exception as e:
@@ -590,6 +590,5 @@ def cctv_schedules(cctv_id):
 
 @cctv_bp.route('/refresh_scheduler', methods=['POST'])
 def refresh_scheduler_now():
-    from core.cctv_scheduler import refresh_scheduler_state
     refresh_scheduler_state()
     return jsonify({"success": True, "message": "Scheduler refreshed"})

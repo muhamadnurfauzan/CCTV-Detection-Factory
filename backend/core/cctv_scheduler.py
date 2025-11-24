@@ -2,6 +2,8 @@ import datetime
 import logging
 from typing import Set
 from db.db_config import get_connection
+from shared_state import state
+from core.detection import start_detection_for_cctv, stop_detection_for_cctv
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,9 +21,8 @@ def is_cctv_active_now(cctv_id: int) -> bool:
     Dipanggil oleh detection.py sebelum proses frame.
     """
     now = _current_wib_time()
-    current_day = now.weekday()  # 0=Monday ... 6=Sunday → kita pakai ISO (Senin=0)
-    # Konversi ke skema DB: 0=Minggu, 1=Senin, ..., 6=Sabtu
-    db_day = (current_day + 1) % 7  # Senin=0 → 1, Minggu=6 → 0
+    current_day = now.weekday()  
+    db_day = (current_day + 1) % 7 
     current_time = now.time()
 
     query = """
@@ -41,7 +42,7 @@ def is_cctv_active_now(cctv_id: int) -> bool:
                 return cur.fetchone() is not None
     except Exception as e:
         logging.error(f"[SCHEDULER] Error checking schedule for CCTV {cctv_id}: {e}")
-        return False  # fail-safe: jika error, matikan deteksi
+        return False 
 
 def get_active_cctv_ids_now() -> Set[int]:
     """
@@ -73,23 +74,23 @@ def get_active_cctv_ids_now() -> Set[int]:
     return active_ids
 
 def refresh_scheduler_state():
-    """
-    Dipanggil oleh scheduler.py (yang sudah ada) tiap menit via APScheduler.
-    Update state.cctv_configs[...]['scheduled_active'] = True/False
-    Lalu trigger start/stop detection otomatis.
-    """
-    from shared_state import state
-    from core.detection import start_detection_for_cctv, stop_detection_for_cctv
-
-    active_now = get_active_cctv_ids_now()
+    active_now = get_active_cctv_ids_now()  # ← ini harus return set kosong jika no schedule
 
     for cctv_id, config in state.cctv_configs.items():
-        should_be_active = cctv_id in active_now and config.get('enabled', False)
-        currently_running = cctv_id in state.detection_threads
+        enabled = config.get('enabled', False)
+        if not enabled:
+            if cctv_id in state.detection_threads:
+                stop_detection_for_cctv(cctv_id)
+            continue
 
-        if should_be_active and not currently_running:
-            logging.info(f"[SCHEDULER] CCTV {cctv_id} ({config['name']}) masuk jadwal → mulai deteksi")
-            start_detection_for_cctv(cctv_id)
-        elif not should_be_active and currently_running:
-            logging.info(f"[SCHEDULER] CCTV {cctv_id} ({config['name']}) keluar jadwal → hentikan deteksi")
-            stop_detection_for_cctv(cctv_id)
+        should_have_yolo = cctv_id in active_now
+        current_mode = state.detection_threads.get(cctv_id, {}).get('mode')
+
+        if should_have_yolo and current_mode != 'full':
+            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Streaming ON + YOLO ON")
+            start_detection_for_cctv(cctv_id, full_detection=True)
+        elif not should_have_yolo and current_mode == 'full':
+            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Streaming ON + YOLO OFF")
+            start_detection_for_cctv(cctv_id, full_detection=False)
+        elif not should_have_yolo and current_mode != 'stream_only':
+            start_detection_for_cctv(cctv_id, full_detection=False)

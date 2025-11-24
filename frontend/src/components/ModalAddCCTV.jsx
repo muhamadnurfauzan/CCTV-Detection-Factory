@@ -529,7 +529,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                     <div className="flex justify-end gap-3">
                         {/* === Submit Button === */}
                         <button type="button" onClick={onClose} className="px-5 py-2 border rounded-lg">Cancel</button>
-                        <button type="submit" disabled={submitting || !!urlError} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50"> {/* <-- Tombol submit disabled jika ada error URL */}
+                        <button type="submit" disabled={submitting || !!urlError} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50"> 
                             {submitting ? 'Adding...' : 'Add CCTV'}
                         </button>
                     </div>

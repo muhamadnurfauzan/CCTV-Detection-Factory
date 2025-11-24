@@ -4,9 +4,8 @@ import gc
 import os
 import numpy as np
 from ultralytics import YOLO
-from threading import Thread
 from collections import deque
-from threading import Event
+from threading import Event, Thread
 import logging
 from shared_state import state
 from config import (
@@ -60,74 +59,55 @@ def capture_thread(cctv_id, frame_queue, stop_event):
     if not cap:
         logging.error(f"[{cctv_id}] Thread exit: Initial stream failed.")
         return 
-    
+
     fail_count = 0
     max_fails = 10
     frame_count = 0
 
     while not stop_event.is_set():
         ret, frame = cap.read()
-        
-        if not ret:
+
+        # --- HANYA UPDATE JIKA FRAME VALID ---
+        if ret and frame is not None:
+            # Update raw frame untuk streaming polos
+            with state.RAW_FRAME_LOCK:
+                state.raw_frames[cctv_id] = (frame.copy(), time.time())
+
+            # Masukkan ke queue hanya tiap FRAME_SKIP
+            if frame_count % FRAME_SKIP == 0:
+                if len(frame_queue) < frame_queue.maxlen:
+                    frame_queue.append(frame.copy())
+            frame_count += 1
+            fail_count = 0
+        else:
+            # Frame gagal → reconnect
             fail_count += 1
-            logging.warning(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails}).")
-            cap = reconnect_cap(cctv, cap)  
-            if cap is None:
-                continue
+            logging.warning(f"[{cctv_id}] Frame read failed ({fail_count}/{max_fails})")
             
             if fail_count >= max_fails:
-                cap.release() # Cap yang terdefinisi di capture_thread
-                
-                # --- LOGIKA RECONNECT DIBUAT LOKAL ---
-                reconnected_cap = None
-                max_retries = 5
-                retry_delay = 1
-                for attempt in range(max_retries):
-                    print(f"[{cctv['name']}] Reconnecting stream (attempt {attempt + 1}/{max_retries})...")
-                    time.sleep(retry_delay * (2 ** attempt)) 
-                    reconnected_cap = open_stream(cctv)
-                    if reconnected_cap and reconnected_cap.isOpened():
-                        print(f"[{cctv['name']}] Reconnected successfully.")
-                        break
-                # --- AKHIR LOGIKA RECONNECT DIBUAT LOKAL ---
-
-                if not reconnected_cap:                    
-                    placeholder_failed = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(placeholder_failed, "Stream connection failed permanently", (10, 30), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                    
-                    # WRITE DILINDUNGI LOCK (Saat Reconnect Gagal Total)
+                cap.release()
+                cap = reconnect_cap(cctv, cap) or open_stream(cctv)
+                if cap:
+                    fail_count = 0
+                else:
+                    # Update placeholder jika total gagal
+                    placeholder = np.zeros((480, 640, 3), np.uint8)
+                    cv2.putText(placeholder, "Stream Failed", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 3)
                     with state.ANNOTATED_FRAME_LOCK:
-                        state.annotated_frames[cctv_id] = (placeholder_failed, time.time())
-                    
-                    if stop_event.is_set(): break
-                    time.sleep(5) 
+                        state.annotated_frames[cctv_id] = (placeholder, time.time())
+                    with state.RAW_FRAME_LOCK:
+                        state.raw_frames[cctv_id] = (placeholder, time.time())
+                    time.sleep(5)
                     continue
-                
-                # Berhasil reconnect, ganti cap lama dengan yang baru
-                cap = reconnected_cap 
-                fail_count = 0
-                
-                # Update placeholder "Connecting..." dengan timestamp BARU
-                fail_placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(fail_placeholder, "Stream Lost", (10, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                
-                with state.ANNOTATED_FRAME_LOCK:
-                    state.annotated_frames[cctv_id] = (fail_placeholder, time.time())
-                logging.info(f"[{cctv_id}] Placeholder updated after successful reconnect.")
-            continue 
 
-        if stop_event.is_set(): break
+        if stop_event.is_set():
+            break
 
-        fail_count = 0        
-        if frame_count % FRAME_SKIP == 0:
-            frame_queue.append(frame)
-            logging.debug(f"[{cctv_id}] Appended frame to queue (len={len(frame_queue)})")
-        frame_count += 1
+        time.sleep(0.01)
 
-    cap.release()
-    logging.info(f"[{cctv_id}] Capture thread finished.")
+    if cap:
+        cap.release()
+    logging.info(f"[{cctv_id}] Capture thread stopped.")
 
 def process_thread(cctv_id, frame_queue, stop_event):
     """
@@ -295,13 +275,12 @@ def cleanup_thread(tracked_violations):
             print(f"[CLEANUP] Total {removed_count} track lama dihapus.")
         time.sleep(CLEANUP_INTERVAL)
 
-def _start_capture_wrapper(cctv_id): # <-- HAPUS ARGUMEN SNAPSHOT
+def _start_capture_wrapper(cctv_id):
     """Wrapper thread untuk memastikan thread dimulai setelah API selesai."""
     
     logging.info(f"[{cctv_id}] Wrapper thread starting. Delaying 3 seconds before main start.")
-    time.sleep(1) # Jeda awal 1 detik
+    time.sleep(1)
     
-    # --- PENTING: FORCE REFRESH DI DALAM WRAPPER ---
     # Memastikan cctv_configs diisi sebelum mencoba memulai stream
     refresh_all_cctv_configs() 
     
@@ -335,22 +314,37 @@ def _start_capture_wrapper(cctv_id): # <-- HAPUS ARGUMEN SNAPSHOT
     state.detection_threads[cctv_id]['threads'].extend([t1, t2])
     logging.info(f"[{cctv_id}] Core detection threads started successfully via wrapper.")
 
-def start_detection_for_cctv(cctv_id):
-    """Memulai thread deteksi untuk CCTV ID tertentu menggunakan wrapper."""
-    
-    logging.info(f"[THREAD] Stopping existing detection for {cctv_id}...")
-    stop_detection_for_cctv(cctv_id) 
-    
-    # Beri jeda agar stop_detection selesai
-    time.sleep(2) 
-    
-    # --- PENGUBAHAN: Hapus pengecekan snapshot yang gagal dan pass argumen ---
-    
-    # MEMULAI WRAPPER THREAD (tanpa argumen snapshot)
-    wrapper_thread = Thread(target=_start_capture_wrapper, args=(cctv_id,), daemon=True) 
-    wrapper_thread.start()
-    
-    logging.info(f"[THREAD] Wrapper thread initiated for CCTV {cctv_id}.")
+def start_detection_for_cctv(cctv_id: int, full_detection: bool = True):
+    stop_detection_for_cctv(cctv_id)
+    time.sleep(0.5)
+
+    stop_event = Event()
+    state.detection_threads[cctv_id] = {
+        'stop_event': stop_event,
+        'threads': [],
+        'mode': 'full' if full_detection else 'stream_only'
+    }
+
+    frame_queue = deque(maxlen=QUEUE_SIZE)
+
+    # SELALU jalankan capture_thread
+    t_capture = Thread(target=capture_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
+    t_capture.start()
+    state.detection_threads[cctv_id]['threads'].append(t_capture)
+
+    # Hanya jalankan process_thread jika full_detection
+    if full_detection:
+        t_process = Thread(target=process_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
+        t_process.start()
+        state.detection_threads[cctv_id]['threads'].append(t_process)
+
+    # Init placeholder
+    placeholder = np.zeros((480, 640, 3), np.uint8)
+    cv2.putText(placeholder, "Initializing...", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 3)
+    with state.ANNOTATED_FRAME_LOCK:
+        state.annotated_frames[cctv_id] = (placeholder, time.time())
+    with state.RAW_FRAME_LOCK:
+        state.raw_frames[cctv_id] = (placeholder, time.time())
 
 def stop_detection_for_cctv(cctv_id):
     """Menghentikan thread deteksi untuk CCTV ID tertentu."""
