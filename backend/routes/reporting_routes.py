@@ -6,6 +6,7 @@ from psycopg2.extras import RealDictCursor
 from db.db_config import get_connection
 import config as config
 import services.notification_service as notification_service
+from backend.services.cloud_storage import delete_violation_image
 
 reports_bp = Blueprint('reports_bp', __name__, url_prefix='/api')
 
@@ -118,6 +119,54 @@ def get_reports():
     except Exception as e:
         logging.error(f"[REPORTS API ERROR]: {e}")
         return jsonify({"error": "Failed to retrieve reports data."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@reports_bp.route('/reports_delete/<int:violation_id>', methods=['DELETE'])
+def delete_report(violation_id): 
+    conn = None
+    cur = None
+    image_url = None
+    
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        # 1. AMBIL IMAGE URL
+        cur.execute("SELECT image FROM violation_detection WHERE id = %s", (violation_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": f"Report with ID {violation_id} not found."}), 404
+        
+        image_url = row[0]
+        
+        # 2. HAPUS DATA DARI DATABASE
+        cur.execute("DELETE FROM violation_detection WHERE id = %s", (violation_id,))
+        
+        # 3. HAPUS GAMBAR DARI SUPABASE STORAGE
+        image_deletion_success = True
+        if image_url:
+            image_deletion_success = delete_violation_image(image_url)
+        
+        if not image_deletion_success:
+            logging.warning(f"DB row deleted for ID {violation_id}, but image deletion failed for URL: {image_url}")
+
+        # 4. COMMIT TRANSAKSI DATABASE
+        conn.commit()
+
+        # Beri respon sukses
+        return jsonify({
+            "message": f"Report ID {violation_id} successfully deleted from database.",
+            "image_deleted": image_deletion_success
+        }), 200
+
+    except Exception as e:
+        if conn: 
+            conn.rollback() # Rollback jika terjadi error
+        logging.error(f"[REPORT_DELETE API ERROR]: {e}")
+        return jsonify({"error": f"Failed to delete Report Violation. Detail: {str(e)}"}), 500
+    
     finally:
         if cur: cur.close()
         if conn: conn.close()

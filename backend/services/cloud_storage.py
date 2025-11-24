@@ -1,6 +1,7 @@
 # cloud_storage.py
 import datetime
 import uuid
+import re
 from supabase import create_client, Client
 import config
 
@@ -10,6 +11,7 @@ except Exception as e:
     print(f"[Supabase] Gagal membuat koneksi: {e}")
     supabase = None
 
+# --- FUNGSI UNTUK MENAMBAHKAN GAMBAR KE SUPABASE STORAGE ---
 def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str) -> str:
     if supabase is None:
         raise RuntimeError("Supabase client belum diinisialisasi.")
@@ -49,3 +51,44 @@ def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str
     except Exception as e:
         print(f"[Supabase] Gagal upload gambar: {e}")
         raise
+
+# --- FUNGSI UNTUK MENGHAPUS GAMBAR DARI SUPABASE STORAGE ---
+def delete_violation_image(image_url: str) -> bool:
+    """
+    Menghapus file gambar dari Supabase Storage berdasarkan public URL.
+    Mengembalikan True jika penghapusan berhasil atau jika file tidak ditemukan.
+    """
+    if supabase is None:
+        print("[Supabase] ERROR: Supabase client belum diinisialisasi.")
+        return False
+
+    # 1. Ekstrak path yang diperlukan untuk penghapusan
+    match = re.search(r'/public/(.+)', image_url)
+    if not match:
+        print(f"[Supabase] WARNING: Gagal mengekstrak path dari URL: {image_url}. Menganggap URL tidak valid.")
+        return True # Anggap sukses jika URL tidak valid
+
+    storage_path_full = match.group(1) 
+    
+    parts = storage_path_full.split('/', 1)
+    bucket_name = parts[0]
+    path_in_bucket = parts[1] if len(parts) > 1 else None
+
+    if not path_in_bucket or bucket_name != config.SUPABASE_BUCKET:
+        print(f"[Supabase] WARNING: Path tidak lengkap atau bucket mismatch: {storage_path_full}")
+        return True 
+
+    try:
+        res = supabase.storage.from_(bucket_name).remove([path_in_bucket]) 
+
+        if res is not None and len(res) > 0 and 'error' in res[0] and res[0]['error']:
+             # Beberapa error bisa muncul, misalnya permission denied
+             raise RuntimeError(f"Gagal menghapus file: {res[0]['message']}")
+
+        print(f"[Supabase] SUCCESS: File {path_in_bucket} berhasil dihapus.")
+        return True
+
+    except Exception as e:
+        # Tangani error jaringan, otorisasi, atau server Supabase
+        print(f"[Supabase] ERROR menghapus gambar {path_in_bucket}: {e}")
+        return False

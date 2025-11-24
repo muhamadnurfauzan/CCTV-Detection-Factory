@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, FaTrash } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import Pagination from '../components/Pagination';
+import ModalDeleteReport from '../components/ModalDeleteReport';
 
 // --- Helper Modal Preview Gambar ---
 const ImagePreviewModal = ({ imageUrl, onClose }) => {
@@ -51,6 +52,10 @@ export default function Reports() {
     // --- State Modal Preview Image ---
     const [showImageModal, setShowImageModal] = useState(false);
     const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+
+    // --- State Modal Delete Report ---
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [selectedReportData, setSelectedReportData] = useState(null);
 
     // --- Efek 1: Debouncing Search Input ---
     useEffect(() => {
@@ -146,6 +151,17 @@ export default function Reports() {
         setShowImageModal(true);
     };
     
+    // --- Handler Panggil Modal Delete ---
+    const handleDeleteReport = (report) => {
+        setSelectedReportData(report);
+        setShowDeleteModal(true);
+    };
+
+    // --- Handler Konfirmasi Penghapusan (dipanggil dari ModalDeleteReport) ---
+    const handleConfirmDelete = (deletedReportId) => {
+        fetchReports(); 
+    };
+
     // --- Handler Pagination ---
     const handlePageChange = (page) => setCurrentPage(page);
     const handleItemsPerPageChange = (items) => {
@@ -240,6 +256,13 @@ export default function Reports() {
                                             >
                                                 <FaEnvelope className="w-5 h-5" />
                                             </button>
+                                            {/* Tombol Delete */}
+                                            <button
+                                                onClick={() => handleDeleteReport(report)} 
+                                                className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
+                                            >
+                                                <FaTrash className="w-5 h-5" />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -268,6 +291,16 @@ export default function Reports() {
                 />
             )}
             </>}
+
+            {/* NEW: Modal Delete Report */}
+            {showDeleteModal && (
+                <ModalDeleteReport 
+                    open={showDeleteModal}
+                    onClose={() => setShowDeleteModal(false)}
+                    onConfirm={handleConfirmDelete} 
+                    reportData={selectedReportData}
+                />
+            )}
         </div>
     );
 }
