@@ -149,7 +149,7 @@ export default function Users() {
     };
 
     // --- Render ---
-    if (error) return <p className="text-center py-8 text-red-500">{error}</p>;
+    if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">

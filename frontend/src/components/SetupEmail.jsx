@@ -88,8 +88,8 @@ const SetupEmail = () => {
         }
     };
 
-    if (loading) return <p className="text-center p-8">Loading configuration...</p>;
-    if (error) return <p className="text-center p-8 text-red-500">Error: {error}</p>;
+    if (loading) return <p className="text-gray-600 p-6 bg-white shadow rounded-lg text-center">Loading configuration...</p>;
+    if (error) return <p className="text-red-500 p-6 bg-white shadow rounded-lg text-center">Error: {error}</p>;
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md max-w-2xl">
@@ -205,7 +205,7 @@ const SetupEmail = () => {
                 <div className="pt-4">
                     <button
                         type="submit"
-                        disabled={!isEditing} // Tombol submit hanya aktif saat isEditing=true
+                        disabled={!isEditing} 
                         className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition ${!isEditing ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
                     >
                         Save Email Configuration

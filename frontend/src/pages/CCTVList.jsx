@@ -207,7 +207,7 @@ const CCTVList = () => {
 
 
   // --- Render ---
-  if (error) return <p className="text-center py-8 text-red-500">{error}</p>;
+  if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 p-6">
@@ -217,7 +217,7 @@ const CCTVList = () => {
         {view === 'stream' && `Streaming CCTV #${selectedCCTV}`}
         {view === 'violation' && "Violation Configurations"}
         </h2>
-
+        
         {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Data...</p></div>: <>
 
         <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2'>

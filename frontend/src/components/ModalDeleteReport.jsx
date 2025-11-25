@@ -15,20 +15,43 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
 
     setSubmitting(true);
     setError(null);
+    
+    // Deteksi jika ini adalah penghapusan massal (ID dipisahkan koma)
+    const isBatchDelete = String(reportId).includes(', '); 
+    
+    let url = `/api/reports_delete/${reportId}`;
+    let method = 'DELETE';
+    let body = null;
+    
+    if (isBatchDelete) {
+        url = '/api/reports_delete/batch'; // Endpoint baru di Flask
+        const idsArray = String(reportId).split(', ').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+        body = JSON.stringify({ ids: idsArray });
+        // Karena ini batch, kita akan gunakan DELETE method dengan body JSON
+    }
+
     try {
-      // Panggil API DELETE. Sesuaikan URL dengan endpoint Flask Anda.
-      const res = await fetch(`/api/reports_delete/${reportId}`, { 
-        method: 'DELETE'
+      const res = await fetch(url, {
+        method: 'DELETE', // Method DELETE
+        headers: { 'Content-Type': 'application/json' },
+        body: body, // Body hanya berisi IDs untuk batch delete
       });
       
       const data = await res.json();
-
+      
       if (res.ok) {
-        onConfirm(reportId); // Panggil fungsi untuk me-refresh data di Reports.jsx
+        const confirmValue = isBatchDelete ? data.reports_deleted_db : reportId;
+        
+        onConfirm(confirmValue); 
         onClose();
-        showAlert(`Violation Report ID ${reportId} successfully deleted.`, 'success');
+        
+        const successMessage = isBatchDelete 
+            ? `Successfully deleted ${data.reports_deleted_db} reports!` 
+            : `Violation Report ID ${reportId} successfully deleted.`;
+            
+        showAlert(successMessage, 'success');
       } else {
-        const errorMessage = data.error || 'Failed to delete report';
+        const errorMessage = data.error || 'Failed to delete report(s)';
         setError(errorMessage);
         showAlert(`Failed to delete: ${errorMessage}`, 'error');
       }
@@ -50,11 +73,11 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
       </div>
 
       <p className="text-sm text-gray-600 mb-4">
-        Are you sure you want to delete this Violation Report (ID: <strong>{reportId}</strong>)?
+        Are you sure you want to delete {String(reportData?.id).includes(', ') ? `${String(reportData.id).split(', ').length} selected reports` : `this Violation Report (ID: ${reportData?.id})`}?
       </p>
       
       <p className="text-sm text-red-600 mb-6 font-semibold flex items-center gap-2 p-3 bg-red-50 rounded-lg">
-        <FaFileImage className="w-4 h-4" /> This action will also permanently delete the associated image from storage.
+        <FaFileImage className="w-4 h-4" /> This action will also permanently delete the associated image(s) from storage.
       </p>
 
       {/* Detail Ringkas */}

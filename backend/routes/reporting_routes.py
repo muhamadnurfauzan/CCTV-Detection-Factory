@@ -171,6 +171,66 @@ def delete_report(violation_id):
         if cur: cur.close()
         if conn: conn.close()
 
+@reports_bp.route('/reports_delete/batch', methods=['DELETE'])
+def delete_reports_batch():
+    """
+    API untuk menghapus laporan pelanggaran secara massal (batch).
+    Menerima list ID laporan.
+    """
+    data = request.get_json()
+    violation_ids = data.get('ids', [])
+
+    if not violation_ids or not isinstance(violation_ids, list):
+        return jsonify({"error": "Invalid or missing 'ids' list in request body."}), 400
+    
+    conn = None
+    cur = None
+    deleted_count = 0
+    failed_images = 0
+    
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        # Konversi list ID ke tuple untuk query IN (PostgreSQL/SQL)
+        placeholders = ', '.join(['%s'] * len(violation_ids))
+
+        # 1. Ambil semua image_url yang akan dihapus
+        query_select = f"SELECT id, image FROM violation_detection WHERE id IN ({placeholders})"
+        cur.execute(query_select, tuple(violation_ids))
+        reports_to_delete = cur.fetchall()
+
+        # 2. Hapus gambar satu per satu dari Supabase Storage
+        for report_id, image_url in reports_to_delete:
+            if image_url:
+                # delete_violation_image diimpor dari services.cloud_storage
+                if not delete_violation_image(image_url): 
+                    failed_images += 1
+                    logging.warning(f"Failed to delete image for Report ID {report_id} at URL: {image_url}")
+
+        # 3. Hapus data dari database secara massal
+        query_delete = f"DELETE FROM violation_detection WHERE id IN ({placeholders})"
+        cur.execute(query_delete, tuple(violation_ids))
+        deleted_count = cur.rowcount
+        
+        conn.commit()
+
+        return jsonify({
+            "message": f"Successfully deleted {deleted_count} reports.",
+            "reports_requested": len(violation_ids),
+            "reports_deleted_db": deleted_count,
+            "image_deletion_failed": failed_images
+        }), 200
+
+    except Exception as e:
+        if conn: conn.rollback()
+        logging.error(f"[REPORTS_BATCH_DELETE API ERROR]: {e}")
+        return jsonify({"error": f"Failed to perform batch deletion. Detail: {str(e)}"}), 500
+    
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
 @reports_bp.route('/send_email/<int:violation_id>', methods=['POST'])
 def send_email(violation_id):
     """

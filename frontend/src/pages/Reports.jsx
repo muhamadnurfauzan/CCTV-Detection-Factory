@@ -57,6 +57,9 @@ export default function Reports() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [selectedReportData, setSelectedReportData] = useState(null);
 
+    // --- State Multi-Select ---
+    const [selectedReportIds, setSelectedReportIds] = useState([]);
+
     // --- Efek 1: Debouncing Search Input ---
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -145,20 +148,61 @@ export default function Reports() {
         }
     };
 
-    // --- Handler Preview Image Violation ---
-    const handlePreviewImage = (imageUrl) => {
-        setSelectedImageUrl(imageUrl);
-        setShowImageModal(true);
+    // --- Handler Checkbox (Individual) ---
+    const handleSelectReport = (reportId) => {
+        setSelectedReportIds(prevIds => 
+            prevIds.includes(reportId)
+                ? prevIds.filter(id => id !== reportId) 
+                : [...prevIds, reportId] 
+        );
     };
-    
-    // --- Handler Panggil Modal Delete ---
+
+    // --- Handler Checkbox (Pilih Semua) ---
+    const handleSelectAll = () => {
+        if (selectedReportIds.length === reports.length) {
+            // Jika semua sudah dipilih di halaman ini, batalkan semua
+            setSelectedReportIds([]);
+        } else {
+            // Pilih semua ID di halaman saat ini
+            const allIds = reports.map(report => report.id);
+            setSelectedReportIds(allIds);
+        }
+    };
+
+    // --- Handler Panggil Modal Delete (Tunggal/Massal) ---
     const handleDeleteReport = (report) => {
         setSelectedReportData(report);
         setShowDeleteModal(true);
     };
 
+    // --- Handler Delete Massal (Memanggil Modal) ---
+    const handleDeleteSelected = () => {
+        if (selectedReportIds.length === 0) return;
+
+        // Data ringkasan untuk modal
+        const isBatch = selectedReportIds.length > 1; // Jika lebih dari 1 adalah Batch Delete
+        
+        const reportDataForModal = {
+            // Menggunakan string koma untuk menandakan ini adalah aksi massal
+            id: selectedReportIds.join(', '), 
+            cctv_name: isBatch ? `Total: ${selectedReportIds.length} Reports Selected` : 'Single Report Selected',
+            violation_name: isBatch ? 'BATCH DELETE' : selectedReportIds[0],
+            timestamp: new Date().toISOString(),
+        };
+
+        setSelectedReportData(reportDataForModal);
+        setShowDeleteModal(true);
+    };
+
+    // --- Handler Preview Image Violation ---
+    const handlePreviewImage = (imageUrl) => {
+        setSelectedImageUrl(imageUrl);
+        setShowImageModal(true);
+    };
+
     // --- Handler Konfirmasi Penghapusan (dipanggil dari ModalDeleteReport) ---
     const handleConfirmDelete = (deletedReportId) => {
+        setSelectedReportIds([]);
         fetchReports(); 
     };
 
@@ -170,7 +214,7 @@ export default function Reports() {
     };
     
     // --- Render ---
-    if (error) return <p className="text-center py-8 text-red-500">{error}</p>;
+    if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
@@ -180,8 +224,8 @@ export default function Reports() {
 
             <>
             {/* Filter dan Search Bar */}
-            <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
-                <div className="flex space-x-3">
+            <div className="grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
+                <div className="flex justify-start">
                     {/* Tombol Filter (Sort Order) */}
                     <button
                         onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
@@ -193,19 +237,39 @@ export default function Reports() {
                     </button>
                 </div>
 
-                {/* Search Bar */}
-                <div className="flex items-center relative w-full max-w-sm">
-                    <input
-                        type="text"
-                        placeholder="Type CCTV Name..."
-                        value={searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setCurrentPage(1); 
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
-                    />
-                    <FaSearch className="absolute left-3 text-gray-400 w-4 h-4" />
+                <div className='flex items-center justify-end gap-2'>
+                    {/* Delete All Button */}
+                    <div className="flex">
+                        <button
+                            onClick={handleDeleteSelected}
+                            disabled={selectedReportIds.length < 2} 
+                            className={`
+                            flex items-center gap-2 px-3 py-2 text-white rounded-lg // Always applied classes
+                            ${selectedReportIds.length >= 2 
+                                ? 'bg-red-600 hover:bg-red-700 transition'
+                                : 'bg-gray-400 cursor-not-allowed'          
+                            }
+                            `}
+                            title={`Delete ${selectedReportIds.length} selected reports`}
+                        >
+                            <FaTrash className='h-4 w-4'/>Del Selected ({selectedReportIds.length})
+                        </button>
+                    </div>
+                    
+                    {/* Search Bar */}
+                    <div className="flex items-center relative w-full max-w-sm">
+                        <input
+                            type="text"
+                            placeholder="Type CCTV Name..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setCurrentPage(1); 
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
+                        />
+                        <FaSearch className="absolute left-3 text-gray-400 w-4 h-4" />
+                    </div>
                 </div>
             </div>
 
@@ -214,6 +278,15 @@ export default function Reports() {
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-indigo-200 text-center">
                         <tr>
+                            <th className="p-2 text-indigo-800 border-r w-10">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedReportIds.length > 0 && selectedReportIds.length === reports.length}
+                                    onChange={handleSelectAll} 
+                                    title="Select All on this page"
+                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </th>
                             <th className="p-2 text-indigo-800 border-r">No</th>
                             <th className="p-2 text-indigo-800 border-r">CCTV</th>
                             <th className="p-2 text-indigo-800 border-r">Violation</th>
@@ -231,6 +304,14 @@ export default function Reports() {
                         ) : (
                             reports.map((report, i) => (
                                 <tr key={report.id} className="hover:bg-gray-50 transition">
+                                    <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedReportIds.includes(report.id)}
+                                            onChange={() => handleSelectReport(report.id)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </td>
                                     <td className="border-r p-2 text-center text-gray-600 whitespace-nowrap">
                                         {(currentPage - 1) * itemsPerPage + i + 1}
                                     </td>

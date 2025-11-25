@@ -175,7 +175,7 @@ const ImagesShow = () => {
   // ---- RENDER ----
   if (error) {
     return (
-      <div className="p-6 text-red-500 text-center">
+      <div className="text-red-600 p-6 bg-white shadow rounded-lg text-center">
         <p className="font-bold">Error:</p>
         <p>{error}</p>
         <button onClick={() => fetchData(currentPage)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded">
