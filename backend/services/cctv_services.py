@@ -1,4 +1,5 @@
 import json
+import logging
 import numpy as np
 from psycopg2.extras import RealDictCursor 
 import config
@@ -45,7 +46,7 @@ def load_roi_from_json(area_field):
                 })
         return regions, width, height
     except Exception as e:
-        print(f"[ROI LOAD ERROR from Supabase]: {e}")
+        logging.error(f"[ROI LOAD ERROR from Supabase]: {e}")
         return [], 0, 0
     
 # --- Muat konfigurasi semua CCTV aktif ---
@@ -68,7 +69,7 @@ def load_all_cctv_configs():
                 "enabled": cctv.get("enabled", False)
             }
     except Exception as e:
-        print(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")
+        logging.error(f"[ERROR] Gagal memuat konfigurasi CCTV: {e}")
     return configs
 
 def load_violation_filters():
@@ -86,11 +87,11 @@ def load_violation_filters():
     conn.close()
     
     state.CCTV_ALLOWED_VIOLATIONS = filters
-    print(f"[VIOLATION FILTER] Loaded filters for {len(filters)} CCTVs")
+    logging.info(f"[VIOLATION FILTER] Loaded filters for {len(filters)} CCTVs")
     
 # --- Fungsi baru untuk merefresh cache konfigurasi CCTV secara penuh ---
 def refresh_all_cctv_configs():
-    print("[CONFIG] Refreshing all CCTV configurations from DB...")
+    logging.info("[CONFIG] Refreshing all CCTV configurations from DB...")
     configs = load_all_cctv_configs()
     state.cctv_configs.clear()
     state.cctv_configs.update(configs)
@@ -98,4 +99,4 @@ def refresh_all_cctv_configs():
     # TAMBAHAN: Refresh violation filter juga
     load_violation_filters()
     
-    print(f"[CONFIG] Loaded {len(state.cctv_configs)} active CCTV configs.")
+    logging.info(f"[CONFIG] Loaded {len(state.cctv_configs)} active CCTV configs.")

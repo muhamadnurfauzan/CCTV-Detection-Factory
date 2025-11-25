@@ -12,6 +12,8 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const sseClients = new Set();
+
 // === LOAD ENV DARI backend/.env ===
 dotenv.config({
   path: path.resolve(__dirname, '../backend/.env'),
@@ -40,7 +42,6 @@ app.use(bodyParser.json({
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 // 1. API ROUTES (SPESIFIK DULU)
-
 // === API: Get violation images with signed URLs + cache + safe date parsing ===
 app.get('/supabase-api/violations', async (req, res) => {
   const { cctv, year, month, day, page = 1, limit = 20 } = req.query;
@@ -220,6 +221,54 @@ app.post('/invalidate-cache', (req, res) => {
   cache.flushAll();
   console.log('[CACHE] All flushed');
   res.json({ success: true });
+});
+
+// Subscribe Supabase Realtime — HARUS DI ATAS app.listen() !!!
+const realtimeChannel = supabase
+  .channel('violation-broadcast')
+  .on('postgres_changes', {
+    event: 'INSERT',
+    schema: 'public',
+    table: 'violation_detection'
+  }, async (payload) => {
+    console.log('REALTIME INSERT TERDETEKSI! ID:', payload.new.id); // ← INI HARUS MUNCUL DI LOG
+
+    let formatted = {
+      id: payload.new.id,
+      cctv_name: `CCTV ${payload.new.id_cctv || 'Unknown'}`,
+      violation_name: 'no-vest',
+      image_url: payload.new.image || '',
+      timestamp: payload.new.timestamp || new Date().toISOString(),
+    };
+
+    // Broadcast ke semua client
+    const message = `data: ${JSON.stringify(formatted)}\n\n`;
+    console.log('BROADCASTING TO', sseClients.size, 'clients');
+    sseClients.forEach(client => {
+      client.res.write(message);
+    });
+  })
+  .subscribe((status) => {
+    console.log('Supabase Realtime Status:', status); // ← INI HARUS MUNCUL SAAT SERVER START
+  });
+
+// SSE Endpoint (tetap sama)
+app.get('/api/reports/sse', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  res.write('event: connected\ndata: SSE connected\n\n');
+
+  const client = { id: Date.now(), res };
+  sseClients.add(client);
+
+  req.on('close', () => {
+    console.log('Client disconnected');
+    sseClients.delete(client);
+  });
 });
 
 // 2. PROXY KE PYTHON BACKEND

@@ -1,4 +1,5 @@
 # backend/utils/geometry.py
+import logging
 from db.db_config import get_connection
 from shared_state import state
 
@@ -46,7 +47,7 @@ def reset_table_sequence(table_name):
         return True
     except Exception as e:
         # Pengecualian: sequence mungkin tidak ada jika tabel tidak punya SERIAL id
-        print(f"[DB INIT] Gagal me-reset sequence ID untuk {table_name}: {e}")
+        logging.error(f"[DB INIT] Gagal me-reset sequence ID untuk {table_name}: {e}")
         return False
     finally:
         if cur: cur.close()

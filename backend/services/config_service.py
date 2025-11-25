@@ -51,9 +51,9 @@ def load_object_classes(force_refresh=False):
             cur.close(); conn.close()
             state._CACHE_TIMESTAMP = now
             if not state.OBJECT_CLASS_CACHE:
-                print("[CACHE] WARNING: Object classes kosong dari DB!")
+                logging.warning("[CACHE] WARNING: Object classes kosong dari DB!")
         except Exception as e:
-            print(f"[CACHE] ERROR: Gagal load object_classes: {e}")
+            logging.error(f"[CACHE] ERROR: Gagal load object_classes: {e}")
 
 # --- Fetch jenis violation yang aktif dari CCTV secara custom ---
 def get_active_violation_ids_for_cctv(cctv_id):

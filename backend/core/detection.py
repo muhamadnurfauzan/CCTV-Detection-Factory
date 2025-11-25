@@ -129,12 +129,7 @@ def process_thread(cctv_id, frame_queue, stop_event):
     json_width = cctv_cfg.get("json_width", CCTV_RATIO[0]) 
     json_height = cctv_cfg.get("json_height", CCTV_RATIO[1])
 
-    # Variabel untuk FPS
-    last_frame_time = time.time()
-
     while not stop_event.is_set():
-        current_time = time.time()
-
         # PROSES FRAME (SATU-SATUNYA YANG WRITE LOCK)
         if frame_queue:
             frame = frame_queue.popleft()
@@ -156,16 +151,6 @@ def process_thread(cctv_id, frame_queue, stop_event):
                 pts = scaled_points.astype(np.int32).reshape((-1, 1, 2))
                 
                 cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
-
-            # --- Hitung FPS ---
-            fps = 1.0 / max(0.1, current_time - last_frame_time)
-            last_frame_time = current_time
-
-            # --- Tanda LIVE + FPS di frame (hijau, non-locking) ---
-            # cv2.putText(annotated, "LIVE", (10, 30),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-            # cv2.putText(annotated, f"{fps:.1f} FPS", (10, 60),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             # --- Ambil active IDs ---
             active_ids = state.ACTIVE_VIOLATION_CACHE.get(cctv_id, [])
@@ -210,11 +195,6 @@ def process_thread(cctv_id, frame_queue, stop_event):
                         if not class_info or not class_info["is_violation"]:
                             continue
                         if class_info["id"] not in active_ids:
-                            continue
-
-                        cls_id_int = int(cls_id)
-                        allowed_classes = state.CCTV_ALLOWED_VIOLATIONS.get(cctv_id, set())
-                        if allowed_classes and cls_id_int not in allowed_classes:
                             continue
 
                         process_detection(
@@ -315,8 +295,20 @@ def _start_capture_wrapper(cctv_id):
     logging.info(f"[{cctv_id}] Core detection threads started successfully via wrapper.")
 
 def start_detection_for_cctv(cctv_id: int, full_detection: bool = True):
-    stop_detection_for_cctv(cctv_id)
-    time.sleep(0.5)
+    current = state.detection_threads.get(cctv_id, {})
+    desired_mode = 'full' if full_detection else 'stream_only'
+    current_mode = current.get('mode')
+
+    # HANYA restart jika mode berubah atau thread mati
+    if current_mode == desired_mode and current.get('threads'):
+        # Sudah sesuai, tidak perlu apa-apa
+        logging.info(f"[SCHEDULER] CCTV {cctv_id} sudah di mode {desired_mode}, skip restart.")
+        return
+
+    # Baru stop kalau memang perlu ganti mode
+    if cctv_id in state.detection_threads:
+        stop_detection_for_cctv(cctv_id)
+        time.sleep(0.5)
 
     stop_event = Event()
     state.detection_threads[cctv_id] = {
@@ -363,37 +355,3 @@ def stop_all_detections():
     
     # Tunggu sebentar (opsional) agar thread memiliki waktu untuk berhenti
     time.sleep(0.5)
-
-def start_all_detections():
-    """Memulai semua thread deteksi untuk CCTV aktif saat startup."""
-    threads = []
-    
-    # Bersihkan thread lama jika ada
-    # Lakukan stop thread yang masih berjalan jika ada, meskipun ini dipanggil saat startup
-    stop_all_detections() 
-    
-    for cctv_id, cctv_config in state.cctv_configs.items():
-        if cctv_config['enabled']:
-            # --- TAMBAHAN BARU ---
-            stop_event = Event() # Buat sinyal penghentian
-            state.detection_threads[cctv_id] = {'stop_event': stop_event, 'threads': []}
-            # --------------------
-
-            # --- Gunakan placeholder dengan timestamp ---
-            connecting = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(connecting, "Connecting...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            # PASTIKAN INI HANYA MENYIMPAN TUPLE (FRAME, TIMESTAMP)
-            with state.ANNOTATED_FRAME_LOCK:
-                state.annotated_frames[cctv_id] = (connecting, time.time())
-
-            frame_queue = deque(maxlen=QUEUE_SIZE)
-            
-            t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue, stop_event), daemon=True) # <-- Kirim stop_event
-            t2 = Thread(target=process_thread, args=(cctv_id, frame_queue, stop_event), daemon=True) # <-- Kirim stop_event
-            
-            t1.start(); t2.start()
-            
-            state.detection_threads[cctv_id]['threads'].extend([t1, t2])
-            threads.append((t1, t2))
-            
-    return threads

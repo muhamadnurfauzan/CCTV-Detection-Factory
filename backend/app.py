@@ -51,11 +51,6 @@ if __name__ == "__main__":
     config_service.load_object_classes()
     config_service.load_violation_pairs() 
 
-    # Jalankan deteksi multi-CCTV 
-    threads = detection.start_all_detections()
-    # Log di sini sudah termasuk thread scheduler
-    logging.info(f"Started {len(threads)} core/scheduler threads for CCTV management.")
-
     # Jalankan scheduler
     Thread(target=scheduler.scheduler_thread, daemon=True).start()
     logging.info("DB/Global Scheduler thread started.")

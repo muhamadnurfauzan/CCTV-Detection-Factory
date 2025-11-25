@@ -1,5 +1,6 @@
 # cloud_storage.py
 import datetime
+import logging
 import uuid
 import re
 from supabase import create_client, Client
@@ -8,7 +9,7 @@ import config
 try:
     supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
 except Exception as e:
-    print(f"[Supabase] Gagal membuat koneksi: {e}")
+    logging.warning(f"[Supabase] Gagal membuat koneksi: {e}")
     supabase = None
 
 # --- FUNGSI UNTUK MENAMBAHKAN GAMBAR KE SUPABASE STORAGE ---
@@ -49,7 +50,7 @@ def upload_violation_image(image_bytes: bytes, cctv_id: int, violation_type: str
         return public_url
 
     except Exception as e:
-        print(f"[Supabase] Gagal upload gambar: {e}")
+        logging.error(f"[Supabase] Gagal upload gambar: {e}")
         raise
 
 # --- FUNGSI UNTUK MENGHAPUS GAMBAR DARI SUPABASE STORAGE ---
@@ -59,13 +60,13 @@ def delete_violation_image(image_url: str) -> bool:
     Mengembalikan True jika penghapusan berhasil atau jika file tidak ditemukan.
     """
     if supabase is None:
-        print("[Supabase] ERROR: Supabase client belum diinisialisasi.")
+        logging.error("[Supabase] ERROR: Supabase client belum diinisialisasi.")
         return False
 
     # 1. Ekstrak path yang diperlukan untuk penghapusan
     match = re.search(r'/public/(.+)', image_url)
     if not match:
-        print(f"[Supabase] WARNING: Gagal mengekstrak path dari URL: {image_url}. Menganggap URL tidak valid.")
+        logging.warning(f"[Supabase] WARNING: Gagal mengekstrak path dari URL: {image_url}. Menganggap URL tidak valid.")
         return True # Anggap sukses jika URL tidak valid
 
     storage_path_full = match.group(1) 
@@ -75,7 +76,7 @@ def delete_violation_image(image_url: str) -> bool:
     path_in_bucket = parts[1] if len(parts) > 1 else None
 
     if not path_in_bucket or bucket_name != config.SUPABASE_BUCKET:
-        print(f"[Supabase] WARNING: Path tidak lengkap atau bucket mismatch: {storage_path_full}")
+        logging.warning(f"[Supabase] WARNING: Path tidak lengkap atau bucket mismatch: {storage_path_full}")
         return True 
 
     try:
@@ -85,10 +86,10 @@ def delete_violation_image(image_url: str) -> bool:
              # Beberapa error bisa muncul, misalnya permission denied
              raise RuntimeError(f"Gagal menghapus file: {res[0]['message']}")
 
-        print(f"[Supabase] SUCCESS: File {path_in_bucket} berhasil dihapus.")
+        logging.info(f"[Supabase] SUCCESS: File {path_in_bucket} berhasil dihapus.")
         return True
 
     except Exception as e:
         # Tangani error jaringan, otorisasi, atau server Supabase
-        print(f"[Supabase] ERROR menghapus gambar {path_in_bucket}: {e}")
+        logging.error(f"[Supabase] ERROR menghapus gambar {path_in_bucket}: {e}")
         return False

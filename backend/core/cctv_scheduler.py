@@ -74,23 +74,32 @@ def get_active_cctv_ids_now() -> Set[int]:
     return active_ids
 
 def refresh_scheduler_state():
-    active_now = get_active_cctv_ids_now()  # ← ini harus return set kosong jika no schedule
+    active_now = get_active_cctv_ids_now()
 
     for cctv_id, config in state.cctv_configs.items():
         enabled = config.get('enabled', False)
+        thread_info = state.detection_threads.get(cctv_id, {})
+        current_mode = thread_info.get('mode')  # bisa None
+        should_have_yolo = cctv_id in active_now
+        
+        # 3. CCTV disabled → matikan semua
         if not enabled:
             if cctv_id in state.detection_threads:
+                logging.info(f"[SCHEDULER] CCTV {cctv_id} → Disabled, stopping all threads.")
                 stop_detection_for_cctv(cctv_id)
             continue
 
-        should_have_yolo = cctv_id in active_now
-        current_mode = state.detection_threads.get(cctv_id, {}).get('mode')
+        # Tentukan mode yang diinginkan
+        desired_mode = 'full' if should_have_yolo else 'stream_only'
 
-        if should_have_yolo and current_mode != 'full':
-            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Streaming ON + YOLO ON")
-            start_detection_for_cctv(cctv_id, full_detection=True)
-        elif not should_have_yolo and current_mode == 'full':
-            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Streaming ON + YOLO OFF")
-            start_detection_for_cctv(cctv_id, full_detection=False)
-        elif not should_have_yolo and current_mode != 'stream_only':
-            start_detection_for_cctv(cctv_id, full_detection=False)
+        # Hanya lakukan sesuatu jika:
+        # - Belum ada thread sama sekali, ATAU
+        # - Mode saat ini berbeda dari yang diinginkan
+        if cctv_id not in state.detection_threads or current_mode != desired_mode:
+            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Switching to {desired_mode.upper()} "
+                         f"(current: {current_mode})")
+            start_detection_for_cctv(cctv_id, full_detection=should_have_yolo)
+        else:
+            # Sudah sesuai, diam saja
+            pass
+            # logging.debug(f"[SCHEDULER] CCTV {cctv_id} already in correct mode: {desired_mode}")

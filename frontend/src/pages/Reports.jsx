@@ -77,6 +77,8 @@ export default function Reports() {
         setError(null);
         
         if (debouncedSearchQuery.length < 3 && debouncedSearchQuery.length > 0) {
+            // Optional: Tampilkan pesan "Search minimal 3 karakter"
+            return;
         }
 
         try {
@@ -108,23 +110,27 @@ export default function Reports() {
         fetchReports();
     }, [fetchReports]); 
 
-    // --- NEW: Polling Logic (Refresh data setiap 15 detik) ---
+    // --- Websocket fetching data realtime  ---
     useEffect(() => {
-        // Definisikan interval polling
-        const POLLING_INTERVAL = 15000; 
+        const eventSource = new EventSource('/api/reports/sse');
 
-        const intervalId = setInterval(() => {
-            if (!loading) {
-                fetchReports(); 
-                console.log('Reports Polling: Data refreshed.');
-            }
-        }, POLLING_INTERVAL);
-
-        // Cleanup function
-        return () => {
-            clearInterval(intervalId);
+        eventSource.onmessage = (event) => {
+            const newReport = JSON.parse(event.data);
+            setReports(prev => {
+            if (prev.some(r => r.id === newReport.id)) return prev;
+            return [newReport, ...prev];
+            });
+            setTotalItems(prev => prev + 1);
+            showAlert('New violation detected!', 'success');
         };
-    }, [fetchReports, loading]);
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            setTimeout(() => new EventSource('/api/reports/sse'), 3000);
+        };
+
+        return () => eventSource.close();
+    }, [showAlert]);
 
     // --- Handler Aksi ---
     // --- Handler Kirim Email ---
@@ -252,7 +258,7 @@ export default function Reports() {
                             `}
                             title={`Delete ${selectedReportIds.length} selected reports`}
                         >
-                            <FaTrash className='h-4 w-4'/>Del Selected ({selectedReportIds.length})
+                            <FaTrash className='h-4 w-4'/>({selectedReportIds.length})
                         </button>
                     </div>
                     

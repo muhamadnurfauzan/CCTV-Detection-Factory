@@ -87,12 +87,12 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     
     # Cek ROI
     if not any(point_in_polygon(center, r["points"]) for r in roi_regions):
-        print(f"[VIOLATION] SKIP → {class_name} di luar ROI")
+        logging.warning(f"[VIOLATION] SKIP → {class_name} di luar ROI")
         return
 
     # Cek Confidence
     if conf < CONFIDENCE_THRESHOLD:
-        print(f"[VIOLATION] SKIP → Confidence {conf:.2f} < {CONFIDENCE_THRESHOLD}")
+        logging.warning(f"[VIOLATION] SKIP → Confidence {conf:.2f} < {CONFIDENCE_THRESHOLD}")
         return
 
     # Cooldown Check
@@ -100,7 +100,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     data = tracked_violations.setdefault(track_id, {"last_times": {}})
     last_time = data["last_times"].get(class_name, 0)
     if now - last_time < COOLDOWN:
-        print(f"[VIOLATION] SKIP → Cooldown aktif ({now - last_time:.1f}s)")
+        logging.warning(f"[VIOLATION] SKIP → Cooldown aktif ({now - last_time:.1f}s)")
         return
     
     # --- 2. Crop, Resize, Polaroid ---
@@ -114,7 +114,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     crop = frame[y1e:y2e, x1e:x2e]
 
     if crop.size == 0:
-        print(f"[VIOLATION] SKIP → Crop kosong")
+        logging.warning(f"[VIOLATION] SKIP → Crop kosong")
         return
 
     # Resize jika terlalu kecil
@@ -141,7 +141,7 @@ def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, t
     # Encode ke JPEG
     success, buffer = cv2.imencode(".jpg", polaroid, [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not success:
-        print(f"[CCTV {cctv_id}] GAGAL → Encode gambar gagal")
+        logging.error(f"[CCTV {cctv_id}] GAGAL → Encode gambar gagal")
         return
     image_bytes = buffer.tobytes()
 
