@@ -207,8 +207,6 @@ const CCTVList = () => {
 
 
   // --- Render ---
-  if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
-
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 p-6">
         {/* Header */}
@@ -217,19 +215,23 @@ const CCTVList = () => {
         {view === 'stream' && `Streaming CCTV #${selectedCCTV}`}
         {view === 'violation' && "Violation Configurations"}
         </h2>
-        
-        {(loading) ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Data...</p></div>: <>
 
         <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2'>
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
                 <div className="flex justify-start" >
                     <button
-                        onClick={handleBack}
-                        title="Back to CCTV List"
-                        className="flex items-center gap-2 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                      disabled={error || currentItems.length === 0}
+                      onClick={handleBack}
+                      title="Back to CCTV List"
+                      className={`
+                            flex items-center gap-2 p-3 text-white rounded-lg
+                            ${error || currentItems.length === 0
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-indigo-600 hover:bg-indigo-700 transition'}
+                            `}
                     >
-                        <FaArrowLeft className='h-4 w-4'/>
+                      <FaArrowLeft className='h-4 w-4'/>
                     </button>
                 </div>
             )}
@@ -240,15 +242,27 @@ const CCTVList = () => {
                   {view === 'table' && (
                   <div className='flex gap-2'>
                       <button
-                      onClick={handleOpenViolation}
-                      className="flex items-center gap-2 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-                      title="Configure Violations"
+                        disabled={error || currentItems.length === 0}
+                        onClick={handleOpenViolation}
+                        className={`
+                            flex items-center gap-2 p-3 text-white rounded-lg
+                            ${error || currentItems.length === 0
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-indigo-600 hover:bg-indigo-700 transition'}
+                            `}
+                        title="Configure Violations"
                       >
-                      <FaSlidersH className='h-4 w-4'/>
+                        <FaSlidersH className='h-4 w-4'/>
                       </button>
                       <button
+                        disabled={error || currentItems.length === 0}
                         onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                        className={`
+                            flex items-center gap-2 p-3 text-white rounded-lg
+                            ${error || currentItems.length === 0
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-green-600 hover:bg-green-700 transition'}
+                            `}
                         title="Add New CCTV"
                       >
                         <FaPlus className='h-4 w-4'/>
@@ -257,11 +271,12 @@ const CCTVList = () => {
                   )}
                   <div className='flex items-center relative w-full max-w-sm'>
                     <input
-                        type="text"
-                        placeholder="Type Name, IP, or Location..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
+                      disabled={error || currentItems.length === 0}
+                      type="text"
+                      placeholder="Type Name, IP, or Location..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 pl-10"
                     />
                     <FaSearch className="absolute left-3 text-gray-400 w-4 h-4" />
                   </div>
@@ -270,49 +285,54 @@ const CCTVList = () => {
         </div>
 
         {/* Main Content */}
-        {view !== 'stream' ? (
-          <>
-            <div className='bg-white rounded-lg shadow-lg overflow-x-auto'>
-              {view === 'table' && (
-                  <CCTVTable
-                      cctvs={currentItems} 
-                      onSelect={handleSelect}
-                      onEdit={handleEdit}     
-                      onDelete={handleDelete}
-                      startNo={indexOfFirstItem + 1} 
+        {loading ? (
+          <p className="flex justify-center w-full py-6 bg-white rounded-xl shadow-lg text-gray-600 h-48 items-center">Loading content...</p>
+        ) : (
+        <>
+          {view !== 'stream' ? (
+            <>
+              <div className='bg-white rounded-lg shadow-lg overflow-x-auto'>
+                {view === 'table' && (
+                    <CCTVTable
+                        cctvs={currentItems} 
+                        onSelect={handleSelect}
+                        onEdit={handleEdit}     
+                        onDelete={handleDelete}
+                        startNo={indexOfFirstItem + 1} 
+                    />
+                )}
+                {view === 'violation' && (
+                    <CCTVViolation
+                        cctvs={currentItems} 
+                        violations={violations}
+                        configs={configs}
+                        onToggle={handleToggleViolation}
+                        startNo={indexOfFirstItem + 1} 
+                    />
+                )}
+              </div>
+              {/* Komponen Pagination */}
+              {(view === 'table' || view === 'violation') && (
+                  <Pagination
+                      totalItems={filteredCctvs.length}
+                      itemsPerPage={itemsPerPage}
+                      currentPage={currentPage}
+                      onPageChange={handlePageChange}
+                      onItemsPerPageChange={handleItemsPerPageChange}
                   />
               )}
-              {view === 'violation' && (
-                  <CCTVViolation
-                      cctvs={currentItems} 
-                      violations={violations}
-                      configs={configs}
-                      onToggle={handleToggleViolation}
-                      startNo={indexOfFirstItem + 1} 
-                  />
-              )}
-            </div>
-            {/* Komponen Pagination */}
-            {(view === 'table' || view === 'violation') && (
-                <Pagination
-                    totalItems={filteredCctvs.length}
-                    itemsPerPage={itemsPerPage}
-                    currentPage={currentPage}
-                    onPageChange={handlePageChange}
-                    onItemsPerPageChange={handleItemsPerPageChange}
-                />
-            )}
-          </>
-        )
-         : selectedCCTV && (
-            <CCTVStream cctvId={selectedCCTV} />
-         )}
-      
+            </>
+          )
+          : selectedCCTV && (
+              <CCTVStream cctvId={selectedCCTV} />
+          )}
+        </>)}
+
       {/* MODAL */}
       <ModalAddCCTV
-          open={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSuccess={handleAddSuccess}
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
       />
       <ModalEditCCTV
         open={showEditModal}
@@ -326,7 +346,6 @@ const CCTVList = () => {
         onConfirm={handleDeleteConfirm}
         cctvId={showDeleteModal}
       />
-      </>}
     </div>
   );
 };

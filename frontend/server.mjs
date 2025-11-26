@@ -237,7 +237,7 @@ const realtimeChannel = supabase
   .subscribe();
 
 // SSE Endpoint
-app.get('/api/reports/sse', (req, res) => {
+app.get('/api/sse', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',

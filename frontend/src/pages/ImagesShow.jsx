@@ -188,8 +188,6 @@ const ImagesShow = () => {
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
       <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Images</h2>
-      {loading ? <div className="p-4 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Violation Images...</p></div> : <>
-
       <p className="mb-1 text-gray-600">
         {options
           ? `Choose ${options.options === 'cctv' ? 'CCTV' : options.options === 'year' ? 'Year' : options.options === 'month' ? 'Month' : 'Date'}`
@@ -210,105 +208,110 @@ const ImagesShow = () => {
         ))}
       </div>
 
-      {/* HALAMAN OPSI */}
-      {options && (
-        <div className="max-w-4xl lg:max-w-full mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {options.data.map(item => {
-              const val = typeof item === 'object' ? (item.id ?? item) : item;
-              const lbl = typeof item === 'object' ? (item.name ?? val) : item;
-              return (
-                <Link
-                  key={val}
-                  to={getNextPath(val, options.options)}
-                  className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg items-center"
-                >
-                  {lbl}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* HALAMAN GAMBAR */}
-      {!options && (
-        <>
-          {images.length === 0 && !loading && (
-            <p className="text-center text-gray-500">No pictures can be found.</p>
-          )}
-
-          {images.length > 0 && (
-            <>
-              <div className="masonry-grid">
-                {images.map((img, idx) => (
-                  <div
-                    key={img.id ?? idx}
-                    className="masonry-item cursor-pointer"
-                    onClick={() => setSelectedImage(img)}
+      {loading ? (
+        <p className="flex justify-center w-full py-6 bg-white rounded-xl shadow-lg text-gray-600 items-center">Loading images...</p>
+      ) : (<>
+        {/* HALAMAN OPSI */}
+        {options && (
+          <div className="max-w-4xl lg:max-w-full mx-auto">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {options.data.map(item => {
+                const val = typeof item === 'object' ? (item.id ?? item) : item;
+                const lbl = typeof item === 'object' ? (item.name ?? val) : item;
+                return (
+                  <Link
+                    key={val}
+                    to={getNextPath(val, options.options)}
+                    className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg items-center"
                   >
-                    <div className="masonry-img-container">
-                      <img
-                        src={img.signedUrl}
-                        alt={img.violation}
-                        className="masonry-img"
-                        loading="lazy"
-                      />
+                    {lbl}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        {/* HALAMAN GAMBAR */}
+        {!options && (
+          <>
+            {images.length === 0 && !loading && (
+              <p className="text-center text-gray-500">No pictures can be found.</p>
+            )}
+
+            {images.length > 0 && (
+              <>
+                <div className="masonry-grid">
+                  {images.map((img, idx) => (
+                    <div
+                      key={img.id ?? idx}
+                      className="masonry-item cursor-pointer"
+                      onClick={() => setSelectedImage(img)}
+                    >
+                      <div className="masonry-img-container">
+                        <img
+                          src={img.signedUrl}
+                          alt={img.violation}
+                          className="masonry-img"
+                          loading="lazy"
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* PAGINATION */}
-              <div className="flex justify-center items-center gap-4 mt-8">
-                <button
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  <FaAngleLeft className='h-5 w-5'/>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Page</span>
-                  <span className="font-semibold text-lg">{currentPage}</span>
+                  ))}
                 </div>
 
-                <button
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={!hasMore}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  <FaAngleRight className='h-5 w-5'/>
-                </button>
-              </div>
-            </>
-          )}
+                {/* PAGINATION */}
+                <div className="flex justify-center items-center gap-4 mt-8">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <FaAngleLeft className='h-5 w-5'/>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Page</span>
+                    <span className="font-semibold text-lg">{currentPage}</span>
+                  </div>
+
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={!hasMore}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <FaAngleRight className='h-5 w-5'/>
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+        
+        {/* MODAL */}
+        {selectedImage && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center"
+            onClick={() => setSelectedImage(null)}
+          >
+            <div 
+              className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                  src={selectedImage.signedUrl}
+                  alt={selectedImage.violation || 'Violation'}
+                  className="max-w-full max-h-[85vh] object-contain"
+                />
+            </div>
+            {/* INFO DI BAWAH */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
+              <p className='text-base'>Clik here to close the image.</p>
+            </div>
+          </div>
+        )}
         </>
       )}
-      {/* MODAL */}
-      {selectedImage && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center"
-          onClick={() => setSelectedImage(null)}
-        >
-          <div 
-            className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <img
-                src={selectedImage.signedUrl}
-                alt={selectedImage.violation || 'Violation'}
-                className="max-w-full max-h-[85vh] object-contain"
-              />
-          </div>
-          {/* INFO DI BAWAH */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
-            <p className='text-base'>Clik here to close the image.</p>
-          </div>
-        </div>
-      )}
-      </>}
     </div>
   );
 };

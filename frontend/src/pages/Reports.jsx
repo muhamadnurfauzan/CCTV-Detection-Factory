@@ -112,7 +112,7 @@ export default function Reports() {
 
     // --- Websocket fetching data realtime  ---
     useEffect(() => {
-        const eventSource = new EventSource('/api/reports/sse');
+        const eventSource = new EventSource('/api/sse');
 
         eventSource.onmessage = () => {
             setCurrentPage(1);
@@ -216,22 +216,22 @@ export default function Reports() {
     };
     
     // --- Render ---
-    if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
-
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
             <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Reports</h2>
-            
-            {(loading) ? <div className="p-6 flex items-center justify-center h-screen bg-gray-100"><p className="text-xl font-semibold text-gray-700">Loading Reports...</p></div> :
-
-            <>
             {/* Filter dan Search Bar */}
             <div className="grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
                 <div className="flex justify-start">
                     {/* Tombol Filter (Sort Order) */}
                     <button
+                        disabled={error}
                         onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                        className="flex items-center gap-2 p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                        className={`
+                            flex items-center gap-2 p-3  text-white rounded-lg
+                            ${error 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-indigo-600 hover:bg-indigo-700 transition'}
+                            `}
                         title={`Sort by Timestamp: ${sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}`}
                     >
                         <FaFilter className="w-4 h-4" />
@@ -244,9 +244,9 @@ export default function Reports() {
                     <div className="flex">
                         <button
                             onClick={handleDeleteSelected}
-                            disabled={selectedReportIds.length < 2} 
+                            disabled={selectedReportIds.length < 2 || error} 
                             className={`
-                            flex items-center gap-2 px-3 py-2 text-white rounded-lg // Always applied classes
+                            flex items-center gap-2 px-3 py-2 text-white rounded-lg 
                             ${selectedReportIds.length >= 2 
                                 ? 'bg-red-600 hover:bg-red-700 transition'
                                 : 'bg-gray-400 cursor-not-allowed'          
@@ -261,6 +261,7 @@ export default function Reports() {
                     {/* Search Bar */}
                     <div className="flex items-center relative w-full max-w-sm">
                         <input
+                            disabled={error}
                             type="text"
                             placeholder="Type CCTV Name..."
                             value={searchQuery}
@@ -275,96 +276,101 @@ export default function Reports() {
                 </div>
             </div>
 
-            {/* Konten Utama: Tabel dan Pagination */}
-            <div className="bg-white rounded-lg shadow-lg overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-indigo-200 text-center">
-                        <tr>
-                            <th className="p-2 text-indigo-800 border-r w-10">
-                                <input 
-                                    type="checkbox" 
-                                    checked={selectedReportIds.length > 0 && selectedReportIds.length === reports.length}
-                                    onChange={handleSelectAll} 
-                                    title="Select All on this page"
-                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                                />
-                            </th>
-                            <th className="p-2 text-indigo-800 border-r">No</th>
-                            <th className="p-2 text-indigo-800 border-r">CCTV</th>
-                            <th className="p-2 text-indigo-800 border-r">Violation</th>
-                            <th className="p-2 text-indigo-800 border-r whitespace-nowrap">Date</th>
-                            <th className="p-2 text-indigo-800">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {reports.length === 0 ? (
+            {loading ? (
+            <p className="flex justify-center w-full py-6 bg-white rounded-xl shadow-lg text-gray-600 h-48 items-center">Loading reports...</p>
+            ) : (
+            <>
+                {/* Konten Utama: Tabel dan Pagination */}
+                <div className="bg-white rounded-lg shadow-lg overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-indigo-200 text-center">
                             <tr>
-                                <td colSpan="6" className="text-center text-gray-500 p-4">
-                                    No reports found based on current filters.
-                                </td>
+                                <th className="p-2 text-indigo-800 border-r w-10">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedReportIds.length > 0 && selectedReportIds.length === reports.length}
+                                        onChange={handleSelectAll} 
+                                        title="Select All on this page"
+                                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                </th>
+                                <th className="p-2 text-indigo-800 border-r">No</th>
+                                <th className="p-2 text-indigo-800 border-r">CCTV</th>
+                                <th className="p-2 text-indigo-800 border-r">Violation</th>
+                                <th className="p-2 text-indigo-800 border-r whitespace-nowrap">Date</th>
+                                <th className="p-2 text-indigo-800">Action</th>
                             </tr>
-                        ) : (
-                            reports.map((report, i) => (
-                                <tr key={report.id} className="hover:bg-gray-50 transition">
-                                    <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedReportIds.includes(report.id)}
-                                            onChange={() => handleSelectReport(report.id)}
-                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                    </td>
-                                    <td className="border-r p-2 text-center text-gray-600 whitespace-nowrap">
-                                        {(currentPage - 1) * itemsPerPage + i + 1}
-                                    </td>
-                                    <td className="border-r p-2 text-gray-700 whitespace-nowrap">{report.cctv_name}</td>
-                                    <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">{report.violation_name}</td>
-                                    <td className="border-r p-2 text-gray-600 text-center whitespace-nowrap">
-                                        {new Date(report.timestamp).toLocaleString("id-ID", {timeZone: "UTC"})}
-                                        {/* {new Date(report.timestamp).toLocaleString()} */}
-                                    </td>
-                                    <td className="p-2 text-center space-x-2 whitespace-nowrap">
-                                        <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
-                                            <button
-                                                onClick={() => handlePreviewImage(report.image_url)}
-                                                className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
-                                                title="Preview Violation Image"
-                                            >
-                                                <FaFileImage className="w-5 h-5" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleReport(report.id)}
-                                                className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100"
-                                                title="Send Manual Report via Email"
-                                            >
-                                                <FaEnvelope className="w-5 h-5" />
-                                            </button>
-                                            {/* Tombol Delete */}
-                                            <button
-                                                onClick={() => handleDeleteReport(report)} 
-                                                className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
-                                            >
-                                                <FaTrash className="w-5 h-5" />
-                                            </button>
-                                        </div>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {reports.length === 0 ? (
+                                <tr>
+                                    <td colSpan="6" className="text-center text-gray-500 p-4">
+                                        No reports found based on current filters.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-            
-            {/* Pagination */}
-            {totalItems > 0 && (
-                <Pagination
-                    totalItems={totalItems}
-                    itemsPerPage={itemsPerPage}
-                    currentPage={currentPage}
-                    onPageChange={handlePageChange}
-                    onItemsPerPageChange={handleItemsPerPageChange}
-                />
-            )}
+                            ) : (
+                                reports.map((report, i) => (
+                                    <tr key={report.id} className="hover:bg-gray-50 transition">
+                                        <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedReportIds.includes(report.id)}
+                                                onChange={() => handleSelectReport(report.id)}
+                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                            />
+                                        </td>
+                                        <td className="border-r p-2 text-center text-gray-600 whitespace-nowrap">
+                                            {(currentPage - 1) * itemsPerPage + i + 1}
+                                        </td>
+                                        <td className="border-r p-2 text-gray-700 whitespace-nowrap">{report.cctv_name}</td>
+                                        <td className="border-r p-2 text-gray-700 text-center whitespace-nowrap">{report.violation_name}</td>
+                                        <td className="border-r p-2 text-gray-600 text-center whitespace-nowrap">
+                                            {new Date(report.timestamp).toLocaleString("id-ID", {timeZone: "UTC"})}
+                                            {/* {new Date(report.timestamp).toLocaleString()} */}
+                                        </td>
+                                        <td className="p-2 text-center space-x-2 whitespace-nowrap">
+                                            <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
+                                                <button
+                                                    onClick={() => handlePreviewImage(report.image_url)}
+                                                    className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
+                                                    title="Preview Violation Image"
+                                                >
+                                                    <FaFileImage className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleReport(report.id)}
+                                                    className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100"
+                                                    title="Send Manual Report via Email"
+                                                >
+                                                    <FaEnvelope className="w-5 h-5" />
+                                                </button>
+                                                {/* Tombol Delete */}
+                                                <button
+                                                    onClick={() => handleDeleteReport(report)} 
+                                                    className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
+                                                >
+                                                    <FaTrash className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+        
+                {/* Pagination */}
+                {totalItems > 0 && (
+                    <Pagination
+                        totalItems={totalItems}
+                        itemsPerPage={itemsPerPage}
+                        currentPage={currentPage}
+                        onPageChange={handlePageChange}
+                        onItemsPerPageChange={handleItemsPerPageChange}
+                    />
+                )}
+            </>)}
 
             {/* Modal Gambar */}
             {showImageModal && (
@@ -373,7 +379,6 @@ export default function Reports() {
                     onClose={() => setShowImageModal(false)}
                 />
             )}
-            </>}
 
             {/* NEW: Modal Delete Report */}
             {showDeleteModal && (

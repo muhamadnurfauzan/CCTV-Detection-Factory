@@ -80,7 +80,6 @@ export default function Users() {
             setUsers([]);
             setTotalItems(0);
             // Penggunaan showAlert saat GAGAL fetch data
-            showAlert(err.message || 'Error loading user data.', 'error');
             setError(err.message || 'Error loading user data.');
         } finally {
             setLoading(false);
@@ -103,28 +102,22 @@ export default function Users() {
         setSelectedUser(user);
         setIsDeleteModalOpen(true);
     };
-
-    // --- Handlers Penutup Modal (dan Success Callback) ---
-    // Callback ini dipanggil dari modal setelah API sukses.
     
     const handleAddSuccess = () => {
         setIsAddModalOpen(false);
         fetchUsers(); 
-        // Alert sukses dipanggil di dalam ModalAddUser
     };
     
     const handleUpdateSuccess = () => {
         setIsEditModalOpen(false);
         setSelectedUser(null);
         fetchUsers(); 
-        // Alert sukses dipanggil di dalam ModalEditUser
     };
 
     const handleDeleteConfirm = () => {
         setIsDeleteModalOpen(false);
         setSelectedUser(null);
         fetchUsers(); 
-        // Alert sukses dipanggil di dalam ModalDeleteUser
     };
     
     const closeModal = () => {
@@ -144,13 +137,10 @@ export default function Users() {
 
     // Helper untuk tampilan Role yang lebih baik
     const formatRole = (role) => {
-        // Contoh: cctv_editor -> CCTV Editor
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
     // --- Render ---
-    if (error) return <p className="text-red-600 p-6 bg-white shadow rounded-lg text-center">{error}</p>;
-
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
             <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">User Management</h2>
@@ -159,8 +149,14 @@ export default function Users() {
             <div className="flex justify-end items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
                 <div className='flex space-x-3'>
                     <button
+                        disabled={error}
                         onClick={handleAddUser}
-                        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                        className={`
+                            flex items-center gap-2 px-3 py-2 text-white rounded-lg
+                            ${error 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-green-600 hover:bg-green-700 transition'}
+                            `}
                     >
                         <FaPlus className="w-4 h-4" /> Add User
                     </button>
@@ -168,6 +164,7 @@ export default function Users() {
                 {/* Search Bar */}
                 <div className="flex items-center relative w-full max-w-sm">
                     <input
+                        disabled={error}
                         type="text"
                         placeholder="Search Name, Email, or CCTV Region..."
                         value={searchQuery}
@@ -184,7 +181,7 @@ export default function Users() {
             {/* Loading State */}
             {loading ? (
                 <div className="p-6 flex items-center justify-center h-48 bg-white rounded-lg shadow-lg">
-                    <p className="text-xl font-semibold text-gray-700">Loading User Data...</p>
+                    <p className="text-xl text-gray-600">Loading user data...</p>
                 </div>
             ) : (
                 <>
