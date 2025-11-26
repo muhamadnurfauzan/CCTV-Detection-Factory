@@ -257,7 +257,7 @@ export default function ModalAddUser({ open, onClose, onSuccess }) {
                                         ? 'border-red-500 focus:border-red-500'
                                         : 'border-gray-300'
                                 }`}
-                                placeholder="Must use a Gmail account (@gmail.com)"
+                                placeholder="Use Gmail account!"
                             />
 
                             {/* Indikator valid */}

@@ -264,7 +264,7 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
                                         ? 'border-red-500 focus:border-red-500'
                                         : 'border-gray-300'
                                 }`}
-                                placeholder="Must use a Gmail account (@gmail.com)"
+                                placeholder="Use Gmail account!"
                             />
 
                             {/* Indikator valid */}

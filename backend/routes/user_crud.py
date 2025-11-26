@@ -164,12 +164,6 @@ def update_user(user_id):
         if role not in VALID_ROLES:
             return jsonify({"error": f"Invalid role: {role}."}), 400
 
-        if password:
-            if not is_valid_password(password):
-                return jsonify({"error": "New password does not meet security requirements."}), 400
-            update_fields.append("password = %s")
-            params.append(pwd_context.hash(password))
-
         if role not in ROLES_NEEDING_CCTV:
             cctv_ids = []
 
@@ -189,6 +183,8 @@ def update_user(user_id):
         params = [username, full_name, email, role]
 
         if password:
+            if not is_valid_password(password):
+                return jsonify({"error": "New password does not meet security requirements."}), 400
             update_fields.append("password = %s")
             params.append(pwd_context.hash(password))
 
@@ -219,7 +215,7 @@ def update_user(user_id):
 # =========================================================================
 # API: DELETE USER
 # =========================================================================
-@user_bp.route('/user_delete/<uuid:user_id>', methods=['DELETE'])
+@user_bp.route('/user_delete/<user_id>', methods=['DELETE'])
 def delete_user(user_id):
     conn = None
     cur = None
