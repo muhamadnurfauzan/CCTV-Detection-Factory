@@ -1,6 +1,8 @@
 import logging
+import re
 from flask import Blueprint, request, jsonify
-from psycopg2.extras import RealDictCursor 
+from psycopg2.extras import RealDictCursor
+from passlib.context import CryptContext 
 
 from db.db_config import get_connection
 
@@ -11,8 +13,27 @@ user_bp = Blueprint('user', __name__, url_prefix='/api')
 VALID_ROLES = ['super_admin', 'cctv_editor', 'report_viewer', 'viewer']
 ROLES_NEEDING_CCTV = ['super_admin', 'cctv_editor', 'report_viewer']
 
+# Setup password context (Argon2 > bcrypt > fallback)
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+
+# Regex untuk validasi password dan username kuat
+GMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@gmail\.com$", re.IGNORECASE)
+USERNAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,19}$")
+PASSWORD_PATTERN = re.compile(
+    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
+)
+
+def is_gmail_email(email: str) -> bool:
+    return bool(GMAIL_PATTERN.match(email.strip()))
+
+def is_valid_username(username: str) -> bool:
+    return bool(USERNAME_PATTERN.match(username))
+
+def is_valid_password(password: str) -> bool:
+    return bool(PASSWORD_PATTERN.match(password))
+
 # =========================================================================
-# API: ADD USER (/user_add)
+# API: ADD USER (/user_add) — DIPERBAIKI TOTAL
 # =========================================================================
 @user_bp.route('/user_add', methods=['POST'])
 def add_user():
@@ -20,54 +41,86 @@ def add_user():
     cur = None
     try:
         data = request.json
-        
-        # Wajib Validasi: Ambil dan validasi semua field wajib
-        username = data.get('username').strip() 
-        full_name = data.get('full_name').strip()
-        email = data.get('email').strip().lower()
-        password = data.get('password') 
+        username = data.get('username', '').strip().lower()
+        full_name = data.get('full_name', '').strip()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password')
         role = data.get('role')
-        cctv_ids = data.get('cctv_ids', []) # Array of integer IDs
-        
-        # Validasi Basic
+        cctv_ids = data.get('cctv_ids', [])
+
+        # Validasi wajib
         if not all([username, full_name, email, password, role]):
-            return jsonify({"error": "Missing required fields (Username, Name, Email, Password, Role)."}), 400
+            return jsonify({"error": "All fields are required."}), 400
+        
+        if not email:
+            return jsonify({"error": "Email is required."}), 400
+
+        if not is_gmail_email(email):
+            return jsonify({
+                "error": "Only Gmail (@gmail.com) emails are allowed.\n"
+                         "Example: yourname@gmail.com"
+            }), 400
+        
+        if not username:
+            return jsonify({"error": "Username is required."}), 400
+        
+        if not is_valid_username(username):
+            return jsonify({
+                "error": "Username must be at least 8 characters and contain: "
+                        "only lowercase, number and underscore (_); "
+                        "must start with lowercase; "
+                        "no space, period or other symbol."
+            }), 400
+
         if role not in VALID_ROLES:
             return jsonify({"error": f"Invalid role: {role}."}), 400
-        if len(password) < 6:
-            return jsonify({"error": "Password must be at least 6 characters long."}), 400
 
-        # Logika Pembersihan CCTV 
+        # Validasi password kuat
+        if not is_valid_password(password):
+            return jsonify({
+                "error": "Password must be at least 8 characters and contain: "
+                        "uppercase, lowercase, number and symbol (@$!%*?&)"
+            }), 400
+
+        # Bersihkan CCTV jika tidak diperlukan
         if role not in ROLES_NEEDING_CCTV:
             cctv_ids = []
-            logging.info(f"Role '{role}' does not require CCTV assignment. Clearing cctv_ids.")
 
         conn = get_connection()
         cur = conn.cursor()
-        
-        # 1. Insert User
-        cur.execute("INSERT INTO users (username, full_name, email, password, role) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                    (username, full_name, email, f"HASHED_{password}", role)) 
+
+        # Cek username & email unik
+        cur.execute("SELECT id FROM users WHERE username = %s OR email = %s", (username, email))
+        if cur.fetchone():
+            return jsonify({"error": "Username or email already exists."}), 409
+
+        # Hash password yang benar!
+        hashed_password = pwd_context.hash(password)
+
+        # Insert user
+        cur.execute("""
+            INSERT INTO users (username, full_name, email, password, role)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (username, full_name, email, hashed_password, role))
         new_user_id = cur.fetchone()[0]
-        
-        # 2. Insert CCTV Mappings (hanya jika ada ID)
+
+        # Insert CCTV mapping
         if cctv_ids:
-            for cctv_id in cctv_ids:
-                cur.execute("INSERT INTO user_cctv_map (user_id, cctv_id) VALUES (%s, %s)",
-                            (new_user_id, cctv_id))
-        
+            placeholders = ','.join(['(%s, %s)'] * len(cctv_ids))
+            query = f"INSERT INTO user_cctv_map (user_id, cctv_id) VALUES {placeholders}"
+            params = [(new_user_id, cid) for cid in cctv_ids]
+            cur.executemany(query, params)
+
         conn.commit()
-        
-        return jsonify({"message": "User added successfully.", "id": new_user_id, "name": full_name}), 201
+        return jsonify({"message": "User added successfully.", "id": new_user_id}), 201
 
     except Exception as e:
         if conn: conn.rollback()
-        logging.error(f"[USER_ADD API ERROR]: {e}")
-        return jsonify({"error": "Failed to add user. Check for duplicate username or email or invalid CCTV ID."}), 500
+        logging.error(f"[USER_ADD ERROR]: {e}")
+        return jsonify({"error": "Failed to add user."}), 500
     finally:
         if cur: cur.close()
         if conn: conn.close()
-
 
 # =========================================================================
 # API: UPDATE USER (/user_update/<user_id>)
@@ -78,100 +131,135 @@ def update_user(user_id):
     cur = None
     try:
         data = request.json
-        
-        # Wajib Validasi: Ambil dan validasi semua field wajib
-        username = data.get('username').strip() 
-        full_name = data.get('full_name').strip()
-        email = data.get('email').strip().lower()
-        password = data.get('password') # Opsional
+        username = data.get('username', '').strip().lower()
+        full_name = data.get('full_name', '').strip()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '').strip()
         role = data.get('role')
-        cctv_ids = data.get('cctv_ids', []) # Array of integer IDs
-        
-        # Validasi Basic
+        cctv_ids = data.get('cctv_ids', [])
+
         if not all([username, full_name, email, role]):
-            return jsonify({"error": "Missing required fields (Username, Name, Email, Role)."}), 400
+            return jsonify({"error": "Required fields missing."}), 400
+
+        if not email:
+            return jsonify({"error": "Email is required."}), 400
+
+        if not is_gmail_email(email):
+            return jsonify({
+                "error": "Only Gmail (@gmail.com) emails are allowed.\n"
+                         "Example: yourname@gmail.com"
+            }), 400
+        
+        if not username:
+            return jsonify({"error": "Username is required."}), 400
+        
+        if not is_valid_username(username):
+            return jsonify({
+                "error": "Username must be at least 8 characters and contain: "
+                        "only lowercase, number and underscore (_); "
+                        "must start with lowercase; "
+                        "no space, period or other symbol."
+            }), 400
+        
         if role not in VALID_ROLES:
             return jsonify({"error": f"Invalid role: {role}."}), 400
 
-        # Logika Pembersihan CCTV (Poin 3)
-        # Jika role diubah menjadi 'viewer' atau role yang tidak memerlukan map, 
-        # kita hapus mapping CCTV yang mungkin dikirim frontend atau yang sudah ada di DB.
+        if password:
+            if not is_valid_password(password):
+                return jsonify({"error": "New password does not meet security requirements."}), 400
+            update_fields.append("password = %s")
+            params.append(pwd_context.hash(password))
+
         if role not in ROLES_NEEDING_CCTV:
             cctv_ids = []
-            logging.info(f"Role changed to '{role}'. All previous CCTV assignments will be cleared.")
-            
+
         conn = get_connection()
         cur = conn.cursor()
-        
-        # 1. Update User Details
+
+        # Cek konflik username/email (kecuali untuk user itu sendiri)
+        cur.execute("""
+            SELECT id FROM users 
+            WHERE (username = %s OR email = %s) AND id != %s
+        """, (username, email, user_id))
+        if cur.fetchone():
+            return jsonify({"error": "Username or email already used by another account."}), 409
+
+        # Update user
         update_fields = ["username = %s", "full_name = %s", "email = %s", "role = %s"]
-        update_params = [username, full_name, email, role]
+        params = [username, full_name, email, role]
 
-        if password and len(password) >= 6:
-            update_fields.append("password = %s") 
-            update_params.append(f"HASHED_{password}") 
-        elif password and len(password) < 6:
-            return jsonify({"error": "New password must be at least 6 characters long."}), 400
+        if password:
+            update_fields.append("password = %s")
+            params.append(pwd_context.hash(password))
 
-        update_params.append(user_id)
-        
-        update_query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
-        cur.execute(update_query, update_params)
+        params.append(user_id)
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
+        cur.execute(query, params)
 
-        # 2. Update CCTV Mappings
-        # Hapus semua mapping lama
+        # Update CCTV mapping
         cur.execute("DELETE FROM user_cctv_map WHERE user_id = %s", (user_id,))
-        
-        # Masukkan mapping baru (akan kosong jika cctv_ids sudah di-clear di Poin 3)
         if cctv_ids:
-            for cctv_id in cctv_ids:
-                cur.execute("INSERT INTO user_cctv_map (user_id, cctv_id) VALUES (%s, %s)",
-                            (user_id, cctv_id))
-        
+            placeholders = ','.join(['(%s, %s)'] * len(cctv_ids))
+            cur.executemany(
+                f"INSERT INTO user_cctv_map (user_id, cctv_id) VALUES {placeholders}",
+                [(user_id, cid) for cid in cctv_ids]
+            )
+
         conn.commit()
-        
-        return jsonify({"message": "User updated successfully.", "name": full_name}), 200
+        return jsonify({"message": "User updated successfully."}), 200
 
     except Exception as e:
         if conn: conn.rollback()
-        logging.error(f"[USER_UPDATE API ERROR]: {e}")
-        return jsonify({"error": "Failed to update user. Check for duplicate username or email or invalid CCTV ID."}), 500
+        logging.error(f"[USER_UPDATE ERROR]: {e}")
+        return jsonify({"error": "Failed to update user."}), 500
     finally:
         if cur: cur.close()
         if conn: conn.close()
 
-
 # =========================================================================
 # API: DELETE USER
 # =========================================================================
-@user_bp.route('/user_delete/<user_id>', methods=['DELETE'])
+@user_bp.route('/user_delete/<uuid:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     conn = None
     cur = None
     try:
         conn = get_connection()
         cur = conn.cursor()
-        
-        # 1. Hapus mapping CCTV terkait (Foreign Key akan mencegah user terhapus jika mapping masih ada)
-        cur.execute("DELETE FROM user_cctv_map WHERE user_id = %s", (user_id,))
-        
-        # 2. Hapus User
-        cur.execute("DELETE FROM users WHERE id = %s RETURNING full_name", (user_id,))
-        deleted_user = cur.fetchone()
 
-        if not deleted_user:
+        # Cek apakah user yang akan dihapus adalah super_admin
+        cur.execute("SELECT role, full_name FROM users WHERE id = %s", (user_id,))
+        user = cur.fetchone()
+        if not user:
             return jsonify({"error": "User not found."}), 404
-        
-        deleted_name = deleted_user[0]
-        conn.commit()
-        
-        return jsonify({"message": "User deleted successfully.", "id": user_id, "name": deleted_name}), 200
 
-    except NotImplementedError:
-        return jsonify({"error": "Database functionality not ready."}), 500
+        role, full_name = user
+
+        # CEK: Jika super_admin dan hanya tersisa 1 → DILARANG!
+        if role == 'super_admin':
+            cur.execute("SELECT COUNT(*) FROM users WHERE role = 'super_admin'")
+            super_admin_count = cur.fetchone()[0]
+            if super_admin_count <= 1:
+                return jsonify({
+                    "error": "Cannot delete the last Super Admin. "
+                             "There must be at least one Super Admin in the system."
+                }), 403
+
+        # Hapus mapping CCTV dulu
+        cur.execute("DELETE FROM user_cctv_map WHERE user_id = %s", (user_id,))
+
+        # Hapus user
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        
+        conn.commit()
+        return jsonify({
+            "message": "User deleted successfully.",
+            "name": full_name
+        }), 200
+
     except Exception as e:
         if conn: conn.rollback()
-        logging.error(f"[USER_DELETE API ERROR]: {e}")
+        logging.error(f"[USER_DELETE ERROR]: {e}")
         return jsonify({"error": "Failed to delete user."}), 500
     finally:
         if cur: cur.close()

@@ -24,12 +24,12 @@ export default function ModalDeleteUser({ open, onClose, onConfirm, userData }) 
         showAlert(`User '${userData.full_name}' successfully deleted.`, 'success');
       } else {
         const err = await res.json();
-        const errorMessage = err.error || 'Gagal menghapus user';
+        const errorMessage = err.error || 'Failed to delete user';
         setError(errorMessage);
         showAlert(`Failed to delete: ${errorMessage}`, 'error');
       }
     } catch {
-      setError('Error jaringan');
+      setError('Network error');
       showAlert('Network error: Unable to connect to server.', 'error');
     } finally {
       setSubmitting(false);
@@ -44,6 +44,12 @@ export default function ModalDeleteUser({ open, onClose, onConfirm, userData }) 
         </h2>
         <button onClick={onClose} className="text-2xl text-gray-500 hover:text-red-500"><FaTimes className="w-6 h-6" /></button>
       </div>
+
+      {userData?.role === 'super_admin' && (
+        <p className="text-red-600 font-semibold mt-2">
+          Warning: This is a Super Admin account.
+        </p>
+      )}
 
       <p className="text-sm text-gray-600 mb-6">
         Are you sure want to delete user <strong>{userData?.full_name}</strong> ({userData?.email} | {userData?.username})? This action cannot be cancelled.
