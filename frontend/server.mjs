@@ -223,36 +223,20 @@ app.post('/invalidate-cache', (req, res) => {
   res.json({ success: true });
 });
 
-// Subscribe Supabase Realtime — HARUS DI ATAS app.listen() !!!
+// Subscribe Supabase Realtime
 const realtimeChannel = supabase
   .channel('violation-broadcast')
   .on('postgres_changes', {
-    event: 'INSERT',
-    schema: 'public',
-    table: 'violation_detection'
-  }, async (payload) => {
-    console.log('REALTIME INSERT TERDETEKSI! ID:', payload.new.id); // ← INI HARUS MUNCUL DI LOG
-
-    let formatted = {
-      id: payload.new.id,
-      cctv_name: `CCTV ${payload.new.id_cctv || 'Unknown'}`,
-      violation_name: 'no-vest',
-      image_url: payload.new.image || '',
-      timestamp: payload.new.timestamp || new Date().toISOString(),
-    };
-
-    // Broadcast ke semua client
-    const message = `data: ${JSON.stringify(formatted)}\n\n`;
-    console.log('BROADCASTING TO', sseClients.size, 'clients');
-    sseClients.forEach(client => {
-      client.res.write(message);
-    });
+      event: 'INSERT',
+      schema: 'public',
+      table: 'violation_detection'
+  }, (payload) => {
+      const msg = `data: ${JSON.stringify({ id: payload.new.id })}\n\n`;
+      sseClients.forEach(c => c.res.write(msg));
   })
-  .subscribe((status) => {
-    console.log('Supabase Realtime Status:', status); // ← INI HARUS MUNCUL SAAT SERVER START
-  });
+  .subscribe();
 
-// SSE Endpoint (tetap sama)
+// SSE Endpoint
 app.get('/api/reports/sse', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

@@ -114,13 +114,9 @@ export default function Reports() {
     useEffect(() => {
         const eventSource = new EventSource('/api/reports/sse');
 
-        eventSource.onmessage = (event) => {
-            const newReport = JSON.parse(event.data);
-            setReports(prev => {
-            if (prev.some(r => r.id === newReport.id)) return prev;
-            return [newReport, ...prev];
-            });
-            setTotalItems(prev => prev + 1);
+        eventSource.onmessage = () => {
+            setCurrentPage(1);
+            fetchReports();
             showAlert('New violation detected!', 'success');
         };
 

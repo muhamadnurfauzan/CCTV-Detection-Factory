@@ -58,7 +58,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
             }`}
           >
             {isExpanded ? (
-              <span className="text-xl font-bold text-white">APP LOGO</span>
+              <span className="text-xl font-bold text-white">PPE DETECTION</span>
             ) : (
               <span className="text-xl font-bold text-white">X</span>
             )}
