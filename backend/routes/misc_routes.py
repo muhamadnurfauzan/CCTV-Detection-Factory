@@ -7,12 +7,14 @@ from flask import Blueprint, request, Response, jsonify
 from psycopg2.extras import RealDictCursor
 
 from db.db_config import get_connection
+from utils.auth import require_role
 import services.config_service as config_service
 from shared_state import state
 
 misc_bp = Blueprint('misc', __name__, url_prefix='/api')
 
 @misc_bp.route("/video_feed")
+@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def video_feed():
     cctv_id = int(request.args.get("id", 1))
 
@@ -53,22 +55,14 @@ def video_feed():
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# @misc_bp.route('/object_classes', methods=['GET'])
-# def get_object_classes():
-#     conn = get_connection()
-#     cur = conn.cursor(cursor_factory=RealDictCursor)
-#     cur.execute("SELECT id, name, color_r, color_g, color_b, is_violation FROM object_class")
-#     rows = cur.fetchall()
-#     cur.close()
-#     conn.close()
-#     return jsonify(rows)
-
 @misc_bp.route('/refresh_config', methods=['POST'])
+@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def refresh_config():
     config_service.refresh_active_violations()
     return jsonify({"success": True})
 
 @misc_bp.route('/settings', methods=['GET', 'POST'])
+@require_role(['super_admin'])
 def handle_settings():
     conn = None
     cur = None

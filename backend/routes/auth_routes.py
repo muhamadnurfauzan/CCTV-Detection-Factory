@@ -1,6 +1,5 @@
 # routes/auth_routes.py
 import jwt
-from functools import wraps
 from flask import Blueprint, request, jsonify, make_response, current_app
 from passlib.context import CryptContext
 

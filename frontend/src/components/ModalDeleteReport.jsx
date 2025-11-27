@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaTimes, FaTrash, FaFileImage } from 'react-icons/fa'; 
 import { useAlert } from './AlertProvider'; 
+import RoleButton from './RoleButton';
 
 export default function ModalDeleteReport({ open, onClose, onConfirm, reportData }) {
   const [submitting, setSubmitting] = useState(false);
@@ -103,14 +104,15 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
         >
           Cancel
         </button>
-        <button
+        <RoleButton
+          allowedRoles={['super_admin']}
           type="button"
           onClick={handleDelete}
           className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
           disabled={submitting}
         >
           {submitting ? 'Deleting...' : 'Delete'}
-        </button>
+        </RoleButton>
       </div>
     </dialog>
   );

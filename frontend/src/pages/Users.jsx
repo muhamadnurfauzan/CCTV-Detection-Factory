@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaSearch, FaPenSquare, FaTrash } from 'react-icons/fa'; 
 import { useAlert } from '../components/AlertProvider'; 
 import Pagination from '../components/Pagination'; 
+import RoleButton from '../components/RoleButton';
 
 import ModalAddUser from '../components/ModalAddUser';
 import ModalEditUser from '../components/ModalEditUser';
@@ -148,7 +149,8 @@ export default function Users() {
             {/* Toolbar dan Search Bar */}
             <div className="flex justify-end items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
                 <div className='flex space-x-3'>
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin']}
                         disabled={error}
                         onClick={handleAddUser}
                         className={`
@@ -159,7 +161,7 @@ export default function Users() {
                             `}
                     >
                         <FaPlus className="w-4 h-4" /> Add User
-                    </button>
+                    </RoleButton>
                 </div>
                 {/* Search Bar */}
                 <div className="flex items-center relative w-full max-w-sm">
@@ -234,20 +236,22 @@ export default function Users() {
                                             <td className="p-2 text-center space-x-2 whitespace-nowrap items-center">
                                                 {/* Tombol Aksi */}
                                                 <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
-                                                    <button
+                                                    <RoleButton
+                                                        allowedRoles={['super_admin']}
                                                         onClick={() => handleEdit(user)}
                                                         className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                                                         title="Edit User"
                                                     >
                                                         <FaPenSquare className="w-5 h-5" />
-                                                    </button>
-                                                    <button
+                                                    </RoleButton>
+                                                    <RoleButton
+                                                        allowedRoles={['super_admin']}
                                                         onClick={() => handleDelete(user)}
                                                         className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
                                                         title="Delete User"
                                                     >
                                                         <FaTrash className="w-5 h-5" />
-                                                    </button>
+                                                    </RoleButton>
                                                 </div>
                                             </td>
                                         </tr>

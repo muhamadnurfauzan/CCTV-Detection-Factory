@@ -3,6 +3,7 @@ import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, Fa
 import { useAlert } from '../components/AlertProvider';
 import Pagination from '../components/Pagination';
 import ModalDeleteReport from '../components/ModalDeleteReport';
+import RoleButton from '../components/RoleButton';
 
 // --- Helper Modal Preview Gambar ---
 const ImagePreviewModal = ({ imageUrl, onClose }) => {
@@ -223,7 +224,8 @@ export default function Reports() {
             <div className="grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2">
                 <div className="flex justify-start">
                     {/* Tombol Filter (Sort Order) */}
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin', 'report_viewer']} 
                         disabled={error}
                         onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
                         className={`
@@ -236,13 +238,14 @@ export default function Reports() {
                     >
                         <FaFilter className="w-4 h-4" />
                         {sortOrder === 'desc' ? <FaArrowDown className='w-3 h-3'/> : <FaArrowUp className='w-3 h-3'/>}
-                    </button>
+                    </RoleButton>
                 </div>
 
                 <div className='flex items-center justify-end gap-2'>
                     {/* Delete All Button */}
                     <div className="flex">
-                        <button
+                        <RoleButton
+                            allowedRoles={['super_admin']} 
                             onClick={handleDeleteSelected}
                             disabled={selectedReportIds.length < 2 || error} 
                             className={`
@@ -255,7 +258,7 @@ export default function Reports() {
                             title={`Delete ${selectedReportIds.length} selected reports`}
                         >
                             <FaTrash className='h-4 w-4'/>({selectedReportIds.length})
-                        </button>
+                        </RoleButton>
                     </div>
                     
                     {/* Search Bar */}
@@ -330,27 +333,30 @@ export default function Reports() {
                                         </td>
                                         <td className="p-2 text-center space-x-2 whitespace-nowrap">
                                             <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
-                                                <button
+                                                <RoleButton
+                                                    allowedRoles={['super_admin', 'report_viewer']} 
                                                     onClick={() => handlePreviewImage(report.image_url)}
                                                     className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                                                     title="Preview Violation Image"
                                                 >
                                                     <FaFileImage className="w-5 h-5" />
-                                                </button>
-                                                <button
+                                                </RoleButton>
+                                                <RoleButton
+                                                    allowedRoles={['super_admin', 'report_viewer']} 
                                                     onClick={() => handleReport(report.id)}
                                                     className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100"
                                                     title="Send Manual Report via Email"
                                                 >
                                                     <FaEnvelope className="w-5 h-5" />
-                                                </button>
+                                                </RoleButton>
                                                 {/* Tombol Delete */}
-                                                <button
+                                                <RoleButton
+                                                    allowedRoles={['super_admin']} 
                                                     onClick={() => handleDeleteReport(report)} 
                                                     className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
                                                 >
                                                     <FaTrash className="w-5 h-5" />
-                                                </button>
+                                                </RoleButton>
                                             </div>
                                         </td>
                                     </tr>

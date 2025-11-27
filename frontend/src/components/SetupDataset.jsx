@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FaPenSquare, FaCheckSquare, FaSquare, FaInfoCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider'; 
 import ModalEditObjek from './ModalEditObjek'; 
+import RoleButton from './RoleButton';
 
 // --- Helper: Konversi HSL ke RGB ---
 const hslToRgb = (h, s, l) => {
@@ -204,12 +205,13 @@ const SetupDataset = () => {
                                             </div>
                                         </td>
                                         <td className="p-2 whitespace-nowrap text-center text-sm font-medium">
-                                            <button
+                                            <RoleButton
+                                                allowedRoles={['super_admin']} 
                                                 onClick={() => handleEdit(item)}
                                                 className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                                             >
                                                 <FaPenSquare className="h-5 w-5" />
-                                            </button>
+                                            </RoleButton>
                                         </td>
                                     </tr>
                                 )}

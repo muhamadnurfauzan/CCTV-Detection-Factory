@@ -1,5 +1,6 @@
 // Settings.jsx
 import React, { useState } from 'react';
+import RoleButton from '../components/RoleButton';
 import DatasetSetup from '../components/SetupDataset'; 
 import EmailSetup from '../components/SetupEmail'; 
 
@@ -36,9 +37,10 @@ const Settings = () => {
                 <div className='flex gap-2 border-b border-gray-200 overflow-x-auto'>
                     
                     {menuItems.map(item => (
-                        <button
+                        <RoleButton
+                            allowedRoles={['super_admin']}
                             key={item.key}
-                            type='button'
+                            type='RoleButton'
                             onClick={() => setSettingButton(item.key)}
                             className={`px-4 py-2 font-medium text-sm whitespace-nowrap rounded-t-lg transition ${
                                 settingButton === item.key
@@ -47,7 +49,7 @@ const Settings = () => {
                             }`}
                         >
                             {item.label}
-                        </button>
+                        </RoleButton>
                     ))}
                     
                 </div>

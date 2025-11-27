@@ -1,6 +1,7 @@
 // CCTVTable.jsx
 import React from 'react';
 import { FaEye, FaEyeSlash, FaPenSquare, FaTrash } from 'react-icons/fa';
+import RoleButton from './RoleButton';
 
 // Tambahkan prop startNo
 function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
@@ -46,33 +47,38 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                   <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
                       {/* Tombol View/Enabled */}
                       {cctv.enabled ? (
-                          <button
-                              onClick={() => onSelect(cctv.id)}
-                              className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100" 
+                          <RoleButton
+                            allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']}
+                            onClick={() => onSelect(cctv.id)}
+                            className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100" 
                           >
-                              <FaEye className="w-5 h-5" />
-                          </button>
+                            <FaEye className="w-5 h-5" />
+                          </RoleButton>
                       ) : (
-                          <button disabled className='p-1 rounded-full bg-gray-100'>
-                              <FaEyeSlash className="w-5 h-5 text-gray-400" />
+                          <button 
+                            disabled 
+                            className='p-1 rounded-full bg-gray-100'>
+                            <FaEyeSlash className="w-5 h-5 text-gray-400" />
                           </button>
                       )}
                       
                       {/* Tombol Edit */}
-                      <button
-                          onClick={() => onEdit(cctv.id)}
-                          className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
+                      <RoleButton
+                        allowedRoles={['super_admin', 'cctv_editor']}
+                        onClick={() => onEdit(cctv.id)}
+                        className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                       >
-                          <FaPenSquare className="w-5 h-5" />
-                      </button>
+                        <FaPenSquare className="w-5 h-5" />
+                      </RoleButton>
                       
                       {/* Tombol Delete */}
-                      <button
-                          onClick={() => onDelete(cctv.id)}
-                          className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
+                      <RoleButton
+                        allowedRoles={['super_admin', 'cctv_editor']}
+                        onClick={() => onDelete(cctv.id)}
+                        className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
                       >
-                          <FaTrash className="w-5 h-5" />
-                      </button>
+                        <FaTrash className="w-5 h-5" />
+                      </RoleButton>
                   </div>
               </td>
               </tr>

@@ -5,6 +5,7 @@ from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext 
 
 from db.db_config import get_connection
+from utils.auth import require_role
 
 # Inisialisasi Blueprint untuk modul user
 user_bp = Blueprint('user', __name__, url_prefix='/api')
@@ -36,6 +37,7 @@ def is_valid_password(password: str) -> bool:
 # API: ADD USER (/user_add) — DIPERBAIKI TOTAL
 # =========================================================================
 @user_bp.route('/user_add', methods=['POST'])
+@require_role(['super_admin'])
 def add_user():
     conn = None
     cur = None
@@ -126,6 +128,7 @@ def add_user():
 # API: UPDATE USER (/user_update/<user_id>)
 # =========================================================================
 @user_bp.route('/user_update/<user_id>', methods=['PUT'])
+@require_role(['super_admin'])
 def update_user(user_id):
     conn = None
     cur = None
@@ -216,6 +219,7 @@ def update_user(user_id):
 # API: DELETE USER
 # =========================================================================
 @user_bp.route('/user_delete/<user_id>', methods=['DELETE'])
+@require_role(['super_admin'])
 def delete_user(user_id):
     conn = None
     cur = None
@@ -263,6 +267,7 @@ def delete_user(user_id):
 
 # --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
 @user_bp.route('/users_with_cctvs', methods=['GET'])
+@require_role(['super_admin'])
 def get_users_with_cctvs():
     conn = None
     cur = None

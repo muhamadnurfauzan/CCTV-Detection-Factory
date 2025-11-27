@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaSlidersH, FaArrowLeft, FaSearch } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
+import RoleButton from '../components/RoleButton';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
 import CCTVViolation from '../components/CCTVViolation';
@@ -220,7 +221,8 @@ const CCTVList = () => {
             {/* Back Button - hanya muncul di stream/violation */}
             {(view === 'stream' || view === 'violation') && (
                 <div className="flex justify-start" >
-                    <button
+                    <RoleButton
+                      allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']} 
                       disabled={error || currentItems.length === 0}
                       onClick={handleBack}
                       title="Back to CCTV List"
@@ -232,7 +234,7 @@ const CCTVList = () => {
                             `}
                     >
                       <FaArrowLeft className='h-4 w-4'/>
-                    </button>
+                    </RoleButton>
                 </div>
             )}
 
@@ -241,7 +243,8 @@ const CCTVList = () => {
                 <div className="flex items-center justify-end gap-2">
                   {view === 'table' && (
                   <div className='flex gap-2'>
-                      <button
+                      <RoleButton
+                        allowedRoles={['super_admin', 'cctv_editor']} 
                         disabled={error || currentItems.length === 0}
                         onClick={handleOpenViolation}
                         className={`
@@ -253,8 +256,10 @@ const CCTVList = () => {
                         title="Configure Violations"
                       >
                         <FaSlidersH className='h-4 w-4'/>
-                      </button>
-                      <button
+                      </RoleButton>
+                      
+                      <RoleButton
+                        allowedRoles={['super_admin', 'cctv_editor']}
                         disabled={error || currentItems.length === 0}
                         onClick={() => setShowAddModal(true)}
                         className={`
@@ -266,7 +271,7 @@ const CCTVList = () => {
                         title="Add New CCTV"
                       >
                         <FaPlus className='h-4 w-4'/>
-                      </button>
+                      </RoleButton>
                   </div>
                   )}
                   <div className='flex items-center relative w-full max-w-sm'>

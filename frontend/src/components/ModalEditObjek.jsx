@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FaSave, FaTimes, FaPalette, FaHashtag, FaRulerHorizontal } from 'react-icons/fa';
+import RoleButton from './RoleButton';
 
 // --- HELPER CONVERSIONS (Penting) ---
 // HSL ke RGB
@@ -315,14 +316,15 @@ const ModalEditObjek = ({
                     >
                         <FaTimes className="mr-2" /> Cancel
                     </button>
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin']}
                         type="button"
                         className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700"
                         onClick={() => handleSave(previewRGB)}
                         disabled={loading || hexError}
                     >
                         <FaSave className="mr-2" /> {loading ? 'Saving...' : 'Save changes'}
-                    </button>
+                    </RoleButton>
                 </div>
             </div>
         </div>

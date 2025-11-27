@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FaAngleLeft, FaAngleRight } from 'react-icons/fa';
+import RoleLink from '../components/RoleLink';
 import '../styles/MasonryGrid.css';
 
 const ImagesShow = () => {
@@ -200,7 +201,11 @@ const ImagesShow = () => {
           <span key={i}>
             {i > 0 && <span className="mx-2 text-gray-400">›</span>}
             {i < breadcrumb.length - 1 ? (
-              <Link to={crumb.path} className="text-blue-600 hover:underline">{crumb.label}</Link>
+              <RoleLink 
+                allowedRoles={['super_admin', 'report_viewer']}
+                to={crumb.path} 
+                className="text-blue-600 hover:underline">{crumb.label}
+              </RoleLink>
             ) : (
               <span className="text-gray-700 font-semibold">{crumb.label}</span>
             )}
@@ -219,13 +224,14 @@ const ImagesShow = () => {
                 const val = typeof item === 'object' ? (item.id ?? item) : item;
                 const lbl = typeof item === 'object' ? (item.name ?? val) : item;
                 return (
-                  <Link
+                  <RoleLink
+                    allowedRoles={['super_admin', 'report_viewer']}
                     key={val}
                     to={getNextPath(val, options.options)}
                     className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg items-center"
                   >
                     {lbl}
-                  </Link>
+                  </RoleLink>
                 );
               })}
             </div>

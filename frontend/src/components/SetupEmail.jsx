@@ -1,6 +1,7 @@
 // components/SetupEmail.jsx
 import React, { useState, useEffect } from 'react';
 import { useAlert } from './AlertProvider'; 
+import RoleButton from './RoleButton';
 
 const initialFormData = {
     smtp_host: '',
@@ -96,21 +97,23 @@ const SetupEmail = () => {
             {/* --- Tombol Edit/Cancel --- */}
             <div className="flex justify-end mb-4">
                 {isEditing ? (
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin']} 
                         type="button"
                         onClick={() => setIsEditing(false)}
                         className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition"
                     >
                         Cancel Edit
-                    </button>
+                    </RoleButton>
                 ) : (
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin']} 
                         type="button"
                         onClick={() => setIsEditing(true)}
                         className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition"
                     >
                         Edit Configuration
-                    </button>
+                    </RoleButton>
                 )}
             </div>
 
@@ -203,13 +206,14 @@ const SetupEmail = () => {
                 </fieldset>
                 
                 <div className="pt-4">
-                    <button
+                    <RoleButton
+                        allowedRoles={['super_admin']} 
                         type="submit"
                         disabled={!isEditing} 
                         className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition ${!isEditing ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
                     >
                         Save Email Configuration
-                    </button>
+                    </RoleButton>
                 </div>
             </form>
         </div>

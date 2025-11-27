@@ -4,6 +4,7 @@ import { useDropzone } from 'react-dropzone';
 import { FaTimes, FaUpload, FaCamera, FaPenSquare } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
 import CCTVScheduleInput from './CCTVScheduleInput';
+import RoleButton from './RoleButton';
 
 export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
   const [form, setForm] = useState({
@@ -543,9 +544,13 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
           <div className="flex gap-3">
             {/* === Submit Button === */}
             <button type="button" onClick={onClose} className="px-5 py-2 border rounded-lg">Cancel</button>
-            <button type="submit" disabled={submitting} className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50">
+            <RoleButton
+              allowedRoles={['super_admin', 'cctv_editor']} 
+              type="submit" 
+              disabled={submitting} 
+              className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50">
               {submitting ? 'Updating...' : 'Update CCTV'}
-            </button>
+            </RoleButton>
           </div>
         </div>
       </form>

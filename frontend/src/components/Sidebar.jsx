@@ -1,141 +1,118 @@
-import React, { useState } from 'react';
+// Sidebar.jsx – VERSI FINAL (Menu Utama di Atas, Users/Settings/Logout di Bawah)
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn, FaUsers, FaSignOutAlt } from 'react-icons/fa';
+import { FaHome, FaVideo, FaImages, FaBullhorn, FaUsers, FaCog, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 import ModalLogout from './ModalLogout';
+import { useAuth } from '../context/AuthContext';
 
-const navItemsData = [
-    { path: "/", label: "Dashboard", Icon: FaHome },
-    { path: "/cctv", label: "CCTVs", Icon: FaVideo },
-    { path: "/images", label: "Violations", Icon: FaImages},
-    { path: "/reports", label: "Reports", Icon: FaBullhorn},
+const mainNavItems = [
+  { path: "/", label: "Dashboard", Icon: FaHome, allowedRoles: ['super_admin', 'report_viewer', 'cctv_editor', 'viewer'] },
+  { path: "/cctv", label: "CCTVs", Icon: FaVideo, allowedRoles: ['super_admin', 'report_viewer', 'cctv_editor', 'viewer'] },
+  { path: "/images", label: "Violations", Icon: FaImages, allowedRoles: ['super_admin', 'report_viewer'] },
+  { path: "/reports", label: "Reports", Icon: FaBullhorn, allowedRoles: ['super_admin', 'report_viewer'] },
+];
+
+const bottomNavItems = [
+  { path: "/users", label: "Users", Icon: FaUsers, allowedRoles: ['super_admin'] },
+  { path: "/settings", label: "Settings", Icon: FaCog, allowedRoles: ['super_admin'] },
 ];
 
 const Sidebar = ({ isExpanded, setIsExpanded }) => {
   const location = useLocation();
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
+  const { user } = useAuth();
 
-  const navItem = ({ path, label, Icon }) => {
+  const NavItem = ({ item }) => {
+    const { path, label, Icon, allowedRoles } = item;
+
+    // Role check
+    if (allowedRoles && !allowedRoles.includes(user?.role)) return null;
+
     const isActive = location.pathname === path;
-    const baseClasses = "flex items-center h-12 px-3 rounded transition-colors duration-200";
+    const baseClasses = "flex items-center h-12 rounded transition-colors duration-200 w-full";
     const activeClasses = "bg-indigo-700 text-white";
     const inactiveClasses = "text-indigo-200 hover:bg-indigo-700 hover:text-white";
 
     return (
-      <li key={path}>
-        <Link
-          to={path}
-          className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
-          data-tooltip-id="sidebar-tooltip"
-          data-tooltip-content={label}
-          aria-label={label}
-        >
-          <Icon className="w-6 h-6" />
-          {isExpanded && <span className="ml-3 text-sm font-medium">{label}</span>}
-        </Link>
-      </li>
+      <Link
+        to={path}
+        className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${isExpanded ? 'px-3' : 'justify-center'}`}
+        data-tooltip-id="sidebar-tooltip"
+        data-tooltip-content={label}
+      >
+        <Icon className="w-6 h-6" />
+        {isExpanded && <span className="ml-3 text-sm font-medium">{label}</span>}
+      </Link>
     );
   };
 
   return (
     <>
-      {!isExpanded && 
-      <Tooltip 
-        id="sidebar-tooltip" 
-        place="right" 
-        effect="float" 
-        style={{ borderRadius: '0.375rem', zIndex: 50 }}
-      />}
-      <nav
-        className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col
-          bg-indigo-900 text-indigo-300 shadow-2xl
-          transition-all duration-300 ease-in-out
-          ${isExpanded ? 'w-56' : 'w-20'}
-        `}
-      >
+      {!isExpanded && <Tooltip id="sidebar-tooltip" place="right" style={{ borderRadius: '0.375rem', zIndex: 50 }} />}
+
+      <nav className={`
+        fixed inset-y-0 left-0 z-50 flex flex-col
+        bg-indigo-900 text-indigo-300 shadow-2xl
+        transition-all duration-300 ease-in-out
+        ${isExpanded ? 'w-56' : 'w-20'}
+      `}>
         <div className="flex flex-col h-full p-3">
           {/* Header */}
-          <div
-            className={`flex items-center mb-6 ${
-              isExpanded ? 'justify-between' : 'justify-center'
-            }`}
-          >
+          <div className={`flex items-center mb-6 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
             {isExpanded ? (
               <span className="text-xl font-bold text-white">PPE DETECTION</span>
             ) : (
               <span className="text-xl font-bold text-white">X</span>
             )}
             {isExpanded && (
-              <button
-                onClick={() => setIsExpanded(false)}
-                className="p-1 rounded hover:bg-indigo-700 transition-colors duration-200"
-                aria-label="Tutup Sidebar"
-              >
-                <FaTimes className="w-5 h-5" />
+              <button onClick={() => setIsExpanded(false)} className="p-1 rounded hover:bg-indigo-700 text-white">
+                <FaTimes className="w-6 h-6"/>
               </button>
             )}
           </div>
 
-          {/* Menu Navigasi */}
-          <ul className="space-y-2 flex-grow">{navItemsData.map(navItem)}</ul>
+          {/* MENU UTAMA – Di atas, flex-grow */}
+          <ul className="space-y-2 flex-1">
+            {mainNavItems.map((item, i) => (
+              <li key={i}><NavItem item={item} /></li>
+            ))}
+          </ul>
 
-          {/* Bagian bawah */}
-
-          <div className={`mt-auto`}>
-            <div className='pb-2'>
-              <a
-                href="/users"
-                className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
-                  ${isExpanded ? 'px-3' : 'justify-center'}
-                `}
-                data-tooltip-id="sidebar-tooltip"
-                data-tooltip-content="Users"
-                aria-label="Users"
-              >
-                <FaUsers className="w-6 h-6" />
-                {isExpanded && <span className="ml-3 text-sm font-medium">Users</span>}
-              </a>
-            </div>
-            <div className='pt-2 border-t-2 border-indigo-700'>
-              <button
-                onClick={() => setIsLogoutModalOpen(true)}
-                className={`flex items-center h-12 rounded hover:bg-red-600 hover:text-white transition-colors duration-200 w-full
-                  ${isExpanded ? 'px-3' : 'justify-center'}
-                `}
-                data-tooltip-id="sidebar-tooltip"
-                data-tooltip-content="Logout"
-                aria-label="Logout"
-              >
-                <FaSignOutAlt className="w-6 h-6" />
-                {isExpanded && <span className="ml-3 text-sm font-medium">Logout</span>}
-              </button>
-              <a
-                href="/settings"
-                className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
-                  ${isExpanded ? 'px-3' : 'justify-center'}
-                `}
-                data-tooltip-id="sidebar-tooltip"
-                data-tooltip-content="Settings"
-                aria-label="Settings"
-              >
-                <FaCog className="w-6 h-6" />
-                {isExpanded && <span className="ml-3 text-sm font-medium">Settings</span>}
-              </a>
-            </div>
+          {/* MENU BAWAH – Users, Settings, Logout */}
+          <div className="space-y-2">
+            {bottomNavItems.map((item, i) => (
+              <NavItem key={i} item={item} />
+            ))}
+            
+            <div className="border-t-4 border-indigo-700 my-3" />
+            {/* Logout – tetap button, karena bukan navigasi */}
+            <button
+              onClick={() => setIsLogoutModalOpen(true)}
+              className={`flex items-center h-12 rounded transition-colors duration-200 w-full
+                hover:bg-red-600 hover:text-white text-indigo-200
+                ${isExpanded ? 'px-3' : 'justify-center'}
+              `}
+              data-tooltip-id="sidebar-tooltip"
+              data-tooltip-content="Logout"
+            >
+              <FaSignOutAlt className="w-6 h-6" />
+              {isExpanded && <span className="ml-3 text-sm font-medium">Logout</span>}
+            </button>
           </div>
         </div>
       </nav>
+
+      {/* Hamburger button saat collapsed */}
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="fixed top-4 left-4 z-50 p-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 transition-colors duration-200 shadow-lg"
-          aria-label="Open Sidebar"
+          className="fixed top-4 left-4 z-50 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg"
         >
           <FaBars className="w-6 h-6" />
         </button>
       )}
-      {/* Modal Logout */}
+
       <ModalLogout 
         open={isLogoutModalOpen} 
         onClose={() => setIsLogoutModalOpen(false)} 

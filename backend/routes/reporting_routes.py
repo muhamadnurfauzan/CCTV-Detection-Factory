@@ -7,10 +7,12 @@ from db.db_config import get_connection
 import config as config
 import services.notification_service as notification_service
 from backend.services.cloud_storage import delete_violation_image
+from utils.auth import require_role
 
 reports_bp = Blueprint('reports_bp', __name__, url_prefix='/api')
 
 @reports_bp.route('/reports', methods=['GET'])
+@require_role(['super_admin', 'report_viewer'])
 def get_reports():
     conn = None
     cur = None
@@ -124,6 +126,7 @@ def get_reports():
         if conn: conn.close()
 
 @reports_bp.route('/reports_delete/<int:violation_id>', methods=['DELETE'])
+@require_role(['super_admin'])
 def delete_report(violation_id): 
     conn = None
     cur = None
@@ -172,6 +175,7 @@ def delete_report(violation_id):
         if conn: conn.close()
 
 @reports_bp.route('/reports_delete/batch', methods=['DELETE'])
+@require_role(['super_admin'])
 def delete_reports_batch():
     """
     API untuk menghapus laporan pelanggaran secara massal (batch).
@@ -232,6 +236,7 @@ def delete_reports_batch():
         if conn: conn.close()
 
 @reports_bp.route('/send_email/<int:violation_id>', methods=['POST'])
+@require_role(['super_admin', 'report_viewer'])
 def send_email(violation_id):
     """
     API untuk mengirim email notifikasi secara MANUAL.
