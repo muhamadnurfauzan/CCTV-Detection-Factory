@@ -41,18 +41,17 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
     <>
       {!isExpanded && 
       <Tooltip 
-            id="sidebar-tooltip" 
-            place="right" 
-            effect="float" 
-            style={{ borderRadius: '0.375rem', zIndex: 50 }}
+        id="sidebar-tooltip" 
+        place="right" 
+        effect="float" 
+        style={{ borderRadius: '0.375rem', zIndex: 50 }}
       />}
       <nav
         className={`
-          fixed inset-y-0 left-0 z-50
+          fixed inset-y-0 left-0 z-50 flex flex-col
           bg-indigo-900 text-indigo-300 shadow-2xl
           transition-all duration-300 ease-in-out
           ${isExpanded ? 'w-56' : 'w-20'}
-          flex flex-col overflow-hidden
         `}
       >
         <div className="flex flex-col h-full p-3">
