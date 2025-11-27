@@ -10,13 +10,10 @@ sys.path.insert(0, current_dir)
 from flask import Flask
 from flask_cors import CORS
 from threading import Thread
+from dotenv import load_dotenv
 
-# Impor ini sekarang akan bekerja karena sys.path sudah disesuaikan
-import config
-from core import detection
 import utils.helpers as helpers
 import scheduler  
-from core import detection
 from services import config_service
 from services import cctv_services
 
@@ -27,10 +24,14 @@ import routes.dashboard_routes as dashboard_routes
 import routes.reporting_routes as reporting_routes
 import routes.misc_routes as misc_routes
 import routes.object_routes as object_routes
+import routes.auth_routes as auth_routes
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")  
+app.config['SECRET_KEY'] = os.getenv("JWT_SECRET", "fallback-random-string")
 
 # --- REGISTRASI BLUEPRINT ---
 app.register_blueprint(cctv_crud.cctv_bp)
@@ -39,6 +40,7 @@ app.register_blueprint(dashboard_routes.dashboard_bp)
 app.register_blueprint(reporting_routes.reports_bp)
 app.register_blueprint(misc_routes.misc_bp)
 app.register_blueprint(object_routes.object_bp)
+app.register_blueprint(auth_routes.auth_bp)
 
 if __name__ == "__main__":
     helpers.reset_table_sequence('violation_detection')

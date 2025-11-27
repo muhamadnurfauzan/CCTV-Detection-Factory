@@ -76,7 +76,7 @@ const CCTVList = () => {
 
   const handleItemsPerPageChange = useCallback((items) => {
       setItemsPerPage(items);
-      setCurrentPage(1); // Reset ke halaman 1 saat items per page berubah
+      setCurrentPage(1); 
   }, []);
 
   // --- Handler Update Data (Tambahkan sorting) ---

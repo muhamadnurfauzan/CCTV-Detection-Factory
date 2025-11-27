@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn, FaUsers } from 'react-icons/fa';
+import { FaHome, FaVideo, FaCog, FaTimes, FaBars, FaImages, FaBullhorn, FaUsers, FaSignOutAlt } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
+import ModalLogout from './ModalLogout';
 
 const navItemsData = [
     { path: "/", label: "Dashboard", Icon: FaHome },
@@ -12,6 +13,7 @@ const navItemsData = [
 
 const Sidebar = ({ isExpanded, setIsExpanded }) => {
   const location = useLocation();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const navItem = ({ path, label, Icon }) => {
     const isActive = location.pathname === path;
@@ -45,9 +47,12 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
             style={{ borderRadius: '0.375rem', zIndex: 50 }}
       />}
       <nav
-        className={`fixed top-0 left-0 h-screen bg-indigo-900 text-indigo-300 shadow-xl transition-all duration-300 ${isExpanded ? 'z-40' : 'z-0'}
+        className={`
+          fixed inset-y-0 left-0 z-50
+          bg-indigo-900 text-indigo-300 shadow-2xl
+          transition-all duration-300 ease-in-out
           ${isExpanded ? 'w-56' : 'w-20'}
-          ${isExpanded ? 'translate-x-0' : 'translate-x-0'}
+          flex flex-col overflow-hidden
         `}
       >
         <div className="flex flex-col h-full p-3">
@@ -94,6 +99,18 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
               </a>
             </div>
             <div className='pt-2 border-t-2 border-indigo-700'>
+              <button
+                onClick={() => setIsLogoutModalOpen(true)}
+                className={`flex items-center h-12 rounded hover:bg-red-600 hover:text-white transition-colors duration-200 w-full
+                  ${isExpanded ? 'px-3' : 'justify-center'}
+                `}
+                data-tooltip-id="sidebar-tooltip"
+                data-tooltip-content="Logout"
+                aria-label="Logout"
+              >
+                <FaSignOutAlt className="w-6 h-6" />
+                {isExpanded && <span className="ml-3 text-sm font-medium">Logout</span>}
+              </button>
               <a
                 href="/settings"
                 className={`flex items-center h-12 rounded hover:bg-indigo-700 hover:text-white transition-colors duration-200 
@@ -114,11 +131,16 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
         <button
           onClick={() => setIsExpanded(true)}
           className="fixed top-4 left-4 z-50 p-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 transition-colors duration-200 shadow-lg"
-          aria-label="Buka Sidebar"
+          aria-label="Open Sidebar"
         >
           <FaBars className="w-6 h-6" />
         </button>
       )}
+      {/* Modal Logout */}
+      <ModalLogout 
+        open={isLogoutModalOpen} 
+        onClose={() => setIsLogoutModalOpen(false)} 
+      />
     </>
   );
 };
