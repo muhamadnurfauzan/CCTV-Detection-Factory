@@ -134,25 +134,66 @@ def notify_user_by_violation_id(violation_id):
         for email, full_name in recipients:
         # HTML Body
             html_body = f"""
+            <!DOCTYPE html>
             <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>PPE Violation Alert</title>
+                    <style>
+                        body {{ margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; }}
+                        .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
+                        .header {{ background-color: #d32f2f; padding: 20px; text-align: center; color: white; }}
+                        .header h1 {{ margin: 0; font-size: 24px; }}
+                        .content {{ padding: 30px; color: #333333; }}
+                        .alert-box {{ background-color: #ffebee; border-left: 6px solid #d32f2f; padding: 15px; margin: 20px 0; }}
+                        .detail-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+                        .detail-table th {{ text-align: left; padding: 12px 0; color: #d32f2f; font-weight: 600; }}
+                        .detail-table td {{ padding: 12px 0; }}
+                        .footer {{ background-color: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666666; }}
+                        .btn {{ display: inline-block; background-color: #d32f2f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+                    </style>
+                </head>
                 <body>
-                    <p>Dear Mr./Ms. {full_name},</p>
-                    <p>A <strong>PPE Violation</strong> has been detected in your area of ​​responsibility:</p>
-                    <hr>
-                    <p><strong>Violation Type:</strong> {violation_name.upper()}</p>
-                    <p><strong>CCTV Location:</strong> {cctv_name} ({location})</p>
-                    <p><strong>Time of Incident</strong> {timestamp} WIB</p>
-                    <hr>
-                    <p>Please verify and follow up immediately. Image evidence of the violation is attached to this email.</p>
-                    <p>Thank you for your attention.</p>
-                    <p><small>This message was sent automatically by the PPE Detection System, please do not reply.</small></p>
+                    <div class="container">
+                        <!-- Header dengan Logo (ganti URL logo perusahaan kalian) -->
+                        <div class="header">
+                            <h1>PPE VIOLATION DETECTED</h1>
+                        </div>
+
+                        <div class="content">
+                            <p>Dear Mr./Ms. <strong>{full_name}</strong>,</p>
+                            
+                            <div class="alert-box">
+                                <p><strong>A serious PPE violation has been automatically detected by AI system in your area of responsibility.</strong></p>
+                            </div>
+
+                            <table class="detail-table">
+                                <tr><th>Violation Type</th><td><span style="color:#d32f2f; font-weight:bold;">{violation_name.upper()}</span></td></tr>
+                                <tr><th>CCTV Location</th><td>{cctv_name} ({location})</td></tr>
+                                <tr><th>Time of Incident</th><td>{timestamp} WIB</td></tr>
+                            </table>
+
+                            <p>Please <strong>verify and take immediate corrective action</strong>. Evidence image from CCTV is attached to this email.</p>
+                            
+                            <p>This is an automated safety alert. Delaying follow-up may result in repeated violations or incidents.</p>
+
+                            <!-- Optional: tambahkan tombol kalau ada link ke dashboard -->
+                            <!-- <a href="https://safety.yourcompany.com/violation/{violation_id}" class="btn">View Detail in Safety Dashboard</a> -->
+                        </div>
+
+                        <div class="footer">
+                            <p>This message was sent automatically by the <strong>AI PPE Detection System</strong><br>
+                            © 2025 PT Summit Adyawinsa Indonesia. All rights reserved.</p>
+                        </div>
+                    </div>
                 </body>
             </html>
             """
 
             if send_violation_notification(email, subject, html_body, image_bytes, image_filename):
                 success_count += 1
-                
+                            
         return success_count > 0
 
     except Exception as e:
