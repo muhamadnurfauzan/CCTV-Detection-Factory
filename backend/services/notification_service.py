@@ -1,5 +1,8 @@
 # backend/services/notification_service.py
 import smtplib
+from string import Template
+from psycopg2.extras import RealDictCursor
+
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
@@ -7,7 +10,6 @@ import requests
 import logging
 from db.db_config import get_connection
 from shared_state import state
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # --- 1. Fungsi Utama Pengiriman Email ---
@@ -73,7 +75,32 @@ def download_image_from_url(url):
         logging.error(f"[DOWNLOAD] Gagal mengunduh gambar dari {url}: {e}")
         return None
 
-# --- 3. Fungsi Logika Utama (API Call) ---
+# --- 3. Fungsi Ambil Template Email ---
+
+def get_email_template():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute("""
+            SELECT subject_template, body_template 
+            FROM email_templates 
+            WHERE template_key = 'ppe_violation' AND (is_active = true OR is_active IS NULL)
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row:
+            return row['subject_template'], row['body_template']
+        else:
+            # Fallback kalau DB kosong
+            return (
+                "[URGENT] PPE Violation: {violation_name} at {cctv_name}",
+                "<h1>FALLBACK TEMPLATE</h1><p>{full_name} - {violation_name}</p>"
+            )
+    finally:
+        cur.close()
+        conn.close()
+
+# --- 4. Fungsi Logika Utama (API Call) ---
 
 def notify_user_by_violation_id(violation_id):
     """
@@ -127,71 +154,24 @@ def notify_user_by_violation_id(violation_id):
         violation_name = violation_data[5] # violation_name index ke-5
         timestamp = violation_data[0].strftime("%Y-%m-%d %H:%M:%S")
 
-        subject = f"[Important] PPE Violation: {violation_name.upper()} at {cctv_name}"
         success_count = 0
+        subject_template, body_template = get_email_template()  # ambil sekali di luar loop (efisien)
 
-        # --- LOOP Pengiriman Email (Kirim personal ke setiap penerima) ---
-        for email, full_name in recipients:
-        # HTML Body
-            html_body = f"""
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>PPE Violation Alert</title>
-                    <style>
-                        body {{ margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; }}
-                        .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
-                        .header {{ background-color: #d32f2f; padding: 20px; text-align: center; color: white; }}
-                        .header h1 {{ margin: 0; font-size: 24px; }}
-                        .content {{ padding: 30px; color: #333333; }}
-                        .alert-box {{ background-color: #ffebee; border-left: 6px solid #d32f2f; padding: 15px; margin: 20px 0; }}
-                        .detail-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-                        .detail-table th {{ text-align: left; padding: 12px 0; color: #d32f2f; font-weight: 600; }}
-                        .detail-table td {{ padding: 12px 0; }}
-                        .footer {{ background-color: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666666; }}
-                        .btn {{ display: inline-block; background-color: #d32f2f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <!-- Header dengan Logo (ganti URL logo perusahaan kalian) -->
-                        <div class="header">
-                            <h1>PPE VIOLATION DETECTED</h1>
-                        </div>
+        for recipient_email, full_name in recipients:
+            # Context dibuat PER PENERIMA
+            context = {
+                'full_name': full_name or "Bapak/Ibu",  # fallback kalau null
+                'violation_name': violation_name.upper(),
+                'cctv_name': cctv_name,
+                'location': location or "Unknown",
+                'timestamp': timestamp,
+                'violation_id': violation_id,
+            }
 
-                        <div class="content">
-                            <p>Dear Mr./Ms. <strong>{full_name}</strong>,</p>
-                            
-                            <div class="alert-box">
-                                <p><strong>A serious PPE violation has been automatically detected by AI system in your area of responsibility.</strong></p>
-                            </div>
+            subject = Template(subject_template).safe_substitute(context)
+            html_body = Template(body_template).safe_substitute(context)
 
-                            <table class="detail-table">
-                                <tr><th>Violation Type</th><td><span style="color:#d32f2f; font-weight:bold;">{violation_name.upper()}</span></td></tr>
-                                <tr><th>CCTV Location</th><td>{cctv_name} ({location})</td></tr>
-                                <tr><th>Time of Incident</th><td>{timestamp} WIB</td></tr>
-                            </table>
-
-                            <p>Please <strong>verify and take immediate corrective action</strong>. Evidence image from CCTV is attached to this email.</p>
-                            
-                            <p>This is an automated safety alert. Delaying follow-up may result in repeated violations or incidents.</p>
-
-                            <!-- Optional: tambahkan tombol kalau ada link ke dashboard -->
-                            <!-- <a href="https://safety.yourcompany.com/violation/{violation_id}" class="btn">View Detail in Safety Dashboard</a> -->
-                        </div>
-
-                        <div class="footer">
-                            <p>This message was sent automatically by the <strong>AI PPE Detection System</strong><br>
-                            © 2025 PT Summit Adyawinsa Indonesia. All rights reserved.</p>
-                        </div>
-                    </div>
-                </body>
-            </html>
-            """
-
-            if send_violation_notification(email, subject, html_body, image_bytes, image_filename):
+            if send_violation_notification(recipient_email, subject, html_body, image_bytes, image_filename):
                 success_count += 1
                             
         return success_count > 0

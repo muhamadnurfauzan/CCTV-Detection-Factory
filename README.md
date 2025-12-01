@@ -113,5 +113,5 @@ If you use a separate proxy, ensure port is not blocked by the browser (avoid un
 
 ---
 
-## Useful commands
+## License
 © 2025 PT Summit Adyawinsa Indonesia.
