@@ -1,4 +1,3 @@
-// components/SetupEmail.jsx
 import React, { useState, useEffect } from 'react';
 import { useAlert } from './AlertProvider'; 
 import RoleButton from './RoleButton';
@@ -12,36 +11,45 @@ const initialFormData = {
     enable_auto_email: false,
 };
 
-// Fungsi insert tag
-const insertAtCursor = (field, text) => {
-  setTemplate(prev => {
-    const old = prev[field] || '';
-    return { ...prev, [field]: old + text };
-  });
+// Fungsi insert tag (di luar, agar reusable)
+const insertAtCursor = (setTemplate, field, text) => {
+  setTemplate(prev => ({
+    ...prev,
+    [field]: (prev[field] || '') + text
+  }));
 };
 
 const SetupEmail = () => {
     const { showAlert } = useAlert();
     const [formData, setFormData] = useState(initialFormData);
+    const [formDataOriginal, setFormDataOriginal] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [isEditing, setIsEditing] = useState(false);
+    const [isEditingSMTP, setIsEditingSMTP] = useState(false); 
+    const [isEditingTemplate, setIsEditingTemplate] = useState(false); 
     const [newPassword, setNewPassword] = useState('');
+    const [template, setTemplate] = useState({
+        subject_template: '',
+        body_template: ''
+    });
+    const [templateOriginal, setTemplateOriginal] = useState(null);
+    const [savingTemplate, setSavingTemplate] = useState(false);
+    const [savingSMTP, setSavingSMTP] = useState(false); // NEW: Loading state per section
 
-    // 1. Fetch data saat komponen dimuat (GET /api/settings)
+    // Fetch SMTP settings
     useEffect(() => {
         const fetchSettings = async () => {
             try {
                 const res = await fetch('/api/settings');
                 if (!res.ok) throw new Error('Failed to fetch settings.');
                 const data = await res.json();
-                
-                // Set data ke form state. Password diisi placeholder
-                setFormData({
+                const formattedData = {
                     ...data,
                     enable_auto_email: data.enable_auto_email || false,
                     smtp_pass_current: data.smtp_pass 
-                });
+                };
+                setFormData(formattedData);
+                setFormDataOriginal(formattedData); // Snapshot awal untuk SMTP
             } catch (err) {
                 setError(err.message);
                 showAlert(`Error loading settings: ${err.message}`, 'error');
@@ -50,6 +58,28 @@ const SetupEmail = () => {
             }
         };
         fetchSettings();
+    }, []);
+
+    // Fetch Template
+    useEffect(() => {
+        const fetchTemplate = async () => {
+            try {
+                const res = await fetch('/api/email-template/ppe-violation');
+                if (res.ok) {
+                    const data = await res.json();
+                    const formattedTemplate = {
+                        subject_template: data.subject_template || '',
+                        body_template: data.body_template || ''
+                    };
+                    setTemplate(formattedTemplate);
+                    setTemplateOriginal(formattedTemplate);
+                }
+            } catch (err) {
+                console.error("Failed to load email template:", err);
+                showAlert("Failed to load email template", "error");
+            }
+        };
+        fetchTemplate();
     }, []);
 
     const handleChange = (e) => {
@@ -64,12 +94,13 @@ const SetupEmail = () => {
         setNewPassword(e.target.value);
     };
 
-    // 2. Handle Submit (POST /api/settings)
+    // Handle Submit SMTP (POST /api/settings)
     const handleSubmit = async (e) => {
         e.preventDefault();
-        showAlert('Saving configuration...', 'info');
+        if (savingSMTP) return;
+        setSavingSMTP(true);
+        showAlert('Saving SMTP configuration...', 'info');
         
-        // Data yang akan dikirim ke backend
         const dataToSend = {
             ...formData,
             smtp_pass: newPassword || formData.smtp_pass_current,
@@ -87,73 +118,64 @@ const SetupEmail = () => {
             if (!res.ok) throw new Error('Failed to save settings.');
             
             const result = await res.json();
-            showAlert(result.message || 'Configuration saved successfully!', 'success');
+            showAlert(result.message || 'SMTP configuration saved successfully!', 'success');
             
             setNewPassword(''); 
-            setIsEditing(false);
+            setFormDataOriginal({ ...formData }); // Update snapshot
+            setIsEditingSMTP(false);
             
         } catch (err) {
-            showAlert(`Error saving: ${err.message}`, 'error');
+            showAlert(`Error saving SMTP: ${err.message}`, 'error');
+        } finally {
+            setSavingSMTP(false);
         }
     };
 
-    const [template, setTemplate] = useState({
-        subject_template: '',
-        body_template: ''
-    });
+    // Handle Save Template
+    const handleSaveTemplate = async () => {
+        if (savingTemplate) return;
+        setSavingTemplate(true);
 
-    useEffect(() => {
-        const fetchTemplate = async () => {
-            try {
-            const res = await fetch('/api/email-template/ppe-violation');
-            if (res.ok) {
-                const data = await res.json();
-                setTemplate({
-                subject_template: data.subject_template || '',
-                body_template: data.body_template || ''
-                });
-            }
-            } catch (err) {
-            console.error("Failed to load email template:", err);
-            }
-        };
-        fetchTemplate();
-    }, []);
+        try {
+            const res = await fetch('/api/email-template/ppe-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject_template: template.subject_template,
+                    body_template: template.body_template
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to save email template');
+
+            const result = await res.json();
+            showAlert('Email template saved successfully!', 'success');
+            setTemplateOriginal({ ...template });
+            setIsEditingTemplate(false);
+        } catch (err) {
+            showAlert('Error: ' + err.message, 'error');
+        } finally {
+            setSavingTemplate(false);
+        }
+    };
+
+    // Deteksi perubahan
+    const hasSMTPChanged = JSON.stringify(formData) !== JSON.stringify(formDataOriginal || {}) || newPassword !== '';
+    const hasTemplateChanged = JSON.stringify(template) !== JSON.stringify(templateOriginal || {});
 
     if (loading) return <p className="text-gray-600 p-6 bg-white shadow rounded-lg text-center">Loading configuration...</p>;
     if (error) return <p className="text-red-500 p-6 bg-white shadow rounded-lg text-center">Error: {error}</p>;
 
     return (
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-2'>
-            <div className="bg-white p-6 rounded-lg shadow-md mb-4">
-                {/* --- Tombol Edit/Cancel --- */}
-                <div className="flex justify-end mb-4">
-                    {isEditing ? (
-                        <RoleButton
-                            allowedRoles={['super_admin']} 
-                            type="button"
-                            onClick={() => setIsEditing(false)}
-                            className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition"
-                        >
-                            Cancel Edit
-                        </RoleButton>
-                    ) : (
-                        <RoleButton
-                            allowedRoles={['super_admin']} 
-                            type="button"
-                            onClick={() => setIsEditing(true)}
-                            className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition"
-                        >
-                            Edit Configuration
-                        </RoleButton>
-                    )}
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+            {/* === KIRI: SMTP CONFIG === */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className='flex justify-between items-center mb-4 border-b pb-2'>
+                    <h3 className="text-xl font-semibold text-gray-700">SMTP Server</h3>
                 </div>
-
-                <h3 className="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">SMTP Server Configuration</h3>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    
-                    {/* Bagian Kredensial SMTP */}
-                    <fieldset disabled={!isEditing} className="space-y-4">
+                
+                <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4"> 
+                    <fieldset disabled={!isEditingSMTP} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">SMTP Host (e.g., smtp.gmail.com)</label>
@@ -164,7 +186,7 @@ const SetupEmail = () => {
                                     onChange={handleChange}
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 disabled:bg-gray-100"
                                     required
-                                    disabled={!isEditing} 
+                                    disabled={!isEditingSMTP} 
                                 />
                             </div>
                             <div>
@@ -176,7 +198,7 @@ const SetupEmail = () => {
                                     onChange={handleChange}
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 disabled:bg-gray-100"
                                     required
-                                    disabled={!isEditing} 
+                                    disabled={!isEditingSMTP} 
                                 />
                             </div>
                         </div>
@@ -190,7 +212,7 @@ const SetupEmail = () => {
                                 onChange={handleChange}
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 disabled:bg-gray-100"
                                 required
-                                disabled={!isEditing} 
+                                disabled={!isEditingSMTP} 
                             />
                         </div>
                         
@@ -203,7 +225,7 @@ const SetupEmail = () => {
                                 onChange={handleChange}
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 disabled:bg-gray-100"
                                 required
-                                disabled={!isEditing} 
+                                disabled={!isEditingSMTP} 
                             />
                         </div>
 
@@ -211,11 +233,11 @@ const SetupEmail = () => {
                             <label className="block text-sm font-medium text-gray-700">SMTP Password (App Password)</label>
                             <input
                                 type="password"
-                                placeholder={isEditing ? "Leave blank to keep existing password" : formData.smtp_pass_current}
+                                placeholder={isEditingSMTP ? "Leave blank to keep existing password" : formData.smtp_pass_current}
                                 value={newPassword}
                                 onChange={handlePasswordChange}
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                disabled={!isEditing} 
+                                disabled={!isEditingSMTP} 
                             />
                             <p className="mt-1 text-xs text-gray-500">Only fill this if you want to change the password.</p>
                         </div>
@@ -230,81 +252,153 @@ const SetupEmail = () => {
                                     checked={formData.enable_auto_email}
                                     onChange={handleChange}
                                     className="sr-only peer"
-                                    disabled={!isEditing} 
+                                    disabled={!isEditingSMTP} 
                                 />
                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600" />
                             </label>
                         </div>
                     </fieldset>
-                    
+
                     <div className="pt-4">
-                        <RoleButton
-                            allowedRoles={['super_admin']} 
-                            type="submit"
-                            disabled={!isEditing} 
-                            className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition ${!isEditing ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
-                        >
-                            Save Email Configuration
-                        </RoleButton>
+                        {isEditingSMTP ? (
+                            <div className='flex gap-2'> 
+                                <button
+                                    onClick={() => {
+                                        setFormData(formDataOriginal || initialFormData);
+                                        setNewPassword('');
+                                        setIsEditingSMTP(false);
+                                    }}
+                                    className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition bg-gray-200 border-gray-300 hover:bg-gray-100"
+                                    disabled={savingSMTP}
+                                >
+                                    Cancel
+                                </button>
+                                <RoleButton
+                                    allowedRoles={['super_admin']} 
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    disabled={!hasSMTPChanged || savingSMTP}
+                                    className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition text-white ${
+                                        hasSMTPChanged && !savingSMTP
+                                            ? 'bg-indigo-600 hover:bg-indigo-700'
+                                            : 'bg-gray-400 cursor-not-allowed'
+                                    }`}
+                                >
+                                    {savingSMTP ? 'Saving...' : 'Save SMTP'}
+                                </RoleButton>
+                            </div>
+                        ) : (
+                            <RoleButton
+                                allowedRoles={['super_admin']} 
+                                type="button"
+                                onClick={() => setIsEditingSMTP(true)}
+                                className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition text-white bg-green-600 hover:bg-green-700"
+                            >
+                                Edit SMTP
+                            </RoleButton>
+                        )}
                     </div>
                 </form>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-md mb-4">
-                <h3 className="text-xl font-semibold mb-4 text-gray-700 border-b pb-2">
-                    Email Template Configuration – PPE Violation
-                </h3>
 
-                {/* Tombol Tag */}
-                <div className="flex flex-wrap gap-2 mb-4">
+            {/* === KANAN: TEMPLATE EMAIL === */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-xl font-semibold text-gray-700">
+                        Email Template
+                    </h3>
+                </div>
+
+                {/* Tag Buttons */}
+                <div className="flex flex-wrap gap-2 mb-6">
                     {[
-                    {l: "Full Name", v: "${full_name}"},
-                    {l: "Violation Type", v: "${violation_name}"},
-                    {l: "CCTV Name", v: "${cctv_name}"},
-                    {l: "CCTV Location", v: "${location}"},
-                    {l: "Time of Incident", v: "${timestamp}"}
+                        { l: "Full Name", v: "${full_name}" },
+                        { l: "Violation Type", v: "${violation_name}" },
+                        { l: "CCTV Name", v: "${cctv_name}" },
+                        { l: "CCTV Location", v: "${location}" },
+                        { l: "Time of Incident", v: "${timestamp}" },
+                        { l: "Violation ID", v: "${violation_id}" }
                     ].map(t => (
-                    <button
-                        key={t.v}
-                        type="button"
-                        onClick={() => insertAtCursor('body', t.v)}
-                        className="px-3 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full hover:bg-indigo-200 transition"
-                        disabled={!isEditing}
-                    >
-                        {t.l}
-                    </button>
+                        <button
+                            key={t.v}
+                            type="button"
+                            onClick={() => insertAtCursor(setTemplate, 'body_template', t.v)}
+                            disabled={!isEditingTemplate}
+                            className="px-4 py-1.5 text-xs bg-indigo-100 text-indigo-800 rounded-full hover:bg-indigo-200 transition"
+                        >
+                            {t.l}
+                        </button>
                     ))}
                 </div>
 
-                <div className="mt-6">
+                {/* Subject */}
+                <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Subject Template
                     </label>
                     <input
                         type="text"
                         value={template.subject_template}
-                        onChange={(e) => setTemplate(prev => ({...prev, subject_template: e.target.value}))}
-                        className="w-full px-4 py-2 border rounded-lg"
-                        disabled={!isEditing}
-                        placeholder="[URGENT] PPE Violation: {violation_name} at {cctv_name}"
+                        onChange={e => setTemplate(prev => ({ ...prev, subject_template: e.target.value }))}
+                        disabled={!isEditingTemplate}
+                        className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-50"
+                        placeholder="[URGENT] PPE Violation: ${violation_name} at ${location}"
                     />
                 </div>
 
-                <div className="mt-6">
+                {/* Body */}
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Body Template
+                        Body Template (HTML)
                     </label>
                     <textarea
-                        rows="20"
-                        value={template.body_template || ''}
-                        onChange={(e) => setTemplate(prev => ({...prev, body_template: e.target.value}))}
-                        className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-50"
-                        disabled={!isEditing}
-                        placeholder="Paste or edit HTML template here..."
+                        rows="22"
+                        value={template.body_template}
+                        onChange={e => setTemplate(prev => ({ ...prev, body_template: e.target.value }))}
+                        disabled={!isEditingTemplate}
+                        className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-50 disabled:bg-gray-100"
+                        placeholder="Paste atau edit HTML template di sini..."
                     />
+                </div>
+
+                <div className="pt-4">
+                    {isEditingTemplate ? (
+                        <div className='flex gap-2'>
+                            <button
+                                onClick={() => {
+                                    setTemplate(templateOriginal || { subject_template: '', body_template: '' });
+                                    setIsEditingTemplate(false);
+                                }}
+                                className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition bg-gray-200 border-gray-300 hover:bg-gray-100"
+                                disabled={savingTemplate}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveTemplate}
+                                disabled={!hasTemplateChanged || savingTemplate}
+                                className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium  text-white transition ${
+                                    hasTemplateChanged && !savingTemplate
+                                        ? 'bg-indigo-600 hover:bg-indigo-700'
+                                        : 'bg-gray-400 cursor-not-allowed'
+                                }`}
+                            >
+                                {savingTemplate ? 'Saving...' : 'Save Template'}
+                            </button>
+                        </div>
+                    ) : (
+                        <RoleButton
+                            allowedRoles={['super_admin']}
+                            type="button"
+                            onClick={() => setIsEditingTemplate(true)}
+                            className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition text-white bg-green-600 hover:bg-green-700"
+                        >
+                            Edit Template
+                        </RoleButton>
+                    )}
                 </div>
             </div>
         </div>
-        
     );
 };
 

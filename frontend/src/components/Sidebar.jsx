@@ -73,6 +73,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
           </div>
 
           {/* MENU UTAMA – Di atas, flex-grow */}
+          <div className='border-t-4 border-indigo-700 my-2' />
           <ul className="space-y-2 flex-1">
             {mainNavItems.map((item, i) => (
               <li key={i}><NavItem item={item} /></li>
