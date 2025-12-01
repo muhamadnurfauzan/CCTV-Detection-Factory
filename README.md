@@ -114,4 +114,8 @@ If you use a separate proxy, ensure port is not blocked by the browser (avoid un
 ---
 
 ## License
+<<<<<<< HEAD
 © 2025 PT Summit Adyawinsa Indonesia.
+=======
+© 2025 PT Summit Adyawinsa Indonesia.
+>>>>>>> 4519cf38a4abac4e778b179df8a279f29a4ece9f
