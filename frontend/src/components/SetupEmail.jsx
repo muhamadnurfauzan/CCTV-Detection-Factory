@@ -161,7 +161,7 @@ const SetupEmail = () => {
 
     return (
         // <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-        <div>
+        <div className='space-y-4'>
             {/* === KIRI: SMTP CONFIG === */}
             <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className='flex justify-between items-center mb-4 border-b pb-2'>
