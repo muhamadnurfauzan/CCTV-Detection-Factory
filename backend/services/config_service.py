@@ -115,3 +115,22 @@ def refresh_active_violations():
         logging.error(f"[ACTIVE CACHE] FAILED to refresh: {e}")
         # Jangan biarkan cache kosong total jika error — fallback ke empty
         state.ACTIVE_VIOLATION_CACHE.clear()
+
+# --- Reload detection settings ---
+def load_detection_settings(force=False):
+    """
+    Load semua detection settings dari DB ke state.detection_settings
+    Dipanggil saat startup dan setiap ada perubahan dari admin
+    """
+    with state.DETECTION_SETTINGS_LOCK:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT key, value FROM detection_settings")
+        new_settings = {row[0]: float(row[1]) for row in cur.fetchall()}
+        cur.close()
+        conn.close()
+        
+        state.detection_settings.clear()
+        state.detection_settings.update(new_settings)
+        
+        logging.info("[CONFIG] Detection settings reloaded from DB loaded")

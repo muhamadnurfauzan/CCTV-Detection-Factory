@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaPlus } from 'react-icons/fa';
 import { useAlert } from './AlertProvider'; 
 import RoleButton from './RoleButton';
 import EmailTemplateEditor from './EmailTemplateEditor';
@@ -298,7 +299,35 @@ const SetupEmail = () => {
             {/* === KANAN: TEMPLATE EMAIL === */}
             <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 className="text-xl font-semibold text-gray-700">Email Template</h3>
+                    <div>
+                        <h3 className="text-xl font-semibold text-gray-700">Email Template</h3>
+                    </div>
+                    
+                    {/* Tombol Add dan Select template */}
+                    {/* <div className='flex items-center justify-end'>
+                        <div className='flex gap-2'>
+                            <RoleButton
+                                allowedRoles={['super_admin']}
+                                type="button"
+                                disabled={error || template.subject_template.trim() === '' || template.body_template.trim() === ''}
+                                className={`
+                                    flex items-center gap-2 p-3 text-white rounded-lg
+                                    ${error || template.subject_template.trim() === '' || template.body_template.trim() === ''
+                                        ? 'bg-gray-400 cursor-not-allowed' 
+                                        : 'bg-green-600 hover:bg-green-700 transition'}
+                                    `}
+                                title="Add New Template"
+                            >
+                                <FaPlus className='h-4 w-4'/>
+                            </RoleButton>
+                            <select name="" id="" className='border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-indigo-500'>
+                                <option value="" selected> PPE Violation </option>
+                                <option value="" selected> Template A </option>
+                                <option value="" selected> Template B </option>
+                                <option value="" selected> Template C </option>
+                            </select>
+                        </div>
+                    </div> */}
                 </div>
 
                 {/* Email Codemirror */}
@@ -321,7 +350,9 @@ const SetupEmail = () => {
                             >
                                 Cancel
                             </button>
-                            <button
+                            <RoleButton
+                                allowedRoles={['super_admin']}  
+                                type="button"
                                 onClick={handleSaveTemplate}
                                 disabled={!hasTemplateChanged || savingTemplate}
                                 className={`w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium  text-white transition ${
@@ -331,7 +362,7 @@ const SetupEmail = () => {
                                 }`}
                             >
                                 {savingTemplate ? 'Saving...' : 'Save Template'}
-                            </button>
+                            </RoleButton>
                         </div>
                     ) : (
                         <RoleButton

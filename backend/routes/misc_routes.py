@@ -156,3 +156,32 @@ def email_template_ppe():
     finally:
         cur.close()
         conn.close()
+
+@misc_bp.route('/detection-settings', methods=['GET', 'POST'])
+@require_role(['super_admin'])
+def detection_settings():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        if request.method == 'GET':
+            cur.execute("SELECT key, value, description, min_value, max_value FROM detection_settings ORDER BY key")
+            return jsonify(cur.fetchall())
+
+        else:  # POST
+            data = request.json
+            for item in data:
+                cur.execute("""
+                    UPDATE detection_settings 
+                    SET value = %s, updated_at = NOW(), updated_by = 'admin' 
+                    WHERE key = %s
+                """, (item['value'], item['key']))
+            conn.commit()
+            
+            # Reload ke memory
+            from services.config_service import load_detection_settings
+            load_detection_settings()
+            
+            return jsonify({"success": True})
+    finally:
+        cur.close()
+        conn.close()

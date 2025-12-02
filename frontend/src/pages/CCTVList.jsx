@@ -242,7 +242,7 @@ const CCTVList = () => {
             {(view === 'table' || view === 'violation') && (
                 <div className="flex items-center justify-end gap-2">
                   {view === 'table' && (
-                  <div className='flex gap-2'>
+                    <div className='flex gap-2'>
                       <RoleButton
                         allowedRoles={['super_admin', 'cctv_editor']} 
                         disabled={error || currentItems.length === 0}
@@ -272,7 +272,7 @@ const CCTVList = () => {
                       >
                         <FaPlus className='h-4 w-4'/>
                       </RoleButton>
-                  </div>
+                    </div>
                   )}
                   <div className='flex items-center relative w-full max-w-sm'>
                     <input

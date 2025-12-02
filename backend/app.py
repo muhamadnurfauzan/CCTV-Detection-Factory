@@ -52,6 +52,7 @@ if __name__ == "__main__":
     config_service.load_email_config()
     config_service.load_object_classes()
     config_service.load_violation_pairs() 
+    config_service.load_detection_settings()
 
     # Jalankan scheduler
     Thread(target=scheduler.scheduler_thread, daemon=True).start()

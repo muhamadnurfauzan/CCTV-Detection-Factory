@@ -1,13 +1,15 @@
 // Settings.jsx
 import React, { useState } from 'react';
 import RoleButton from '../components/RoleButton';
+import ConfigSetup from '../components/SetupConfig'; 
 import DatasetSetup from '../components/SetupDataset'; 
 import EmailSetup from '../components/SetupEmail'; 
 
 const Settings = () => {
-    const [settingButton, setSettingButton] = useState('dataset'); 
+    const [settingButton, setSettingButton] = useState('config'); 
 
     const menuItems = [
+        { key: 'config', label: 'Detection Settings' },
         { key: 'dataset', label: 'Dataset Setup' },
         { key: 'email', label: 'Email Setup' },
         { key: 'comingsoon', label: 'Coming Soon' },
@@ -16,6 +18,8 @@ const Settings = () => {
     // Fungsi untuk merender konten berdasarkan tab yang aktif
     const renderContent = () => {
         switch (settingButton) {
+            case 'config':
+                return <ConfigSetup />;
             case 'dataset':
                 return <DatasetSetup />;
             case 'email':

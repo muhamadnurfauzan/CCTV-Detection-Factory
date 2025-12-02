@@ -5,20 +5,18 @@ from shared_state import state
 
 # Load environment variables
 load_dotenv()
-    
-annotated_frames = state.annotated_frames
-ANNOTATED_FRAME_LOCK = state.ANNOTATED_FRAME_LOCK
 
 # --- Model dan Pengaturan Umum ---
 MODEL_PATH = "model/helm detection.pt"
-CONFIDENCE_THRESHOLD = 0.5
-COOLDOWN = 5
-CLEANUP_INTERVAL = 180
-PADDING_PERCENT = 0.5
-TARGET_MAX_WIDTH = 320
-FRAME_SKIP = 15
-QUEUE_SIZE = 3
 CCTV_RATIO = (1920, 1080)
+
+CONFIDENCE_THRESHOLD = state.detection_settings['confidence_threshold']
+COOLDOWN = state.detection_settings['cooldown_seconds']
+CLEANUP_INTERVAL = state.detection_settings['cleanup_interval']
+FRAME_SKIP = state.detection_settings['frame_skip']
+QUEUE_SIZE = state.detection_settings['queue_size']
+PADDING_PERCENT = state.detection_settings['padding_percent']
+TARGET_MAX_WIDTH = state.detection_settings['target_max_width']
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
