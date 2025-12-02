@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAlert } from './AlertProvider'; 
 import RoleButton from './RoleButton';
+import EmailTemplateEditor from './EmailTemplateEditor';
 
 const initialFormData = {
     smtp_host: '',
@@ -9,14 +10,6 @@ const initialFormData = {
     smtp_pass: '', 
     smtp_from: '',
     enable_auto_email: false,
-};
-
-// Fungsi insert tag (di luar, agar reusable)
-const insertAtCursor = (setTemplate, field, text) => {
-  setTemplate(prev => ({
-    ...prev,
-    [field]: (prev[field] || '') + text
-  }));
 };
 
 const SetupEmail = () => {
@@ -34,7 +27,7 @@ const SetupEmail = () => {
     });
     const [templateOriginal, setTemplateOriginal] = useState(null);
     const [savingTemplate, setSavingTemplate] = useState(false);
-    const [savingSMTP, setSavingSMTP] = useState(false); // NEW: Loading state per section
+    const [savingSMTP, setSavingSMTP] = useState(false); 
 
     // Fetch SMTP settings
     useEffect(() => {
@@ -49,7 +42,7 @@ const SetupEmail = () => {
                     smtp_pass_current: data.smtp_pass 
                 };
                 setFormData(formattedData);
-                setFormDataOriginal(formattedData); // Snapshot awal untuk SMTP
+                setFormDataOriginal(formattedData);
             } catch (err) {
                 setError(err.message);
                 showAlert(`Error loading settings: ${err.message}`, 'error');
@@ -121,7 +114,7 @@ const SetupEmail = () => {
             showAlert(result.message || 'SMTP configuration saved successfully!', 'success');
             
             setNewPassword(''); 
-            setFormDataOriginal({ ...formData }); // Update snapshot
+            setFormDataOriginal({ ...formData }); 
             setIsEditingSMTP(false);
             
         } catch (err) {
@@ -167,7 +160,8 @@ const SetupEmail = () => {
     if (error) return <p className="text-red-500 p-6 bg-white shadow rounded-lg text-center">Error: {error}</p>;
 
     return (
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+        // <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+        <div>
             {/* === KIRI: SMTP CONFIG === */}
             <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className='flex justify-between items-center mb-4 border-b pb-2'>
@@ -304,62 +298,15 @@ const SetupEmail = () => {
             {/* === KANAN: TEMPLATE EMAIL === */}
             <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 className="text-xl font-semibold text-gray-700">
-                        Email Template
-                    </h3>
+                    <h3 className="text-xl font-semibold text-gray-700">Email Template</h3>
                 </div>
 
-                {/* Tag Buttons */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                    {[
-                        { l: "Full Name", v: "${full_name}" },
-                        { l: "Violation Type", v: "${violation_name}" },
-                        { l: "CCTV Name", v: "${cctv_name}" },
-                        { l: "CCTV Location", v: "${location}" },
-                        { l: "Time of Incident", v: "${timestamp}" },
-                        { l: "Violation ID", v: "${violation_id}" }
-                    ].map(t => (
-                        <button
-                            key={t.v}
-                            type="button"
-                            onClick={() => insertAtCursor(setTemplate, 'body_template', t.v)}
-                            disabled={!isEditingTemplate}
-                            className="px-4 py-1.5 text-xs bg-indigo-100 text-indigo-800 rounded-full hover:bg-indigo-200 transition"
-                        >
-                            {t.l}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Subject */}
-                <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Subject Template
-                    </label>
-                    <input
-                        type="text"
-                        value={template.subject_template}
-                        onChange={e => setTemplate(prev => ({ ...prev, subject_template: e.target.value }))}
-                        disabled={!isEditingTemplate}
-                        className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-50"
-                        placeholder="[URGENT] PPE Violation: ${violation_name} at ${location}"
-                    />
-                </div>
-
-                {/* Body */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Body Template (HTML)
-                    </label>
-                    <textarea
-                        rows="22"
-                        value={template.body_template}
-                        onChange={e => setTemplate(prev => ({ ...prev, body_template: e.target.value }))}
-                        disabled={!isEditingTemplate}
-                        className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-50 disabled:bg-gray-100"
-                        placeholder="Paste atau edit HTML template di sini..."
-                    />
-                </div>
+                {/* Email Codemirror */}
+                <EmailTemplateEditor
+                    template={template}
+                    setTemplate={setTemplate}
+                    isEditing={isEditingTemplate}
+                />
 
                 <div className="pt-4">
                     {isEditingTemplate ? (
