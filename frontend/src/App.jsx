@@ -1,5 +1,5 @@
-// App.jsx – FINAL VERSION (Overlay Sidebar, No Push)
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+// App.jsx 
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';

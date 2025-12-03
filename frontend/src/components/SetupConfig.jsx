@@ -113,7 +113,7 @@ const SetupConfig = () => {
                         <input
                             type="range"
                             min="0.1"
-                            max="0.99"
+                            max="1"
                             step="0.05"
                             value={val}
                             disabled={disabled}
@@ -124,7 +124,7 @@ const SetupConfig = () => {
                             style={{
                                 background: disabled 
                                     ? undefined
-                                    : `linear-gradient(to right, #4f46e5 0%, #4f46e5 ${((val - 0.1) / 0.89) * 100}%, #e5e7eb ${((val - 0.1) / 0.89) * 100}%, #e5e7eb 100%)`
+                                    : `linear-gradient(to right, #4f46e5 0%, #4f46e5 ${((val - 0.1) / 0.9) * 100}%, #e5e7eb ${((val - 0.1) / 0.9) * 100}%, #e5e7eb 100%)`
                             }}
                         />
                         <span className={`w-16 text-right font-bold text-lg ${disabled ? 'text-gray-500' : 'text-indigo-600'}`}>
