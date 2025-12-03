@@ -6,18 +6,21 @@ import RoleButton from './RoleButton';
 const SetupConfig = () => {
     const { showAlert } = useAlert();
     const [settings, setSettings] = useState([]);
-    const [originalSettings, setOriginalSettings] = useState([]); // Backup saat mulai edit
+    const [originalSettings, setOriginalSettings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
 
-    // Cek apakah ada perubahan
-    const hasChanges = JSON.stringify(settings) !== JSON.stringify(originalSettings);
+    const hasChanges = settings.some((current, index) => {
+        const original = originalSettings[index];
+        if (!original) return true;
+        return current.value !== original.value;
+    });
 
     const fetchSettings = async () => {
         try {
             const res = await fetch('/api/detection-settings');
-            if (!res.ok) throw new Error('Gagal memuat pengaturan');
+            if (!res.ok) throw new Error('Failed to fetch settings');
             const data = await res.json();
 
             // Konversi semua value jadi number agar aman
@@ -49,7 +52,7 @@ const SetupConfig = () => {
             });
             if (!res.ok) throw new Error('Failed to save');
             showAlert('Settings successfully saved & active immediately!', 'success');
-            setOriginalSettings(JSON.parse(JSON.stringify(settings))); // Update backup
+            setOriginalSettings(JSON.parse(JSON.stringify(settings)));
         } catch (err) {
             showAlert('Error: ' + err.message, 'error');
         } finally {
@@ -58,6 +61,17 @@ const SetupConfig = () => {
         }
     };
 
+    const formatLabel = (key) => key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    const groups = {
+        'Detection Accuracy': ['confidence_threshold', 'frame_skip', 'queue_size'],
+        'Violation Timing': ['cleanup_interval', 'cooldown_seconds'],
+        'Image Processing': ['padding_percent', 'target_max_width']
+    };
+
+    const getSetting = (key) => settings.find(s => s.key === key) || {};
+    const getValue = (key) => getSetting(key).value ?? 0;
+
     const updateValue = (key, value) => {
         const numValue = parseFloat(value) || 0;
         setSettings(prev => prev.map(s =>
@@ -65,145 +79,95 @@ const SetupConfig = () => {
         ));
     };
 
-    const formatLabel = (key) => key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const PillGroup = ({ options, current, onChange, unit = '' }) => (
+        <div className="flex flex-wrap gap-2">
+            {options.map(val => (
+                <button
+                    key={val}
+                    onClick={() => onChange(val)}
+                    disabled={!isEditing}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                        current === val
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : isEditing
+                                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                : 'bg-gray-100 text-gray-500'
+                    } ${!isEditing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                    {val}{unit}
+                </button>
+            ))}
+        </div>
+    );
 
-    const groups = {
-        'Detection Accuracy': ['confidence_threshold', 'frame_skip', 'queue_size'],
-        'Violation Timing': ['cooldown_seconds', 'cleanup_interval'],
-        'Image Processing': ['padding_percent', 'target_max_width']
-    };
+    const renderControl = (key) => {
+        const s = getSetting(key);
+        const val = getValue(key);
+        const disabled = !isEditing;
 
-    const renderInput = (s) => {
-        const isDisabled = !isEditing;
-
-        // 1. Confidence Threshold → Slider dengan nilai real-time
-        if (s.key === 'confidence_threshold') {
-            const val = parseFloat(s.value) || 0.5;
-
+        // Confidence Threshold – Enhanced slider dengan step 0.05 + marker
+        if (key === 'confidence_threshold') {
             return (
-                <div className="space-y-4">
-                    <input
-                        type="range"
-                        step="0.01"
-                        min={s.min_value}
-                        max={s.max_value}
-                        value={val}
-                        onChange={(e) => updateValue(s.key, e.target.value)}
-                        disabled={isDisabled}
-                        className={`w-full h-3 rounded-lg appearance-none cursor-pointer transition ${
-                            isDisabled 
-                                ? 'bg-gray-200 accent-gray-400 cursor-not-allowed' 
-                                : 'bg-gray-300 accent-indigo-600 hover:accent-indigo-700'
-                        }`}
-                    />
-                    <div className="flex justify-between text-sm font-medium">
-                        <span className="text-gray-500">0.10</span>
-                        <span className={`text-xl font-bold ${isDisabled ? 'text-gray-500' : 'text-indigo-600'}`}>
-                            {val.toFixed(2)}
+                <div className="space-y-3">
+                    <div className="flex items-center gap-4">
+                        <input
+                            type="range"
+                            min="0.1"
+                            max="0.99"
+                            step="0.05"
+                            value={val}
+                            disabled={disabled}
+                            onChange={(e) => updateValue(key, e.target.value)}
+                            className={`w-full h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb ${
+                                disabled ? 'opacity-60' : ''
+                            }`}
+                            style={{
+                                background: disabled 
+                                    ? undefined
+                                    : `linear-gradient(to right, #4f46e5 0%, #4f46e5 ${((val - 0.1) / 0.89) * 100}%, #e5e7eb ${((val - 0.1) / 0.89) * 100}%, #e5e7eb 100%)`
+                            }}
+                        />
+                        <span className={`w-16 text-right font-bold text-lg ${disabled ? 'text-gray-500' : 'text-indigo-600'}`}>
+                            {parseFloat(val).toFixed(2)}
                         </span>
-                        <span className="text-gray-500">0.99</span>
                     </div>
                 </div>
             );
         }
 
-        // 2. Cleanup Interval → step 30 detik
-        if (s.key === 'cleanup_interval') {
-            return (
-                <div className="flex items-center gap-3">
-                    <input
-                        type="number"
-                        step="30"
-                        min={s.min_value}
-                        max={s.max_value}
-                        value={s.value}
-                        onChange={(e) => updateValue(s.key, e.target.value)}
-                        disabled={isDisabled}
-                        className={`w-32 px-4 py-3 text-lg font-mono border-2 rounded-lg transition ${
-                            isDisabled
-                                ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                                : 'border-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
-                        }`}
-                    />
-                    <span className="text-gray-600">sec</span>
-                </div>
-            );
+        // Cleanup Interval – Pills
+        const cleanupOptions = [30, 60, 120, 180, 300, 600, 1800];
+        if (key === 'cleanup_interval') {
+            return <PillGroup options={cleanupOptions} current={val} onChange={(v) => updateValue(key, v)} unit="s" />;
         }
 
-        // 3. Cooldown → step 5 detik
-        if (s.key === 'cooldown_seconds') {
-            return (
-                <input
-                    type="number"
-                    step="5"
-                    min={s.min_value}
-                    max={s.max_value}
-                    value={s.value}
-                    onChange={(e) => updateValue(s.key, e.target.value)}
-                    disabled={isDisabled}
-                    className={`w-32 px-4 py-3 text-lg font-mono border-2 rounded-lg transition ${
-                        isDisabled
-                            ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'border-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
-                    }`}
-                />
-            );
+        // Cooldown Seconds – Pills
+        const cooldownOptions = [5, 10, 15, 20, 30, 60];
+        if (key === 'cooldown_seconds') {
+            return <PillGroup options={cooldownOptions} current={val} onChange={(v) => updateValue(key, v)} unit="s" />;
         }
 
-        // 4. Padding Percent → step 0.05
-        if (s.key === 'padding_percent') {
-            return (
-                <input
-                    type="number"
-                    step="0.05"
-                    min={s.min_value}
-                    max={s.max_value}
-                    value={s.value}
-                    onChange={(e) => updateValue(s.key, e.target.value)}
-                    disabled={isDisabled}
-                    className={`w-32 px-4 py-3 text-lg font-mono border-2 rounded-lg transition ${
-                        isDisabled
-                            ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'border-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
-                    }`}
-                />
-            );
-        }
+        // Default number inputs (frame_skip, queue_size, padding_percent, target_max_width)
+        const stepMap = {
+            padding_percent: 0.05,
+            target_max_width: 50,
+            frame_skip: 1,
+            queue_size: 1
+        };
 
-        // 5. Target Max Width → step 50
-        if (s.key === 'target_max_width') {
-            return (
-                <input
-                    type="number"
-                    step="50"
-                    min={s.min_value}
-                    max={s.max_value}
-                    value={s.value}
-                    onChange={(e) => updateValue(s.key, e.target.value)}
-                    disabled={isDisabled}
-                    className={`w-32 px-4 py-3 text-lg font-mono border-2 rounded-lg transition ${
-                        isDisabled
-                            ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'border-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
-                    }`}
-                />
-            );
-        }
-
-        // Default
         return (
             <input
                 type="number"
-                step={s.key.includes('threshold') || s.key.includes('percent') ? '0.01' : '1'}
+                step={stepMap[key] || 1}
                 min={s.min_value}
                 max={s.max_value}
-                value={s.value}
-                onChange={(e) => updateValue(s.key, e.target.value)}
-                disabled={isDisabled}
-                className={`w-32 px-4 py-3 text-lg font-mono border-2 rounded-lg transition ${
-                    isDisabled
-                        ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'border-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
+                value={val}
+                disabled={disabled}
+                onChange={(e) => updateValue(key, e.target.value)}
+                className={`w-full max-w-32 p-2 text-center font-medium rounded-lg border-2 transition ${
+                    disabled
+                        ? 'bg-gray-50 border-gray-300 text-gray-500'
+                        : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
                 }`}
             />
         );
@@ -212,91 +176,90 @@ const SetupConfig = () => {
     if (loading) return <div className="text-center p-10 text-gray-600">Loading detection settings...</div>;
 
     return (
-        <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <div className='flex justify-between items-center mb-4 border-b pb-2'>
-                    <h3 className="text-xl font-semibold text-gray-700">Detection System Settings</h3>
+        <div className="max-w-4xl sm:mx-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-200">
+                    <h3 className="p-4 text-xl font-bold text-gray-800">Detection System Settings</h3>
                 </div>
-                
-                {Object.entries(groups).map(([groupName, keys]) => (
-                    <div key={groupName} className="mb-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 border-b pb-8 last:border-b-0 last:pb-0">
-                        <div>
-                            <h3 className="text-xl font-bold text-gray-800 pb-3 inline-block">
+
+                {/* Field */}
+                <div className="p-4 sm:p-6 space-y-8">
+                    {Object.entries(groups).map(([groupName, keys]) => (
+                        <section key={groupName}>
+                            <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
                                 {groupName}
-                            </h3>
-                        </div>
+                            </h4>
 
-                        <div className="col-span-1 sm:col-span-2 space-y-6">
-                            {settings
-                                .filter(s => keys.includes(s.key))
-                                .map(s => (
-                                    <div key={s.key} className="bg-gray-50 p-6 rounded-xl border border-gray-200 hover:border-indigo-400 transition-shadow">
-                                        <label className="block text-lg font-semibold text-gray-800 mb-3">
-                                            {formatLabel(s.key)}
-                                        </label>
-
-                                        <div className="mb-4">
-                                            {renderInput(s)}
+                            <div className="space-y-8">
+                                {keys.map(key => {
+                                    const s = getSetting(key);
+                                    return (
+                                        <div key={key} className="grid sm:grid-cols-3 gap-4 items-start">
+                                            <div className="sm:col-span-1">
+                                                <label className="block text-sm font-medium text-gray-900">
+                                                    {formatLabel(key)}
+                                                </label>
+                                                <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                                                    {s.description}
+                                                </p>
+                                            </div>
+                                            <div className="sm:col-span-2">
+                                                {renderControl(key)}
+                                            </div>
                                         </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ))}
+                </div>
 
-                                        <p className="text-sm text-gray-600 leading-relaxed">
-                                            {s.description}
-                                        </p>
-                                    </div>
-                                ))}
-                        </div>
-                    </div>
-                ))}
-
-                <div className="mt-8 p-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 text-center">
-                    <p className="text-amber-800 font-medium">
-                        All changes are immediately active without restarting the server.
+                {/* Banner */}
+                <div className="mx-6 sm:mx-8 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-sm font-medium text-amber-800 text-center">
+                        All changes take effect immediately – no restart needed
                     </p>
                 </div>
 
-                <div className="pt-4">
-                    <div className="flex justify-end gap-3">
-                        {isEditing ? (
-                            <>
-                                <button
-                                    onClick={() => {
-                                        setSettings(JSON.parse(JSON.stringify(originalSettings)));
-                                        setIsEditing(false);
-                                    }}
-                                    disabled={saving}
-                                    className="px-6 py-3 rounded-lg font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 transition disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
-
-                                <RoleButton
-                                    allowedRoles={['super_admin']}
-                                    onClick={handleSave}
-                                    disabled={saving || !hasChanges}
-                                    className={`
-                                        px-8 py-3 rounded-lg font-medium text-white shadow-lg transition
-                                        ${saving || !hasChanges
-                                            ? 'bg-gray-400 cursor-not-allowed'
-                                            : 'bg-indigo-600 hover:bg-indigo-700'
-                                        }
-                                    `}
-                                >
-                                    {saving ? 'Saving...' : 'Save Changes'}
-                                </RoleButton>
-                            </>
-                        ) : (
+                {/* Edit/save button */}
+                <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
+                    {isEditing ? (
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={() => {
+                                    setSettings(JSON.parse(JSON.stringify(originalSettings)));
+                                    setIsEditing(false);
+                                }}
+                                disabled={saving}
+                                className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
+                            >
+                                Cancel
+                            </button>
                             <RoleButton
                                 allowedRoles={['super_admin']}
-                                onClick={() => {
-                                    setOriginalSettings(JSON.parse(JSON.stringify(settings)));
-                                    setIsEditing(true);
-                                }}
-                                className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium transition text-white bg-green-600 hover:bg-green-700"
+                                onClick={handleSave}
+                                disabled={saving || !hasChanges}
+                                className={`py-3 px-4 rounded-lg font-medium text-white transition ${
+                                    saving || !hasChanges
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-indigo-600 hover:bg-indigo-700'
+                                }`}
                             >
-                                Edit Settings
+                                {saving ? 'Saving...' : 'Save Changes'}
                             </RoleButton>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <RoleButton
+                            allowedRoles={['super_admin']}
+                            onClick={() => {
+                                setOriginalSettings(JSON.parse(JSON.stringify(settings)));
+                                setIsEditing(true);
+                            }}
+                            className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
+                        >
+                            Edit Settings
+                        </RoleButton>
+                    )}
                 </div>
             </div>
         </div>

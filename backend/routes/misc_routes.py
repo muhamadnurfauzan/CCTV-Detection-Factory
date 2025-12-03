@@ -172,7 +172,7 @@ def detection_settings():
             for item in data:
                 cur.execute("""
                     UPDATE detection_settings 
-                    SET value = %s, updated_at = NOW(), updated_by = 'admin' 
+                    SET value = %s
                     WHERE key = %s
                 """, (item['value'], item['key']))
             conn.commit()
