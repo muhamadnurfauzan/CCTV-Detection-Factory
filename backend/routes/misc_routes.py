@@ -13,7 +13,7 @@ from shared_state import state
 
 misc_bp = Blueprint('misc', __name__, url_prefix='/api')
 
-@misc_bp.route("/video_feed")
+@misc_bp.route("/video-feed")
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def video_feed():
     cctv_id = int(request.args.get("id", 1))
@@ -55,7 +55,7 @@ def video_feed():
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@misc_bp.route('/refresh_config', methods=['POST'])
+@misc_bp.route('/refresh-config', methods=['POST'])
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def refresh_config():
     config_service.refresh_active_violations()

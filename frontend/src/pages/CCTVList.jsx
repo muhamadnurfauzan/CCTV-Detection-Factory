@@ -38,8 +38,8 @@ const CCTVList = () => {
       setError(null);
       try {
         const [cctvRes, violRes] = await Promise.all([
-          fetch('/api/cctv_all').then(r => r.ok ? r.json() : []),
-          fetch('/api/object/object_classes').then(r => r.ok ? r.json() : [])
+          fetch('/api/cctv-all').then(r => r.ok ? r.json() : []),
+          fetch('/api/object/object-classes').then(r => r.ok ? r.json() : [])
         ]);
 
         const filteredViolations = violRes.filter(v => v.is_violation);
@@ -52,7 +52,7 @@ const CCTVList = () => {
 
         // Ambil semua config sekaligus
         const configPromises = cctvRes.map(cctv =>
-          fetch(`/api/cctv_violations/${cctv.id}`)
+          fetch(`/api/cctv-violations/${cctv.id}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => ({ [cctv.id]: data }))
         );
@@ -83,7 +83,7 @@ const CCTVList = () => {
   // --- Handler Update Data (Tambahkan sorting) ---
   const handleUpdate = useCallback(async (id, data) => {
     try {
-      const res = await fetch(`/api/cctv_update/${id}`, {
+      const res = await fetch(`/api/cctv-update/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -152,7 +152,7 @@ const CCTVList = () => {
     setConfigs(prev => ({ ...prev, [cctv_id]: newEnabled }));
 
     try {
-      const res = await fetch(`/api/cctv_violations/${cctv_id}`, {
+      const res = await fetch(`/api/cctv-violations/${cctv_id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled_class_ids: newEnabled }),
@@ -160,7 +160,7 @@ const CCTVList = () => {
 
       if (!res.ok) throw new Error("Failed to save violation config.");
 
-      await fetch('/api/refresh_config', { method: 'POST' });
+      await fetch('/api/refresh-config', { method: 'POST' });
       showAlert('Violation configuration saved successfully.', 'success'); 
     } catch (e) {
       showAlert(e.message || 'Failed to save configuration. Reverting changes.', 'error'); 

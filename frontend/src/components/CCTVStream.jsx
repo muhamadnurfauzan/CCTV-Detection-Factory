@@ -16,7 +16,7 @@ function CCTVStream({ cctvId }) {
 
     const loadImage = () => {
       const timestamp = Date.now();
-      const streamUrl = `/api/video_feed?id=${cctvId}&t=${timestamp}`;
+      const streamUrl = `/api/video-feed?id=${cctvId}&t=${timestamp}`;
       img.src = streamUrl;
       setStatus('Connecting...');
     };

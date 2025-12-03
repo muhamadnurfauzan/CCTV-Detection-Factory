@@ -20,12 +20,12 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
     // Deteksi jika ini adalah penghapusan massal (ID dipisahkan koma)
     const isBatchDelete = String(reportId).includes(', '); 
     
-    let url = `/api/reports_delete/${reportId}`;
+    let url = `/api/reports-delete/${reportId}`;
     let method = 'DELETE';
     let body = null;
     
     if (isBatchDelete) {
-        url = '/api/reports_delete/batch'; // Endpoint baru di Flask
+        url = '/api/reports-delete/batch'; // Endpoint baru di Flask
         const idsArray = String(reportId).split(', ').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
         body = JSON.stringify({ ids: idsArray });
         // Karena ini batch, kita akan gunakan DELETE method dengan body JSON

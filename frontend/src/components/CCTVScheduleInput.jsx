@@ -30,7 +30,7 @@ export default function CCTVScheduleInput({ cctvId, onScheduleChange }) {
     if (cctvId) {
       setLoading(true);
       setError('');
-      fetch(`/api/cctv_schedules/${cctvId}`) 
+      fetch(`/api/cctv-schedules/${cctvId}`) 
         .then(r => {
           if (!r.ok) throw new Error(`Failed to load schedule: Status ${r.status}`);
           return r.json();

@@ -69,7 +69,7 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
     const fetchCctvList = async () => {
         setLoadingCctv(true);
         try {
-            const res = await fetch('/api/cctv_all'); 
+            const res = await fetch('/api/cctv-all'); 
             if (!res.ok) throw new Error("Gagal mengambil daftar CCTV.");
             const data = await res.json();
             
@@ -123,7 +123,7 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
         }
 
         try {
-            const res = await fetch(`/api/user_update/${userData.id}`, {
+            const res = await fetch(`/api/user-update/${userData.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

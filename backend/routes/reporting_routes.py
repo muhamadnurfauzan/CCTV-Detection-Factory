@@ -125,7 +125,7 @@ def get_reports():
         if cur: cur.close()
         if conn: conn.close()
 
-@reports_bp.route('/reports_delete/<int:violation_id>', methods=['DELETE'])
+@reports_bp.route('/reports-delete/<int:violation_id>', methods=['DELETE'])
 @require_role(['super_admin'])
 def delete_report(violation_id): 
     conn = None
@@ -174,7 +174,7 @@ def delete_report(violation_id):
         if cur: cur.close()
         if conn: conn.close()
 
-@reports_bp.route('/reports_delete/batch', methods=['DELETE'])
+@reports_bp.route('/reports-delete/batch', methods=['DELETE'])
 @require_role(['super_admin'])
 def delete_reports_batch():
     """
@@ -235,7 +235,7 @@ def delete_reports_batch():
         if cur: cur.close()
         if conn: conn.close()
 
-@reports_bp.route('/send_email/<int:violation_id>', methods=['POST'])
+@reports_bp.route('/send-email/<int:violation_id>', methods=['POST'])
 @require_role(['super_admin', 'report_viewer'])
 def send_email(violation_id):
     """

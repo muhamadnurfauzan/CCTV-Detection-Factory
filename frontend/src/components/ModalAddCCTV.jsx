@@ -104,7 +104,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         setPreviewLoading(true);
         setPreviewError(null);
         try {
-            const res = await fetch('/api/rtsp_snapshot', {
+            const res = await fetch('/api/rtsp-snapshot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -294,7 +294,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         };
 
         try {
-            const res = await fetch('/api/cctv_add', {
+            const res = await fetch('/api/cctv-add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -309,7 +309,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
             // === KIRIM JADWAL SETELAH DAPAT ID ===
             if (form.schedules && form.schedules.length > 0) {
-                await fetch(`/api/cctv_schedules/${newCctv.id}`, {
+                await fetch(`/api/cctv-schedules/${newCctv.id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ schedules: form.schedules })

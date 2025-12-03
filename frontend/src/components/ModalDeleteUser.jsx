@@ -16,7 +16,7 @@ export default function ModalDeleteUser({ open, onClose, onConfirm, userData }) 
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/user_delete/${userId}`, {
+      const res = await fetch(`/api/user-delete/${userId}`, {
         method: 'DELETE'
       });
       if (res.ok) {

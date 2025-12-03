@@ -152,7 +152,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-        const res = await fetch('/api/rtsp_snapshot', {
+        const res = await fetch('/api/rtsp-snapshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -350,7 +350,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
     }
 
     try {
-        const res = await fetch(`/api/cctv_update/${cctvData.id}`, {
+        const res = await fetch(`/api/cctv-update/${cctvData.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -366,12 +366,12 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
 
         // === KIRIM JADWAL BARU (TANPA GANGGU FLOW UTAMA) ===
         if (form.schedules !== undefined) {
-            await fetch(`/api/cctv_schedules/${cctvData.id}`, {
+            await fetch(`/api/cctv-schedules/${cctvData.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ schedules: form.schedules || [] })
             });
-            fetch('/api/refresh_scheduler', { method: 'POST' });
+            fetch('/api/refresh-scheduler', { method: 'POST' });
         }
 
         onUpdate(cctvData.id, updated);

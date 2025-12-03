@@ -69,7 +69,7 @@ export default function Users() {
                 limit: itemsPerPage
             }).toString();
             
-            const res = await fetch(`/api/users_with_cctvs?${params}`); 
+            const res = await fetch(`/api/users-with-cctvs?${params}`); 
             if (!res.ok) throw new Error("Failed to fetch user data.");
             
             const data = await res.json();

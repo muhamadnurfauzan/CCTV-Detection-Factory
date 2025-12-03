@@ -135,7 +135,7 @@ export default function Reports() {
         showAlert(`Sending email notification for Violation ID ${reportId}...`, 'info');
         
         try {
-            const res = await fetch(`/api/send_email/${reportId}`, {
+            const res = await fetch(`/api/send-email/${reportId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

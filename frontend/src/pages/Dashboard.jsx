@@ -17,11 +17,11 @@ const Dashboard = () => {
     setLoading(true);
     try {
       const [sRes, tRes, wRes, oRes, cRes] = await Promise.all([
-          fetch("/api/dashboard/summary_today"),
-          fetch("/api/dashboard/top_cctv_today"),
-          fetch("/api/dashboard/weekly_trend"),
-          fetch("/api/object/object_classes"),
-          fetch("/api/dashboard/comparison_yesterday"),
+          fetch("/api/dashboard/summary-today"),
+          fetch("/api/dashboard/top-cctv-today"),
+          fetch("/api/dashboard/weekly-trend"),
+          fetch("/api/object/object-classes"),
+          fetch("/api/dashboard/comparison-yesterday"),
       ]);
       if (!mounted) return;
       

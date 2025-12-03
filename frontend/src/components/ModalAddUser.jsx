@@ -64,7 +64,7 @@ export default function ModalAddUser({ open, onClose, onSuccess }) {
     const fetchCctvList = async () => {
         setLoadingCctv(true);
         try {
-            const res = await fetch('/api/cctv_all'); 
+            const res = await fetch('/api/cctv-all'); 
             if (!res.ok) throw new Error("Gagal mengambil daftar CCTV.");
             const data = await res.json();
             
@@ -118,7 +118,7 @@ export default function ModalAddUser({ open, onClose, onSuccess }) {
         }
 
         try {
-            const res = await fetch('/api/user_add', {
+            const res = await fetch('/api/user-add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

@@ -9,7 +9,7 @@ from utils.auth import require_role
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api')
 
-@dashboard_bp.route('/dashboard/summary_today')
+@dashboard_bp.route('/dashboard/summary-today')
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def summary_today():
     """
@@ -62,7 +62,7 @@ def summary_today():
         if conn: conn.close()
 
 
-@dashboard_bp.route('/dashboard/top_cctv_today')
+@dashboard_bp.route('/dashboard/top-cctv-today')
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def top_cctv_today():
     """
@@ -162,7 +162,7 @@ def top_cctv_today():
         if conn:
             conn.close()
 
-@dashboard_bp.route('/dashboard/weekly_trend')
+@dashboard_bp.route('/dashboard/weekly-trend')
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def weekly_trend():
     """
@@ -214,7 +214,7 @@ def weekly_trend():
         if cursor: cursor.close()
         if conn: conn.close()
 
-@dashboard_bp.route('/dashboard/comparison_yesterday')
+@dashboard_bp.route('/dashboard/comparison-yesterday')
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def comparison_yesterday():
     """

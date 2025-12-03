@@ -52,8 +52,8 @@ const SetupDataset = () => {
     const [colorS, setColorS] = useState(100);
     const [colorL, setColorL] = useState(50);
 
-    // API_URL menggunakan /api/object/object_classes (Seperti yang sudah diperbaiki)
-    const API_URL = '/api/object/object_classes'; 
+    // API_URL menggunakan /api/object/object-classes (Seperti yang sudah diperbaiki)
+    const API_URL = '/api/object/object-classes'; 
 
     const fetchData = useCallback(async () => {
         setLoading(true);

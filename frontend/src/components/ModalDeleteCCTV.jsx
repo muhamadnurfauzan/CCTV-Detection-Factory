@@ -13,7 +13,7 @@ export default function ModalDeleteCCTV({ open, onClose, onConfirm, cctvId }) {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/cctv_delete/${cctvId}`, {
+      const res = await fetch(`/api/cctv-delete/${cctvId}`, {
         method: 'DELETE'
       });
       if (res.ok) {

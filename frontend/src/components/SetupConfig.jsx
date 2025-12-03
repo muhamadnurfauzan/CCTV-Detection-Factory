@@ -173,8 +173,6 @@ const SetupConfig = () => {
         );
     };
 
-    if (loading) return <div className="text-center p-10 text-gray-600">Loading detection settings...</div>;
-
     return (
         <div className="max-w-4xl sm:mx-auto">
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -182,85 +180,91 @@ const SetupConfig = () => {
                     <h3 className="p-4 text-xl font-bold text-gray-800">Detection System Settings</h3>
                 </div>
 
-                {/* Field */}
-                <div className="p-4 sm:p-6 space-y-8">
-                    {Object.entries(groups).map(([groupName, keys]) => (
-                        <section key={groupName}>
-                            <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
-                                {groupName}
-                            </h4>
+                {loading ? (
+                    <p className="text-center py-8 text-gray-600">Loading detection settings...</p>
+                ) : (
+                    <>
+                        {/* Field */}
+                        <div className="p-4 sm:p-6 space-y-8">
+                            {Object.entries(groups).map(([groupName, keys]) => (
+                                <section key={groupName}>
+                                    <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
+                                        {groupName}
+                                    </h4>
 
-                            <div className="space-y-8">
-                                {keys.map(key => {
-                                    const s = getSetting(key);
-                                    return (
-                                        <div key={key} className="grid sm:grid-cols-3 gap-4 items-start">
-                                            <div className="sm:col-span-1">
-                                                <label className="block text-sm font-medium text-gray-900">
-                                                    {formatLabel(key)}
-                                                </label>
-                                                <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-                                                    {s.description}
-                                                </p>
-                                            </div>
-                                            <div className="sm:col-span-2">
-                                                {renderControl(key)}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    ))}
-                </div>
-
-                {/* Banner */}
-                <div className="mx-6 sm:mx-8 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <p className="text-sm font-medium text-amber-800 text-center">
-                        All changes take effect immediately – no restart needed
-                    </p>
-                </div>
-
-                {/* Edit/save button */}
-                <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
-                    {isEditing ? (
-                        <div className="grid grid-cols-2 gap-4">
-                            <button
-                                onClick={() => {
-                                    setSettings(JSON.parse(JSON.stringify(originalSettings)));
-                                    setIsEditing(false);
-                                }}
-                                disabled={saving}
-                                className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
-                            >
-                                Cancel
-                            </button>
-                            <RoleButton
-                                allowedRoles={['super_admin']}
-                                onClick={handleSave}
-                                disabled={saving || !hasChanges}
-                                className={`py-3 px-4 rounded-lg font-medium text-white transition ${
-                                    saving || !hasChanges
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-700'
-                                }`}
-                            >
-                                {saving ? 'Saving...' : 'Save Changes'}
-                            </RoleButton>
+                                    <div className="space-y-8">
+                                        {keys.map(key => {
+                                            const s = getSetting(key);
+                                            return (
+                                                <div key={key} className="grid sm:grid-cols-3 gap-4 items-start">
+                                                    <div className="sm:col-span-1">
+                                                        <label className="block text-sm font-medium text-gray-900">
+                                                            {formatLabel(key)}
+                                                        </label>
+                                                        <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                                                            {s.description}
+                                                        </p>
+                                                    </div>
+                                                    <div className="sm:col-span-2">
+                                                        {renderControl(key)}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
                         </div>
-                    ) : (
-                        <RoleButton
-                            allowedRoles={['super_admin']}
-                            onClick={() => {
-                                setOriginalSettings(JSON.parse(JSON.stringify(settings)));
-                                setIsEditing(true);
-                            }}
-                            className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
-                        >
-                            Edit Settings
-                        </RoleButton>
-                    )}
-                </div>
+
+                        {/* Banner */}
+                        <div className="mx-6 sm:mx-8 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                            <p className="text-sm font-medium text-amber-800 text-center">
+                                All changes take effect immediately – no restart needed
+                            </p>
+                        </div>
+
+                        {/* Edit/save button */}
+                        <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
+                            {isEditing ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setSettings(JSON.parse(JSON.stringify(originalSettings)));
+                                            setIsEditing(false);
+                                        }}
+                                        disabled={saving}
+                                        className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <RoleButton
+                                        allowedRoles={['super_admin']}
+                                        onClick={handleSave}
+                                        disabled={saving || !hasChanges}
+                                        className={`py-3 px-4 rounded-lg font-medium text-white transition ${
+                                            saving || !hasChanges
+                                                ? 'bg-gray-400 cursor-not-allowed'
+                                                : 'bg-indigo-600 hover:bg-indigo-700'
+                                        }`}
+                                    >
+                                        {saving ? 'Saving...' : 'Save Changes'}
+                                    </RoleButton>
+                                </div>
+                            ) : (
+                                <RoleButton
+                                    allowedRoles={['super_admin']}
+                                    onClick={() => {
+                                        setOriginalSettings(JSON.parse(JSON.stringify(settings)));
+                                        setIsEditing(true);
+                                    }}
+                                    className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
+                                >
+                                    Edit Settings
+                                </RoleButton>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

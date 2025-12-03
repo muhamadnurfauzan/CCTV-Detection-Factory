@@ -7,7 +7,7 @@ from utils.auth import require_role
 object_bp = Blueprint('object', __name__, url_prefix='/api')
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-@object_bp.route('/object/object_classes', methods=['GET'])
+@object_bp.route('/object/object-classes', methods=['GET'])
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def get_object_classes():
     """
@@ -37,7 +37,7 @@ def get_object_classes():
         if cursor: cursor.close()
         if conn: conn.close()
 
-@object_bp.route('/object/object_classes/<int:id>', methods=['PUT'])
+@object_bp.route('/object/object-classes/<int:id>', methods=['PUT'])
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def update_object_class(id):
     """

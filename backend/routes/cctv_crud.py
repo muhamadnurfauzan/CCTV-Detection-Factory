@@ -120,7 +120,7 @@ def get_roi_file(filename):
         logging.error(f"[ROI GET ERROR FROM SUPABASE]: {e}")
         return jsonify({"error": "Failed to retrieve ROI file from storage"}), 500
 
-@cctv_bp.route("/cctv_add", methods=["POST"])
+@cctv_bp.route("/cctv-add", methods=["POST"])
 @require_role(['super_admin', 'cctv_editor'])
 def add_new_cctv():
     data = request.json
@@ -209,7 +209,7 @@ def add_new_cctv():
         if cur: cur.close()
         if conn: conn.close()
 
-@cctv_bp.route('/rtsp_snapshot', methods=['POST'])
+@cctv_bp.route('/rtsp-snapshot', methods=['POST'])
 @require_role(['super_admin', 'cctv_editor'])
 def rtsp_snapshot():
     data = request.get_json()
@@ -248,7 +248,7 @@ def rtsp_snapshot():
         logging.error(f"[SNAPSHOT ERROR]: {e}")
         return jsonify({"error": "Failed to connect to stream due to server error."}), 500
 
-@cctv_bp.route('/cctv_update/<int:cctv_id>', methods=['PUT'])
+@cctv_bp.route('/cctv-update/<int:cctv_id>', methods=['PUT'])
 @require_role(['super_admin', 'cctv_editor'])
 def update_cctv(cctv_id):
     data = request.get_json()
@@ -389,7 +389,7 @@ def update_cctv(cctv_id):
         if cur: cur.close()
         if conn: conn.close()
 
-@cctv_bp.route('/cctv_delete/<int:cctv_id>', methods=['DELETE'])
+@cctv_bp.route('/cctv-delete/<int:cctv_id>', methods=['DELETE'])
 @require_role(['super_admin', 'cctv_editor'])
 def delete_cctv(cctv_id):
     conn = None
@@ -443,7 +443,7 @@ def delete_cctv(cctv_id):
         if conn: conn.close()
 
 # --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
-@cctv_bp.route('/cctv_violations/<int:cctv_id>', methods=['GET', 'POST'])
+@cctv_bp.route('/cctv-violations/<int:cctv_id>', methods=['GET', 'POST'])
 @require_role(['super_admin', 'cctv_editor'])
 def cctv_violations(cctv_id):
     conn = get_connection()
@@ -462,7 +462,7 @@ def cctv_violations(cctv_id):
         return jsonify(result)
 
     data = request.json.get('enabled_class_ids', [])
-    logging.info(f"[POST] /api/cctv_violations/{cctv_id} enabled_class_ids={data}")
+    logging.info(f"[POST] /api/cctv-violations/{cctv_id} enabled_class_ids={data}")
     logging.info(f"===> REQUEST RECEIVED for CCTV {cctv_id}: {data}")
     sys.stdout.flush()
 
@@ -494,13 +494,13 @@ def cctv_violations(cctv_id):
         return jsonify({"success": True})
     except Exception as e:
         conn.rollback()
-        logging.error(f"[POST ERROR] /api/cctv_violations/{cctv_id}: {e}")
+        logging.error(f"[POST ERROR] /api/cctv-violations/{cctv_id}: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         cur.close()
         conn.close()
 
-@cctv_bp.route("/cctv_all", methods=["GET"])
+@cctv_bp.route("/cctv-all", methods=["GET"])
 @require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
 def get_all_cctv():
     conn = get_connection()
@@ -512,7 +512,7 @@ def get_all_cctv():
     conn.close()
     return jsonify(rows)
 
-@cctv_bp.route('/cctv_schedules/<int:cctv_id>', methods=['GET', 'POST'])
+@cctv_bp.route('/cctv-schedules/<int:cctv_id>', methods=['GET', 'POST'])
 @require_role(['super_admin', 'cctv_editor'])
 def cctv_schedules(cctv_id):
     conn = get_connection()
@@ -597,7 +597,7 @@ def cctv_schedules(cctv_id):
             cur.close()
             conn.close()
 
-@cctv_bp.route('/refresh_scheduler', methods=['POST'])
+@cctv_bp.route('/refresh-scheduler', methods=['POST'])
 @require_role(['super_admin', 'cctv_editor'])
 def refresh_scheduler_now():
     refresh_scheduler_state()
