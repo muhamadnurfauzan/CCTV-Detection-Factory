@@ -44,7 +44,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                   </span>
                 </td>
                 <td className="p-2 text-center space-x-2 whitespace-nowrap">
-                  <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
+                  <div className="flex flex-col sm:flex-row justify-center items-center gap-2 transition-all duration-300 ease-in-out">
                       {/* Tombol View/Enabled */}
                       {cctv.enabled ? (
                           <RoleButton
@@ -80,7 +80,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                         <FaTrash className="w-5 h-5" />
                       </RoleButton>
                   </div>
-              </td>
+                </td>
               </tr>
             ))
           )}

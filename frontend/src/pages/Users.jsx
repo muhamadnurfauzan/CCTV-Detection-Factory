@@ -154,13 +154,14 @@ export default function Users() {
                         disabled={error}
                         onClick={handleAddUser}
                         className={`
-                            flex items-center gap-2 px-3 py-2 text-white rounded-lg
+                            flex items-center gap-2 p-3 text-white rounded-lg
                             ${error 
                                 ? 'bg-gray-400 cursor-not-allowed' 
                                 : 'bg-green-600 hover:bg-green-700 transition'}
                             `}
+                        title="Add New User"
                     >
-                        <FaPlus className="w-4 h-4" /> Add User
+                        <FaPlus className="w-4 h-4" />
                     </RoleButton>
                 </div>
                 {/* Search Bar */}
@@ -235,7 +236,7 @@ export default function Users() {
                                             </td>
                                             <td className="p-2 text-center space-x-2 whitespace-nowrap items-center">
                                                 {/* Tombol Aksi */}
-                                                <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
+                                                <div className='flex flex-col sm:flex-row justify-center items-center gap-2 transition-all duration-300 ease-in-out'>
                                                     <RoleButton
                                                         allowedRoles={['super_admin']}
                                                         onClick={() => handleEdit(user)}

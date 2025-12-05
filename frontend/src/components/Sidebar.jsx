@@ -55,7 +55,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
         fixed inset-y-0 left-0 z-50 flex flex-col
         bg-indigo-900 text-indigo-300 shadow-2xl
         transition-all duration-300 ease-in-out
-        ${isExpanded ? 'w-56' : 'w-20'}
+        ${isExpanded ? 'w-56' : 'w-0 sm:w-20'}
       `}>
         <div className="flex flex-col h-full p-3">
           {/* Header */}
@@ -108,7 +108,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="fixed top-4 left-4 z-50 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg"
+          className="fixed top-2 left-2 sm:top-4 sm:left-4 z-50 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg transition-all duration-300 ease-in-out"
         >
           <FaBars className="w-6 h-6" />
         </button>

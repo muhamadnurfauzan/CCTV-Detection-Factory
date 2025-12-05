@@ -42,13 +42,14 @@ function AppContent() {
         />
       )}
 
-      {/* MAIN CONTENT – Selalu di tengah, max 1440px, tidak bergeser */}
+      {/* MAIN CONTENT */}
       <main className="relative z-10 min-h-screen flex items-start justify-center">
         <div 
           className={`
             w-full max-w-[1440px] 
             px-4 py-8 md:px-8 lg:px-12
-            ${user ? 'pl-20 md:pl-24 lg:pl-28' : 'px-4'}  // Ini kuncinya!
+            transition-all duration-300 ease-in-out
+            ${user ? 'pl-4 sm:pl-24 md:pl-28 lg:pl-32' : 'px-4'}  
           `}
         >
           <ErrorBoundary>

@@ -211,7 +211,7 @@ const CCTVList = () => {
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 p-6">
         {/* Header */}
-        <h2 className="text-3xl font-bold mb-4 text-gray-800 border-b pb-2">
+        <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">
         {view === 'table' && "CCTVs' List"}
         {view === 'stream' && `Streaming CCTV #${selectedCCTV}`}
         {view === 'violation' && "Violation Configurations"}

@@ -332,7 +332,7 @@ export default function Reports() {
                                             {/* {new Date(report.timestamp).toLocaleString()} */}
                                         </td>
                                         <td className="p-2 text-center space-x-2 whitespace-nowrap">
-                                            <div className='flex flex-col sm:flex-row justify-center items-center gap-2'>
+                                            <div className='flex flex-col sm:flex-row justify-center items-center gap-2 transition-all duration-300 ease-in-out'>
                                                 <RoleButton
                                                     allowedRoles={['super_admin', 'report_viewer']} 
                                                     onClick={() => handlePreviewImage(report.image_url)}
