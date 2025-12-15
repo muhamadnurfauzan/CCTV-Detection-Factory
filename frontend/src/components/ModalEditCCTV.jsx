@@ -553,7 +553,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData }) {
             {/* === Submit Button === */}
             <button type="button" onClick={onClose} className="px-5 py-2 border rounded-lg">Cancel</button>
             <RoleButton
-              allowedRoles={['super_admin', 'cctv_editor']} 
+              allowedRoles={['super_admin']} 
               type="submit" 
               disabled={submitting} 
               className="px-5 py-2 bg-green-600 text-white rounded-lg disabled:opacity-50">

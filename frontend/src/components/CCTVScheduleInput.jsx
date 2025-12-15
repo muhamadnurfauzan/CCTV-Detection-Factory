@@ -168,7 +168,7 @@ export default function CCTVScheduleInput({ cctvId, onScheduleChange }) {
   };
 
   return (
-    <div className="space-y-6 p-6 bg-white rounded-xl shadow-lg">
+    <div className="space-y-6 p-6 bg-white rounded-xl border-2 border-gray-50">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-gray-800">CCTV Detection Schedule</h3>
         <button 

@@ -8,7 +8,7 @@ object_bp = Blueprint('object', __name__, url_prefix='/api')
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 @object_bp.route('/object/object-classes', methods=['GET'])
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def get_object_classes():
     """
     Mengambil semua data object_class dari database.
@@ -38,7 +38,7 @@ def get_object_classes():
         if conn: conn.close()
 
 @object_bp.route('/object/object-classes/<int:id>', methods=['PUT'])
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def update_object_class(id):
     """
     Memperbarui object_class dan pasangannya (pair_id) secara atomik, dengan validasi input warna.

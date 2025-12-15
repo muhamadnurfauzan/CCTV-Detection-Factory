@@ -6,7 +6,6 @@ import RoleButton from './RoleButton';
 
 const VALID_ROLES = [
     { value: 'super_admin', label: 'Super Admin' },
-    { value: 'cctv_editor', label: 'CCTV Editor' },
     { value: 'report_viewer', label: 'Report Viewer' },
     { value: 'viewer', label: 'Viewer' } 
 ];

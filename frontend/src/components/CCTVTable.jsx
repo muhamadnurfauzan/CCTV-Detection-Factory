@@ -48,7 +48,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                       {/* Tombol View/Enabled */}
                       {cctv.enabled ? (
                           <RoleButton
-                            allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']}
+                            allowedRoles={['super_admin', 'report_viewer', 'viewer']}
                             onClick={() => onSelect(cctv.id)}
                             className="text-indigo-600 hover:text-indigo-800 transition p-1 rounded-full bg-indigo-100" 
                           >
@@ -64,7 +64,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                       
                       {/* Tombol Edit */}
                       <RoleButton
-                        allowedRoles={['super_admin', 'cctv_editor']}
+                        allowedRoles={['super_admin']}
                         onClick={() => onEdit(cctv.id)}
                         className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
                       >
@@ -73,7 +73,7 @@ function CCTVTable({ cctvs, onSelect, onEdit, onDelete, startNo }) {
                       
                       {/* Tombol Delete */}
                       <RoleButton
-                        allowedRoles={['super_admin', 'cctv_editor']}
+                        allowedRoles={['super_admin']}
                         onClick={() => onDelete(cctv.id)}
                         className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
                       >

@@ -35,14 +35,7 @@ const ModalSendRecap = ({ open, onClose, onSend }) => {
             weeklyEnd.setDate(lastSunday.getDate()); 
 
             setStartDate(formatDate(weeklyStart));
-            setEndDate(formatDate(weeklyEnd));
-
-            console.log("Now:", now);
-            console.log("Start Date:", startDate);
-            console.log("Last Sunday:", lastSunday);
-            console.log("Days to Sunday:", daysToSunday);
-            console.log("Weekly Start:", weeklyStart);
-            console.log("Weekly End:", weeklyEnd);
+            setEndDate(formatDate(new Date(weeklyEnd.getTime() + 24 * 60 * 60 * 1000 - 1))); 
 
         } else if (reportType === 'Monthly') {
             // Logika untuk periode BULAN LALU (Tanggal 1 s/d Tanggal Akhir Bulan)
@@ -56,7 +49,6 @@ const ModalSendRecap = ({ open, onClose, onSend }) => {
             setStartDate(formatDate(monthlyStart));
             // End Date di sini adalah tanggal terakhir bulan lalu (monthlyEnd - 1 hari)
             setEndDate(formatDate(new Date(monthlyEnd.getTime() - 24 * 60 * 60 * 1000)));
-            // setEndDate(formatDate(new Date(monthlyEnd.getTime() - 24 * 60 * 60 * 1000)));
             
         } else if (reportType === 'Custom') {}
     }, [reportType]);
@@ -120,8 +112,7 @@ const ModalSendRecap = ({ open, onClose, onSend }) => {
                             onChange={(e) => setStartDate(e.target.value)}
                             className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${reportType !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
                             max={endDate}
-                            // disabled={loading || reportType !== 'Custom'} 
-                            disabled={loading}
+                            disabled={loading || reportType !== 'Custom'} 
                         />
                     </div>
 
@@ -135,8 +126,7 @@ const ModalSendRecap = ({ open, onClose, onSend }) => {
                             className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${reportType !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
                             max={today}
                             min={startDate}
-                            // disabled={loading || reportType !== 'Custom'} 
-                            disabled={loading}
+                            disabled={loading || reportType !== 'Custom'} 
                         />
                     </div>
                 </div>

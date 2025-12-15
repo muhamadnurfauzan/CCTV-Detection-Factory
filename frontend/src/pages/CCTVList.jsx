@@ -222,7 +222,7 @@ const CCTVList = () => {
             {(view === 'stream' || view === 'violation') && (
                 <div className="flex justify-start" >
                     <RoleButton
-                      allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']} 
+                      allowedRoles={['super_admin', 'report_viewer', 'viewer']} 
                       disabled={error || currentItems.length === 0}
                       onClick={handleBack}
                       title="Back to CCTV List"
@@ -244,7 +244,7 @@ const CCTVList = () => {
                   {view === 'table' && (
                     <div className='flex gap-2'>
                       <RoleButton
-                        allowedRoles={['super_admin', 'cctv_editor']} 
+                        allowedRoles={['super_admin']} 
                         disabled={error || currentItems.length === 0}
                         onClick={handleOpenViolation}
                         className={`
@@ -259,7 +259,7 @@ const CCTVList = () => {
                       </RoleButton>
                       
                       <RoleButton
-                        allowedRoles={['super_admin', 'cctv_editor']}
+                        allowedRoles={['super_admin']}
                         disabled={error || currentItems.length === 0}
                         onClick={() => setShowAddModal(true)}
                         className={`

@@ -11,8 +11,8 @@ from utils.auth import require_role
 user_bp = Blueprint('user', __name__, url_prefix='/api')
 
 # Daftar role yang valid
-VALID_ROLES = ['super_admin', 'cctv_editor', 'report_viewer', 'viewer']
-ROLES_NEEDING_CCTV = ['super_admin', 'cctv_editor', 'report_viewer']
+VALID_ROLES = ['super_admin', 'report_viewer', 'viewer']
+ROLES_NEEDING_CCTV = ['super_admin', 'report_viewer']
 
 # Setup password context (Argon2 > bcrypt > fallback)
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")

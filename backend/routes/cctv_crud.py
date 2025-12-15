@@ -100,7 +100,7 @@ def save_cctv_schedules(conn, cur, cctv_id, schedules):
         execute_batch(cur, schedule_query, insert_data)
 
 @cctv_bp.route('/roi/<filename>', methods=['GET'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def get_roi_file(filename):
     """Mengambil dan mengirim file JSON ROI dari Supabase."""
     storage_path = f"{config.SUPABASE_ROI_DIR}/{filename}"
@@ -121,7 +121,7 @@ def get_roi_file(filename):
         return jsonify({"error": "Failed to retrieve ROI file from storage"}), 500
 
 @cctv_bp.route("/cctv-add", methods=["POST"])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def add_new_cctv():
     data = request.json
     logging.info(f"[ADD CCTV] Received: {data}")
@@ -210,7 +210,7 @@ def add_new_cctv():
         if conn: conn.close()
 
 @cctv_bp.route('/rtsp-snapshot', methods=['POST'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def rtsp_snapshot():
     data = request.get_json()
     # SINTAKS PERUBAHAN: Menerima komponen
@@ -249,7 +249,7 @@ def rtsp_snapshot():
         return jsonify({"error": "Failed to connect to stream due to server error."}), 500
 
 @cctv_bp.route('/cctv-update/<int:cctv_id>', methods=['PUT'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def update_cctv(cctv_id):
     data = request.get_json()
     logging.info(f"[UPDATE CCTV {cctv_id}] Received: {data}")
@@ -390,7 +390,7 @@ def update_cctv(cctv_id):
         if conn: conn.close()
 
 @cctv_bp.route('/cctv-delete/<int:cctv_id>', methods=['DELETE'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def delete_cctv(cctv_id):
     conn = None
     cur = None
@@ -444,7 +444,7 @@ def delete_cctv(cctv_id):
 
 # --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
 @cctv_bp.route('/cctv-violations/<int:cctv_id>', methods=['GET', 'POST'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def cctv_violations(cctv_id):
     conn = get_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -501,7 +501,7 @@ def cctv_violations(cctv_id):
         conn.close()
 
 @cctv_bp.route("/cctv-all", methods=["GET"])
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def get_all_cctv():
     conn = get_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -513,7 +513,7 @@ def get_all_cctv():
     return jsonify(rows)
 
 @cctv_bp.route('/cctv-schedules/<int:cctv_id>', methods=['GET', 'POST'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def cctv_schedules(cctv_id):
     conn = get_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -598,7 +598,7 @@ def cctv_schedules(cctv_id):
             conn.close()
 
 @cctv_bp.route('/refresh-scheduler', methods=['POST'])
-@require_role(['super_admin', 'cctv_editor'])
+@require_role(['super_admin'])
 def refresh_scheduler_now():
     refresh_scheduler_state()
     return jsonify({"success": True, "message": "Scheduler refreshed"})

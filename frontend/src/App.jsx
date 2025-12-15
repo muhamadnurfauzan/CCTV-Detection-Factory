@@ -29,7 +29,7 @@ function AppContent() {
 
       {/* SIDEBAR – Hanya muncul kalau sudah login */}
       {user && (
-        <ProtectedRoute allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']}>
+        <ProtectedRoute allowedRoles={['super_admin', 'report_viewer', 'viewer']}>
           <Sidebar isExpanded={isSidebarExpanded} setIsExpanded={setIsSidebarExpanded} />
         </ProtectedRoute>
       )}
@@ -66,12 +66,12 @@ function AppContent() {
                 />
                 {/* Semua halaman lain = sidebar overlay */}
                 <Route path="/" element={
-                  <ProtectedRoute allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']}>
+                  <ProtectedRoute allowedRoles={['super_admin', 'report_viewer', 'viewer']}>
                     <Dashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/cctv/*" element={
-                  <ProtectedRoute allowedRoles={['super_admin', 'cctv_editor', 'report_viewer', 'viewer']}>
+                  <ProtectedRoute allowedRoles={['super_admin', 'report_viewer', 'viewer']}>
                     <CCTVList />
                   </ProtectedRoute>
                 } />

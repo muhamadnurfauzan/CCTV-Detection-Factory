@@ -7,8 +7,8 @@ import ModalLogout from './ModalLogout';
 import { useAuth } from '../context/AuthContext';
 
 const mainNavItems = [
-  { path: "/", label: "Dashboard", Icon: FaHome, allowedRoles: ['super_admin', 'report_viewer', 'cctv_editor', 'viewer'] },
-  { path: "/cctv", label: "CCTVs", Icon: FaVideo, allowedRoles: ['super_admin', 'report_viewer', 'cctv_editor', 'viewer'] },
+  { path: "/", label: "Dashboard", Icon: FaHome, allowedRoles: ['super_admin', 'report_viewer', 'viewer'] },
+  { path: "/cctv", label: "CCTVs", Icon: FaVideo, allowedRoles: ['super_admin', 'report_viewer', 'viewer'] },
   { path: "/images", label: "Violations", Icon: FaImages, allowedRoles: ['super_admin', 'report_viewer'] },
   { path: "/reports", label: "Reports", Icon: FaBullhorn, allowedRoles: ['super_admin', 'report_viewer'] },
 ];

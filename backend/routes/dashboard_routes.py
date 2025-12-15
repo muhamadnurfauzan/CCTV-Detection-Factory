@@ -10,7 +10,7 @@ from utils.auth import require_role
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api')
 
 @dashboard_bp.route('/dashboard/summary-today')
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def summary_today():
     """
     1. Menunjukkan total pelanggaran (SUM(total_violation)) berdasarkan jenis violation (id_violation)
@@ -63,7 +63,7 @@ def summary_today():
 
 
 @dashboard_bp.route('/dashboard/top-cctv-today')
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def top_cctv_today():
     """
     Dashboard: menampilkan Top 5 CCTV berdasarkan total pelanggaran hari ini,
@@ -163,7 +163,7 @@ def top_cctv_today():
             conn.close()
 
 @dashboard_bp.route('/dashboard/weekly-trend')
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def weekly_trend():
     """
     3. Menunjukkan total violation (SUM(total_violation)) selama 7 hari terakhir.
@@ -215,7 +215,7 @@ def weekly_trend():
         if conn: conn.close()
 
 @dashboard_bp.route('/dashboard/comparison-yesterday')
-@require_role(['super_admin', 'cctv_editor', 'report_viewer', 'viewer'])
+@require_role(['super_admin', 'report_viewer', 'viewer'])
 def comparison_yesterday():
     """
     4. Menghitung total violation hari ini dan kemarin untuk perbandingan persentase.

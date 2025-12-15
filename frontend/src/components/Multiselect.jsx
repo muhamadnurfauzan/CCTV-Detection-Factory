@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaChevronDown, FaTimes, FaSearch } from 'react-icons/fa';
 
-export default function Multiselect({ options, selectedValues, onSelect, placeholder = "Pilih opsi..." }) {
+export default function Multiselect({ options, selectedValues, onSelect, placeholder = "Select (an) option(s)..." }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef(null);

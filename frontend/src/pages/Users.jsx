@@ -220,7 +220,6 @@ export default function Users() {
                                                 <span 
                                                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                                                         user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
-                                                        user.role === 'cctv_editor' ? 'bg-blue-100 text-blue-800' :
                                                         user.role === 'report_viewer' ? 'bg-yellow-100 text-yellow-800' :
                                                         user.role === 'viewer' ? 'bg-gray-100 text-gray-800' :
                                                         'bg-gray-100 text-gray-800'

@@ -63,7 +63,7 @@ export default function ModalDeleteCCTV({ open, onClose, onConfirm, cctvId }) {
           Cancel
         </button>
         <RoleButton
-          allowedRoles={['super_admin', 'cctv_editor']}
+          allowedRoles={['super_admin']}
           type="button"
           onClick={handleDelete}
           className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
