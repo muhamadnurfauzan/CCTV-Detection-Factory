@@ -113,7 +113,6 @@ def process_thread(cctv_id, frame_queue, stop_event):
     """
     Thread utama: ambil frame → deteksi → anotasi → proses violation.
     Hanya 1 write lock per frame → nol contention dengan video_feed.
-    Tanda LIVE + FPS ditulis langsung di frame (tidak ada heartbeat terpisah).
     """
     tracked_violations = {}
     model = YOLO(MODEL_PATH).to("cpu")
@@ -254,45 +253,6 @@ def cleanup_thread(tracked_violations):
         if removed_count > 0:
             print(f"[CLEANUP] Total {removed_count} track lama dihapus.")
         time.sleep(CLEANUP_INTERVAL)
-
-def _start_capture_wrapper(cctv_id):
-    """Wrapper thread untuk memastikan thread dimulai setelah API selesai."""
-    
-    logging.info(f"[{cctv_id}] Wrapper thread starting. Delaying 3 seconds before main start.")
-    time.sleep(1)
-    
-    # Memastikan cctv_configs diisi sebelum mencoba memulai stream
-    refresh_all_cctv_configs() 
-    
-    time.sleep(2) # Sisa jeda 2 detik
-    
-    logging.info(f"[{cctv_id}] Wrapper delay finished. Attempting to initiate core threads...")
-    
-    # Ambil config BARU
-    cctv_config = state.cctv_configs.get(cctv_id) 
-    if not cctv_config or not cctv_config.get('enabled'):
-        # JIKA INI MASIH GAGAL, artinya DB/Aplikasi benar-benar tidak stabil.
-        logging.error(f"[{cctv_id}] Wrapper FATAL FAILED: Config not available even after internal refresh.")
-        return
-
-    # --- Gunakan placeholder dengan timestamp ---
-    connecting = np.zeros((480, 640, 3), dtype=np.uint8)
-    cv2.putText(connecting, "Connecting...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-    with state.ANNOTATED_FRAME_LOCK: 
-        state.annotated_frames[cctv_id] = (connecting, time.time())
-
-    # Inisialisasi thread utama (t1 dan t2)
-    stop_event = Event()
-    state.detection_threads[cctv_id] = {'stop_event': stop_event, 'threads': []}
-    frame_queue = deque(maxlen=QUEUE_SIZE)
-    
-    t1 = Thread(target=capture_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
-    t2 = Thread(target=process_thread, args=(cctv_id, frame_queue, stop_event), daemon=True)
-
-    t1.start(); t2.start()
-    
-    state.detection_threads[cctv_id]['threads'].extend([t1, t2])
-    logging.info(f"[{cctv_id}] Core detection threads started successfully via wrapper.")
 
 def start_detection_for_cctv(cctv_id: int, full_detection: bool = True):
     current = state.detection_threads.get(cctv_id, {})

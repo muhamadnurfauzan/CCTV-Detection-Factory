@@ -71,8 +71,8 @@ const Dashboard = () => {
     switch (name) {
       case 'no-helmet': return <FaShieldAlt className="text-4xl" style={{ color }} />;
       case 'no-vest': return <FaVest className="text-4xl" style={{ color }} />;
-      case 'no-boots': return <FaSocks className="text-4xl" style={{ color }} />;
-      case 'no-goggles': return <FaGlasses className="text-4xl" style={{ color }} />;
+      case 'no-shoes': return <FaSocks className="text-4xl" style={{ color }} />;
+      case 'no-glasses': return <FaGlasses className="text-4xl" style={{ color }} />;
       case 'no-gloves': return <FaMitten className="text-4xl" style={{ color }} />;
       default: return <FaExclamationTriangle className="text-4xl" style={{ color }} />;
     }

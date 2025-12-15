@@ -130,33 +130,6 @@ def handle_settings():
         if cur: cur.close()
         if conn: conn.close()
 
-@misc_bp.route('/email-template/ppe-violation', methods=['GET', 'POST'])
-@require_role(['super_admin'])
-def email_template_ppe():
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        if request.method == 'GET':
-            cur.execute("SELECT subject_template, body_template FROM email_templates WHERE template_key = 'ppe_violation'")
-            data = cur.fetchone()
-            return jsonify(data or {"subject_template": "", "body_template": ""})
-
-        else:  # POST
-            data = request.json
-            cur.execute("""
-                INSERT INTO email_templates (template_key, subject_template, body_template, is_active)
-                VALUES ('ppe_violation', %s, %s, true)
-                ON CONFLICT (template_key) DO UPDATE SET
-                    subject_template = EXCLUDED.subject_template,
-                    body_template = EXCLUDED.body_template,
-                    is_active = true  -- tambahkan ini!
-            """, (data['subject_template'], data['body_template']))
-            conn.commit()
-            return jsonify({"success": True})
-    finally:
-        cur.close()
-        conn.close()
-
 @misc_bp.route('/detection-settings', methods=['GET', 'POST'])
 @require_role(['super_admin'])
 def detection_settings():

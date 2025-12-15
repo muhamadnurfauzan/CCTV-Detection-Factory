@@ -5,7 +5,6 @@ from psycopg2.extras import RealDictCursor
 
 from db.db_config import get_connection
 import config as config
-import services.notification_service as notification_service
 from backend.services.cloud_storage import delete_violation_image
 from utils.auth import require_role
 
@@ -234,17 +233,3 @@ def delete_reports_batch():
     finally:
         if cur: cur.close()
         if conn: conn.close()
-
-@reports_bp.route('/send-email/<int:violation_id>', methods=['POST'])
-@require_role(['super_admin', 'report_viewer'])
-def send_email(violation_id):
-    """
-    API untuk mengirim email notifikasi secara MANUAL.
-    Menerima ID Pelanggaran sebagai parameter.
-    """
-    logging.info(f"[EMAIL MANUAL] Menerima permintaan kirim email untuk Violation ID: {violation_id}")
-    
-    if notification_service.notify_user_by_violation_id(violation_id):
-        return jsonify({"success": True, "message": "Notification email sent successfully."}), 200
-    else:
-        return jsonify({"success": False, "message": "Failed to send notification email. Check server log for details."}), 500

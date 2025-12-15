@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, FaTrash } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaArrowUp, FaArrowDown, FaEnvelope, FaFileImage, FaTrash, FaPaperPlane } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import Pagination from '../components/Pagination';
 import ModalDeleteReport from '../components/ModalDeleteReport';
 import RoleButton from '../components/RoleButton';
+import ModalSendRecap from '../components/ModalSendRecap';
 
 // --- Helper Modal Preview Gambar ---
 const ImagePreviewModal = ({ imageUrl, onClose }) => {
@@ -60,6 +61,9 @@ export default function Reports() {
 
     // --- State Multi-Select ---
     const [selectedReportIds, setSelectedReportIds] = useState([]);
+
+    // --- State for Modal Manual Recap Email ---
+    const [showRecapModal, setShowRecapModal] = useState(false);
 
     // --- Efek 1: Debouncing Search Input ---
     useEffect(() => {
@@ -197,6 +201,37 @@ export default function Reports() {
         setShowDeleteModal(true);
     };
 
+    // --- Handler Kirim Rekap Manual ---
+    const handleSendRecapManual = async ({ startDate, endDate, reportType: templateKey, setLoading }) => { // <-- Terima templateKey sebagai reportType
+        setLoading(true);
+        showAlert(`Memicu pengiriman Rekap (${startDate} s/d ${endDate}) menggunakan template ${templateKey}...`, 'info');
+        
+        try {
+            const res = await fetch(`/api/send-recap`, { 
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    start_date: startDate,
+                    end_date: endDate,
+                    report_type: templateKey 
+                })
+            });
+            const data = await res.json();
+            
+            if (!res.ok) {
+                throw new Error(data.message || "Failed to trigger recap send. Check backend log.");
+            }
+            showAlert(data.message || `Email Recap using template ${templateKey} successfully triggered!`, 'success');
+            setShowRecapModal(false); 
+
+        } catch (err) {
+            showAlert(`Error: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // --- Handler Preview Image Violation ---
     const handlePreviewImage = (imageUrl) => {
         setSelectedImageUrl(imageUrl);
@@ -242,6 +277,22 @@ export default function Reports() {
                 </div>
 
                 <div className='flex items-center justify-end gap-2'>
+                    {/* Tombol Kirim Rekap Manual */}
+                    <RoleButton
+                        allowedRoles={['super_admin', 'report_viewer']} 
+                        onClick={() => setShowRecapModal(true)}
+                        disabled={error}
+                        className={`
+                            flex items-center gap-2 p-3 text-white rounded-lg
+                            ${error 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-indigo-600 hover:bg-indigo-700 transition'}
+                        `}
+                        title="Send Manual Summary Report (Weekly/Monthly)"
+                    >
+                        <FaPaperPlane className='h-4 w-4'/>
+                    </RoleButton>
+
                     {/* Delete All Button */}
                     <div className="flex">
                         <RoleButton
@@ -386,13 +437,22 @@ export default function Reports() {
                 />
             )}
 
-            {/* NEW: Modal Delete Report */}
+            {/* Modal Delete Report */}
             {showDeleteModal && (
                 <ModalDeleteReport 
                     open={showDeleteModal}
                     onClose={() => setShowDeleteModal(false)}
                     onConfirm={handleConfirmDelete} 
                     reportData={selectedReportData}
+                />
+            )}
+
+            {/* Modal Send Recap Email Manually */}
+            {showRecapModal && (
+                <ModalSendRecap
+                    open={showRecapModal}
+                    onClose={() => setShowRecapModal(false)}
+                    onSend={handleSendRecapManual}
                 />
             )}
         </div>

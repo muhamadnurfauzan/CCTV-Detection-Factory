@@ -25,6 +25,7 @@ import routes.reporting_routes as reporting_routes
 import routes.misc_routes as misc_routes
 import routes.object_routes as object_routes
 import routes.auth_routes as auth_routes
+import routes.email_routes as email_routes
 
 load_dotenv()
 
@@ -41,6 +42,7 @@ app.register_blueprint(reporting_routes.reports_bp)
 app.register_blueprint(misc_routes.misc_bp)
 app.register_blueprint(object_routes.object_bp)
 app.register_blueprint(auth_routes.auth_bp)
+app.register_blueprint(email_routes.email_bp)
 
 if __name__ == "__main__":
     helpers.reset_table_sequence('violation_detection')
