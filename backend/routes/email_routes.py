@@ -54,7 +54,7 @@ def email_template_ppe():
                 ON CONFLICT (template_key) DO UPDATE SET
                     subject_template = EXCLUDED.subject_template,
                     body_template = EXCLUDED.body_template,
-                    is_active = true  -- tambahkan ini!
+                    is_active = true 
             """, (data['subject_template'], data['body_template']))
             conn.commit()
             return jsonify({"success": True})
@@ -93,35 +93,104 @@ def send_email(violation_id):
 
 @email_bp.route('/send-recap', methods=['POST'])
 @require_role(['super_admin', 'report_viewer']) 
-def send_recap_email_manual():
+def send_recap_manual():
     data = request.json
-    # report_type sekarang bisa berupa template key penuh
-    template_key = data.get('report_type') 
-    start_date_str = data.get('start_date') 
-    end_date_str = data.get('end_date') 
-    
-    if not all([template_key, start_date_str, end_date_str]):
-        return jsonify({"error": "Missing start_date, end_date, or template key."}), 400
-
     try:
-        from datetime import datetime, timedelta 
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1)
-        
-    except ValueError:
-        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
-        
-    allowed_keys = ['violation_weekly_recap', 'violation_monthly_recap', 'violation_custom_report']
-    if template_key not in allowed_keys:
-        return jsonify({"error": "Invalid template key provided."}), 400
+        start_dt = datetime.strptime(data['start_date'], '%Y-%m-%d')
+        end_dt = datetime.strptime(data['end_date'], '%Y-%m-%d')
+        # end_dt = datetime.strptime(data['end_date'], '%Y-%m-%d') + timedelta(days=1)
 
-    logging.info(f"[API] Memicu pengiriman rekap manual: {template_key} dari {start_date_str} s/d {end_date_str}")
+        # AMBIL DATA FILTER DARI REQUEST JSON
+        selected_user_ids = data.get('selected_user_ids')
+        selected_cctv_ids = data.get('selected_cctv_ids')
 
-    report_type_display = template_key.replace('violation_', '').replace('_recap', '').replace('_report', '').title()
+        # TERUSKAN KE SERVICE
+        success = notification_service.send_violation_recap_emails(
+            start_date=start_dt,
+            end_date=end_dt,
+            report_type=data['report_type'],
+            template_key=data['report_type'],
+            selected_user_ids=selected_user_ids,
+            selected_cctv_ids=selected_cctv_ids 
+        )
+        
+        if success:
+            return jsonify({"message": "Recap emails sent successfully."})
+        else:
+            return jsonify({"message": "No violations found or email failed to send."}), 404
+            
+    except Exception as e:
+        logging.error(f"Error in manual recap: {e}")
+        return jsonify({"message": str(e)}), 500
     
-    success = notification_service.send_violation_recap_emails(start_date, end_date, report_type_display, template_key)
-    
-    if success:
-        return jsonify({"success": True, "message": f"Manual recap email using template '{template_key}' successfully triggered."})
-    else:
-        return jsonify({"success": False, "message": "Failed to trigger recap email. Check backend logs for details."}), 500
+@email_bp.route('/users-list', methods=['GET'])
+@require_role(['super_admin', 'report_viewer'])
+def get_users_list():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute("SELECT id, full_name, email FROM users WHERE role not in ('super_admin') ORDER BY full_name;")
+        users = cur.fetchall()
+        return jsonify(users)
+    except Exception as e:
+        logging.error(f"[USERS LIST API ERROR]: {e}")
+        return jsonify({"error": "Failed to retrieve user list."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@email_bp.route('/cctvs-list', methods=['GET'])
+@require_role(['super_admin', 'report_viewer'])
+def get_cctvs_list():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute("SELECT id, name, location FROM cctv_data ORDER BY name;")
+        cctvs = cur.fetchall()
+        return jsonify(cctvs)
+    except Exception as e:
+        logging.error(f"[CCTVS LIST API ERROR]: {e}")
+        return jsonify({"error": "Failed to retrieve CCTV list."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@email_bp.route('/user-cctv-map-all', methods=['GET'])
+@require_role(['super_admin', 'report_viewer'])
+def get_user_cctv_map_all():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        # Ambil semua mapping, user, dan detail CCTV
+        cur.execute("""
+            SELECT 
+                u.id AS user_id,
+                ucm.cctv_id,
+                cd.name AS cctv_name,
+                cd.location
+            FROM users u
+            JOIN user_cctv_map ucm ON u.id = ucm.user_id
+            JOIN cctv_data cd ON ucm.cctv_id = cd.id
+            ORDER BY u.id, cd.name;
+        """)
+        data = cur.fetchall()
+        
+        # Mengelompokkan data berdasarkan user_id (untuk memudahkan frontend)
+        # { user_id: [cctv_id, cctv_id, ...], ... }
+        user_map = {}
+        for row in data:
+            if row['user_id'] not in user_map:
+                user_map[row['user_id']] = []
+            user_map[row['user_id']].append({
+                'id': row['cctv_id'],
+                'name': row['cctv_name'],
+                'location': row['location']
+            })
+
+        return jsonify(user_map)
+    except Exception as e:
+        logging.error(f"[USER CCTV MAP API ERROR]: {e}")
+        return jsonify({"error": "Failed to retrieve user CCTV map."}), 500
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()

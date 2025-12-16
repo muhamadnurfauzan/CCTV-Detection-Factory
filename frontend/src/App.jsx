@@ -37,7 +37,7 @@ function AppContent() {
       {/* Overlay mobile */}
       {user && isSidebarExpanded && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-60 z-40 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-60 z-10 lg:hidden"
           onClick={() => setIsSidebarExpanded(false)}
         />
       )}

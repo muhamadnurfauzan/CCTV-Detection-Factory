@@ -24,8 +24,10 @@ export default function Multiselect({ options, selectedValues, onSelect, placeho
         onSelect(newSelection);
     };
     
-    const filteredOptions = options.filter(option =>
-        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredOptions = options.filter(
+        option =>
+            typeof option.label === 'string' &&
+            option.label.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const selectedLabels = options

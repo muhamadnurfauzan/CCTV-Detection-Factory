@@ -108,14 +108,13 @@ def add_user():
 
         # Insert CCTV mapping
         if cctv_ids:
-            placeholders = ','.join(['(%s, %s)'] * len(cctv_ids))
-            query = f"INSERT INTO user_cctv_map (user_id, cctv_id) VALUES {placeholders}"
-            params = [(new_user_id, cid) for cid in cctv_ids]
-            cur.executemany(query, params)
+            sql_insert_cctv = "INSERT INTO user_cctv_map (user_id, cctv_id) VALUES (%s, %s)"
+            data_to_insert = [(new_user_id, cid) for cid in cctv_ids] 
+            cur.executemany(sql_insert_cctv, data_to_insert)
 
         conn.commit()
         return jsonify({"message": "User added successfully.", "id": new_user_id}), 201
-
+        
     except Exception as e:
         if conn: conn.rollback()
         logging.error(f"[USER_ADD ERROR]: {e}")
@@ -141,6 +140,7 @@ def update_user(user_id):
         role = data.get('role')
         cctv_ids = data.get('cctv_ids', [])
 
+        # --- VALIDASI INPUT ---
         if not all([username, full_name, email, role]):
             return jsonify({"error": "Required fields missing."}), 400
 
@@ -181,7 +181,7 @@ def update_user(user_id):
         if cur.fetchone():
             return jsonify({"error": "Username or email already used by another account."}), 409
 
-        # Update user
+        # --- UPDATE USER ---
         update_fields = ["username = %s", "full_name = %s", "email = %s", "role = %s"]
         params = [username, full_name, email, role]
 
@@ -195,14 +195,12 @@ def update_user(user_id):
         query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
         cur.execute(query, params)
 
-        # Update CCTV mapping
+        # --- UPDATE CCTV MAPPING ---
         cur.execute("DELETE FROM user_cctv_map WHERE user_id = %s", (user_id,))
         if cctv_ids:
-            placeholders = ','.join(['(%s, %s)'] * len(cctv_ids))
-            cur.executemany(
-                f"INSERT INTO user_cctv_map (user_id, cctv_id) VALUES {placeholders}",
-                [(user_id, cid) for cid in cctv_ids]
-            )
+            sql_insert_cctv = "INSERT INTO user_cctv_map (user_id, cctv_id) VALUES (%s, %s)"
+            data_to_insert = [(user_id, cid) for cid in cctv_ids] 
+            cur.executemany(sql_insert_cctv, data_to_insert)
 
         conn.commit()
         return jsonify({"message": "User updated successfully."}), 200

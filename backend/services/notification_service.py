@@ -208,34 +208,45 @@ def notify_user_by_violation_id(violation_id):
         if cur: cur.close()
         if conn: conn.close()
 
-def get_violations_for_user(user_id, start_date, end_date):
+def get_violations_for_user(user_id, start_date, end_date, selected_cctv_ids=None):
     """
-    Mengambil daftar detail pelanggaran yang terjadi pada CCTV yang 
-    bertanggung jawab pada user_id tertentu dalam rentang waktu.
+    Mengambil detail pelanggaran.
+    Jika selected_cctv_ids diisi, kita override filter CCTV berdasarkan daftar tersebut,
+    BUKAN hanya berdasarkan mapping user.
     """
     conn = get_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
     try:
-        # Query yang menggabungkan: user, cctv yang dipegang user, dan pelanggaran di cctv tersebut
-        cur.execute("""
-            SELECT 
+        where_clauses = [
+            "vd.timestamp >= %s",
+            "vd.timestamp < %s",
+            "ucm.user_id = %s"
+        ]
+        params = [start_date, end_date, user_id]
+
+        if selected_cctv_ids:
+            where_clauses.append("vd.id_cctv = ANY(%s)")
+            params.append(selected_cctv_ids)
+
+        cur.execute(f"""
+            SELECT
                 vd.id AS violation_id,
-                vd.timestamp, 
-                cd.name AS cctv_name, 
+                vd.timestamp,
+                cd.name AS cctv_name,
                 cd.location,
                 oc.name AS violation_name,
                 vd.image AS image_url
             FROM violation_detection vd
+            JOIN user_cctv_map ucm ON vd.id_cctv = ucm.cctv_id
             JOIN cctv_data cd ON vd.id_cctv = cd.id
             JOIN object_class oc ON vd.id_violation = oc.id
-            JOIN user_cctv_map ucm ON cd.id = ucm.cctv_id
-            WHERE 
-                ucm.user_id = %s AND
-                vd.timestamp >= %s AND
-                vd.timestamp < %s
-            ORDER BY vd.timestamp DESC;
-        """, (user_id, start_date, end_date))
-        
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY vd.timestamp DESC
+        """, params)
+
         return cur.fetchall()
     
     except Exception as e:
@@ -244,6 +255,7 @@ def get_violations_for_user(user_id, start_date, end_date):
     finally:
         cur.close()
         conn.close()
+
 
 def generate_violation_pdf(violations_data, full_name, start_date, end_date):
     """
@@ -339,90 +351,140 @@ def generate_violation_pdf(violations_data, full_name, start_date, end_date):
     buffer.close()
     return pdf_bytes
 
-def send_violation_recap_emails(start_date: datetime, end_date: datetime, report_type: str, template_key: str):
+def resolve_effective_cctvs(cur, user_id: int, requested_cctv_ids: list | None):
     """
-    Mengambil data rekap, membuat PDF, dan mengirim email ke setiap user yang 
-    bertanggung jawab dalam periode yang ditentukan.
-    report_type harus 'Weekly' atau 'Monthly'.
+    SATU-SATUNYA sumber kebenaran scope CCTV user.
     """
+    if not requested_cctv_ids:
+        return None
+
+    try:
+        # Konversi semua ID di dalam list menjadi integer agar cocok dengan tipe data DB
+        numeric_ids = [int(id) for id in requested_cctv_ids if str(id).isdigit()]
+        
+        if not numeric_ids:
+            return []
+
+        cur.execute("""
+            SELECT cctv_id
+            FROM user_cctv_map
+            WHERE user_id = %s
+              AND cctv_id = ANY(%s)
+        """, (user_id, numeric_ids))
+
+        return [row['cctv_id'] for row in cur.fetchall()]
+    except ValueError as e:
+        logging.error(f"[RECAP] Gagal konversi CCTV ID ke integer: {e}")
+        return []
+
+def send_violation_recap_emails(
+    start_date: datetime,
+    end_date: datetime,
+    report_type: str,
+    template_key: str,
+    selected_user_ids: list = None,
+    selected_cctv_ids: list = None
+):
     conn = None
     cur = None
+
     try:
         conn = get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         subject_template, body_template = get_email_template(template_key)
+
+        # --- 1. Ambil kandidat user ---
+        if selected_user_ids:
+            placeholders = ', '.join(['%s'] * len(selected_user_ids))
+            cur.execute(f"""
+                SELECT id AS user_id, email, full_name
+                FROM users
+                WHERE id IN ({placeholders})
+            """, selected_user_ids)
+        else:
+            cur.execute("""
+                SELECT DISTINCT u.id AS user_id, u.email, u.full_name
+                FROM users u
+                JOIN user_cctv_map ucm ON u.id = ucm.user_id
+            """)
+
+        if selected_user_ids == []:
+            logging.warning(
+                "[RECAP] selected_user_ids kosong dikirim frontend — kontrak API dilanggar"
+            )
+
+        logging.info(
+            f"[RECAP DEBUG] selected_user_ids={selected_user_ids}, selected_cctv_ids={selected_cctv_ids}"
+        )
         
-        # 1. Dapatkan semua user yang bertanggung jawab atas CCTV
-        cur.execute("""
-            SELECT DISTINCT u.id AS user_id, u.email, u.full_name
-            FROM users u
-            JOIN user_cctv_map ucm ON u.id = ucm.user_id;
-        """)
         recipients = cur.fetchall()
-        
         success_count = 0
-        for recipient in recipients:
-            user_id = recipient['user_id']
-            email = recipient['email']
-            full_name = recipient['full_name']
-            
-            # 2. Ambil data pelanggaran user ini
-            raw_violations_data = get_violations_for_user(user_id, start_date, end_date) 
 
-            if not raw_violations_data:
-                logging.info(f"Tidak ada pelanggaran untuk {full_name} ({email}) pada periode ini.")
-                continue
-                
-            violations_with_images = []
-            for violation in raw_violations_data:
-                image_url = violation['image_url']
-                image_bytes = None
-                if image_url:
-                    image_bytes = download_image_from_url(image_url) 
-                    
-                if image_bytes:
-                    violation['image_bytes'] = image_bytes
-                    violations_with_images.append(violation)
-                else:
-                    violation['image_bytes'] = None 
-                    violations_with_images.append(violation)
+        for user in recipients:
+            user_id = user['user_id']
+            email = user['email']
+            full_name = user['full_name']
 
-            if not violations_with_images:
-                logging.info(f"Semua gambar gagal diunduh untuk {full_name}.")
+            # --- 2. Tentukan CCTV efektif untuk user ini ---
+            effective_cctv_ids = resolve_effective_cctvs(
+                cur,
+                user_id,
+                selected_cctv_ids
+            )
+            logging.info(f"[DEBUG] User {user_id} has effective CCTVs: {effective_cctv_ids}")
+
+            if effective_cctv_ids == []:
                 continue 
-                
-            # 3. Generate PDF 
-            pdf_bytes = generate_violation_pdf(violations_with_images, full_name, start_date, end_date)
             
-            # 4. Susun dan Kirim Email
+            logging.debug(
+                f"[RECAP] User {user_id} CCTV scope: {effective_cctv_ids or 'ALL_ASSIGNED'}"
+            )
+
+            violations = get_violations_for_user(
+                user_id,
+                start_date,
+                end_date,
+                effective_cctv_ids
+            )
+
+            if not violations:
+                continue
+
+            for v in violations:
+                v['image_bytes'] = download_image_from_url(v['image_url']) if v['image_url'] else None
+
+            # --- 3. Generate PDF ---
+            pdf_bytes = generate_violation_pdf(violations, full_name, start_date, end_date)
+
+            # --- 4. Susun dan Kirim Email ---
             context = {
                 'full_name': full_name or "Bapak/Ibu",
                 'start_date': start_date.strftime("%Y-%m-%d"),
                 'end_date': end_date.strftime("%Y-%m-%d"),
-                'report_type': report_type 
+                'report_type': report_type
             }
-            
+
             subject = Template(subject_template).safe_substitute(context)
-            html_body = Template(body_template).safe_substitute(context)
-            
-            pdf_filename = f"Laporan_PPE_{report_type}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
-            
+            body = Template(body_template).safe_substitute(context)
+
             if send_notification_with_attachment(
-                email, 
-                subject, 
-                html_body, 
-                attachment_bytes=pdf_bytes, 
-                attachment_filename=pdf_filename, 
-                mime_type='application/pdf'
+                email,
+                subject,
+                body,
+                pdf_bytes,
+                f"PPE_Report_{report_type}_{start_date:%Y%m%d}_{end_date:%Y%m%d}.pdf",
+                'application/pdf'
             ):
-                 success_count += 1
-                 
-        logging.info(f"Selesai mengirimkan {success_count} email rekap. Total penerima: {len(recipients)}")
+                success_count += 1
+
+        logging.info(
+            f"Selesai mengirim {success_count} email rekap dari {len(recipients)} kandidat user."
+        )
         return success_count > 0
 
     except Exception as e:
-        logging.error(f"[RECAP SERVICE] Error di send_violation_recap_emails: {e}")
+        logging.error(f"[RECAP SERVICE] Error: {e}")
         return False
     finally:
         if cur: cur.close()

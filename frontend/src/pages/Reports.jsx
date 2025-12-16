@@ -64,6 +64,8 @@ export default function Reports() {
 
     // --- State for Modal Manual Recap Email ---
     const [showRecapModal, setShowRecapModal] = useState(false);
+    const [allUsers, setAllUsers] = useState([]);
+    const [allCCTVs, setAllCCTVs] = useState([]);
 
     // --- Efek 1: Debouncing Search Input ---
     useEffect(() => {
@@ -132,6 +134,30 @@ export default function Reports() {
 
         return () => eventSource.close();
     }, [showAlert]);
+
+    // --- Fetch Data Users & CCTVs untuk Modal ---
+    useEffect(() => {
+        const fetchFilterData = async () => {
+            try {
+                // 1. Fetch Users
+                const userRes = await fetch('/api/users-list'); 
+                if (!userRes.ok) throw new Error("Failed to fetch user list.");
+                const userData = await userRes.json();
+                setAllUsers(userData);
+
+                // 2. Fetch CCTVs
+                const cctvRes = await fetch('/api/cctvs-list');
+                if (!cctvRes.ok) throw new Error("Failed to fetch CCTV list.");
+                const cctvData = await cctvRes.json();
+                setAllCCTVs(cctvData);
+
+            } catch (err) {
+                console.error("Error fetching filter data:", err);
+                showAlert(`Failed to load filter data: ${err.message}`, 'error'); 
+            }
+        };
+        fetchFilterData();
+    }, []);
 
     // --- Handler Aksi ---
     // --- Handler Kirim Email ---
@@ -202,27 +228,40 @@ export default function Reports() {
     };
 
     // --- Handler Kirim Rekap Manual ---
-    const handleSendRecapManual = async ({ startDate, endDate, reportType: templateKey, setLoading }) => { // <-- Terima templateKey sebagai reportType
+    const handleSendRecapManual = async ({ 
+        startDate, 
+        endDate, 
+        reportType: templateKey, 
+        selectedUserIds, 
+        selectedCctvIds, 
+        setLoading 
+    }) => { 
+        console.log("REPORTS.JSX RECEIVED:", { selectedUserIds, selectedCctvIds });
         setLoading(true);
-        showAlert(`Memicu pengiriman Rekap (${startDate} s/d ${endDate}) menggunakan template ${templateKey}...`, 'info');
+        showAlert(`Trigger Recap delivery (${startDate} to ${endDate})...`, 'info');
         
         try {
             const res = await fetch(`/api/send-recap`, { 
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     start_date: startDate,
                     end_date: endDate,
-                    report_type: templateKey 
+                    report_type: templateKey,
+                    selected_user_ids: selectedUserIds, 
+                    selected_cctv_ids: selectedCctvIds  
                 })
             });
+            
             const data = await res.json();
             
             if (!res.ok) {
-                throw new Error(data.message || "Failed to trigger recap send. Check backend log.");
+                throw new Error(data.message || "Failed to trigger recap send.");
             }
-            showAlert(data.message || `Email Recap using template ${templateKey} successfully triggered!`, 'success');
+            
+            showAlert(data.message || `Email Recap triggered successfully!`, 'success');
             setShowRecapModal(false); 
 
         } catch (err) {
@@ -453,6 +492,8 @@ export default function Reports() {
                     open={showRecapModal}
                     onClose={() => setShowRecapModal(false)}
                     onSend={handleSendRecapManual}
+                    allUsers={allUsers}
+                    allCCTVs={allCCTVs}
                 />
             )}
         </div>

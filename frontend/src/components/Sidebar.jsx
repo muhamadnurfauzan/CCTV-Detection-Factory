@@ -52,7 +52,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
       {!isExpanded && <Tooltip id="sidebar-tooltip" place="right" style={{ borderRadius: '0.375rem', zIndex: 50 }} />}
 
       <nav className={`
-        fixed inset-y-0 left-0 z-50 flex flex-col
+        fixed inset-y-0 left-0 z-40 flex flex-col
         bg-indigo-900 text-indigo-300 shadow-2xl
         transition-all duration-300 ease-in-out
         ${isExpanded ? 'w-56' : 'w-0 sm:w-20'}
@@ -108,7 +108,7 @@ const Sidebar = ({ isExpanded, setIsExpanded }) => {
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="fixed top-2 left-2 sm:top-4 sm:left-4 z-50 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg transition-all duration-300 ease-in-out"
+          className="fixed top-2 left-2 sm:top-4 sm:left-4 z-40 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg transition-all duration-300 ease-in-out"
         >
           <FaBars className="w-6 h-6" />
         </button>

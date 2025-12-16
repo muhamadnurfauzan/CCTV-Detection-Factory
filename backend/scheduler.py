@@ -102,7 +102,7 @@ def scheduler_thread():
 
         # 2. KIRIM REKAP BULANAN (Setiap Tanggal 1 jam 07:00)
         if day_of_month == 1 and hour == 7 and minute == 0:
-            logging.info("[SCHEDULER] Memicu pengiriman Rekap Bulanan...")
+            logging.info("[SCHEDULER] Monthly Violation Report Recap...")
             end_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_date = (end_date - datetime.timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             send_violation_recap_emails(start_date, end_date, 'Monthly')
@@ -110,7 +110,7 @@ def scheduler_thread():
         # 3. KIRIM REKAP MINGGUAN (Setiap Senin jam 07:00)
         if weekday == 0 and hour == 7 and minute == 0:
             if not (day_of_month == 1):
-                logging.info("[SCHEDULER] Memicu pengiriman Rekap Mingguan...")
+                logging.info("[SCHEDULER] Weekly Violation Report Recap...")
                 end_date = now.replace(hour=0, minute=0, second=0, microsecond=0) 
                 start_date = end_date - datetime.timedelta(days=7) 
                 send_violation_recap_emails(start_date, end_date, 'Weekly')
