@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { FaPlus } from 'react-icons/fa';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAlert } from './AlertProvider'; 
 import RoleButton from './RoleButton';
 import EmailTemplateEditor from './EmailTemplateEditor';
@@ -27,6 +26,8 @@ const SetupEmail = () => {
         body_template: ''
     });
     const [templateOriginal, setTemplateOriginal] = useState(null);
+    const [selectedTemplateKey, setSelectedTemplateKey] = useState('ppe_violation');
+    const [templateOptions, setTemplateOptions] = useState([]);
     const [savingTemplate, setSavingTemplate] = useState(false);
     const [savingSMTP, setSavingSMTP] = useState(false); 
 
@@ -55,25 +56,56 @@ const SetupEmail = () => {
     }, []);
 
     // Fetch Template
+    const fetchTemplateByKey = useCallback(async (key) => {
+        try {
+            // Konversi key (violation_weekly_recap) ke format endpoint (violation-weekly-recap)
+            const endpoint = key.replace(/_/g, '-');
+            // Penyesuaian khusus untuk ppe_violation -> ppe-violation
+            const finalEndpoint = endpoint === 'ppe-violation' ? 'ppe-violation' : endpoint;
+
+            const res = await fetch(`/api/email-template/${finalEndpoint}`);
+            if (res.ok) {
+                const data = await res.json();
+                const formattedTemplate = {
+                    subject_template: data.subject_template || '',
+                    body_template: data.body_template || ''
+                };
+                setTemplate(formattedTemplate);
+                setTemplateOriginal(formattedTemplate);
+            }
+        } catch (err) {
+            console.error("Failed to load template:", err);
+            showAlert("Failed to load email template", "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [showAlert]);
+
+    // Pemicu otomatis saat pertama kali buka ATAU saat ganti pilihan
     useEffect(() => {
-        const fetchTemplate = async () => {
+        fetchTemplateByKey(selectedTemplateKey);
+    }, [selectedTemplateKey, fetchTemplateByKey]);
+
+    // Efek untuk mengambil daftar kunci template saat komponen dimuat
+    useEffect(() => {
+        const fetchKeys = async () => {
             try {
-                const res = await fetch('/api/email-template/ppe-violation');
+                const res = await fetch('/api/email-templates/list');
                 if (res.ok) {
-                    const data = await res.json();
-                    const formattedTemplate = {
-                        subject_template: data.subject_template || '',
-                        body_template: data.body_template || ''
-                    };
-                    setTemplate(formattedTemplate);
-                    setTemplateOriginal(formattedTemplate);
+                    const keys = await res.json();
+                    setTemplateOptions(keys);
+                    // Set default jika ppe_violation ada di dalam list
+                    if (keys.includes('ppe_violation')) {
+                        setSelectedTemplateKey('ppe_violation');
+                    } else if (keys.length > 0) {
+                        setSelectedTemplateKey(keys[0]);
+                    }
                 }
             } catch (err) {
-                console.error("Failed to load email template:", err);
-                showAlert("Failed to load email template", "error");
+                console.error("Failed to fetch template list:", err);
             }
         };
-        fetchTemplate();
+        fetchKeys();
     }, []);
 
     const handleChange = (e) => {
@@ -131,7 +163,9 @@ const SetupEmail = () => {
         setSavingTemplate(true);
 
         try {
-            const res = await fetch('/api/email-template/ppe-violation', {
+            // Mapping key ke endpoint yang sesuai
+            const endpoint = selectedTemplateKey.replace(/_/g, '-');
+            const res = await fetch(`/api/email-template/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -141,8 +175,6 @@ const SetupEmail = () => {
             });
 
             if (!res.ok) throw new Error('Failed to save email template');
-
-            const result = await res.json();
             showAlert('Email template saved successfully!', 'success');
             setTemplateOriginal({ ...template });
             setIsEditingTemplate(false);
@@ -304,6 +336,26 @@ const SetupEmail = () => {
             <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className='flex justify-between items-center mb-4 border-b pb-2'>
                     <h3 className="text-xl font-semibold text-gray-700">Email Templater</h3>
+                    <div>
+                        <select
+                            value={selectedTemplateKey} 
+                            onChange={(e) => {
+                                setSelectedTemplateKey(e.target.value);
+                                setIsEditingTemplate(true); 
+                            }}
+                            disabled={!isEditingTemplate}
+                            className={`flex items-center gap-2 p-2 rounded-lg border border-gray-300 text-sm font-medium
+                                ${!isEditingTemplate ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer hover:border-indigo-500 transition'}
+                            `}
+                        >
+                            {templateOptions.map((key) => (
+                                <option key={key} value={key}>
+                                    {/* Mengubah violation_weekly_recap menjadi Violation Weekly Recap */}
+                                    {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 {loading ? (
                     <p className="text-center py-8 text-gray-600">Loading SMTP configuration...</p>
@@ -314,6 +366,7 @@ const SetupEmail = () => {
                             template={template}
                             setTemplate={setTemplate}
                             isEditing={isEditingTemplate}
+                            selectedTemplateKey={selectedTemplateKey}
                         />
 
                         <div className="pt-4">

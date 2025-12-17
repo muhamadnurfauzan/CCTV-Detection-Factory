@@ -6,15 +6,24 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView, Decoration } from '@codemirror/view';
 
 // === Variabel Tags ===
-const EMAIL_TAGS = [
-  { label: 'Full Name',        value: '${full_name}' },
-  { label: 'Violation Type',   value: '${violation_name}' },
-  { label: 'CCTV Name',        value: '${cctv_name}' },
-  { label: 'Location',         value: '${location}' },
-  { label: 'Time of Incident', value: '${timestamp}' },
-];
+const TAG_MAPS = {
+  // Tag khusus untuk notifikasi realtime ppe_violation
+  ppe_violation: [
+    { label: 'Full Name',        value: '${full_name}' },
+    { label: 'Violation Type',   value: '${violation_name}' },
+    { label: 'CCTV Name',        value: '${cctv_name}' },
+    { label: 'Location',         value: '${location}' },
+    { label: 'Time of Incident', value: '${timestamp}' },
+  ],
+  // Tag khusus untuk laporan rekapitulasi (Weekly, Monthly, Custom)
+  default_recap: [
+    { label: 'Full Name',  value: '${full_name}' },
+    { label: 'Start Date', value: '${start_date}' },
+    { label: 'End Date',   value: '${end_date}' },
+  ]
+};
 
-const EmailTemplateEditor = ({ template, setTemplate, isEditing }) => {
+const EmailTemplateEditor = ({ template, setTemplate, isEditing, selectedTemplateKey }) => {
   const [wrapEnabled, setWrapEnabled] = useState(true)
   
   // Fungsi insert tag ke field apapun (subject atau body)
@@ -24,6 +33,11 @@ const EmailTemplateEditor = ({ template, setTemplate, isEditing }) => {
       [field]: prev[field] + tagValue
     }));
   };
+
+  // Tentukan tag mana yang akan ditampilkan
+  const currentTags = selectedTemplateKey === 'ppe_violation' 
+    ? TAG_MAPS.ppe_violation 
+    : TAG_MAPS.default_recap;
 
   // Highlight placeholder kuning di CodeMirror
   const placeholderHighlight = EditorView.decorations.of(view => {
@@ -47,7 +61,7 @@ const EmailTemplateEditor = ({ template, setTemplate, isEditing }) => {
       <div>
         <p className="text-sm font-medium text-gray-600 mb-3">Available Tags (click or drag)</p>
         <div className="flex flex-wrap gap-2">
-          {EMAIL_TAGS.map(tag => (
+          {currentTags.map(tag => (
             <button
               key={tag.value}
               type="button"
@@ -162,9 +176,9 @@ const EmailTemplateEditor = ({ template, setTemplate, isEditing }) => {
           </label>
           <iframe
             title="preview"
-            srcDoc={template.body_template || '<body><p style="padding:40px;color:#999;font-family:sans-serif;">Preview akan muncul di sini</p></body>'}
+            srcDoc={template.body_template || '<body><p style="padding:40px;color:#999;font-family:sans-serif;">Preview will appear here</p></body>'}
             className="w-full h-[600px] border rounded-lg bg-white shadow-inner"
-            sandbox="allow-same-origin"
+            sandbox="allow-same-origin allow-scripts"
           />
         </div>
       </div>

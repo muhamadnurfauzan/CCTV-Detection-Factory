@@ -62,12 +62,12 @@ def email_template_ppe():
         cur.close()
         conn.close()
 
-@email_bp.route('/email-template/weekly-recap', methods=['GET', 'POST'])
+@email_bp.route('/email-template/violation-weekly-recap', methods=['GET', 'POST'])
 @require_role(['super_admin'])
 def email_template_weekly_recap():
     return handle_email_template_recap('violation_weekly_recap')
 
-@email_bp.route('/email-template/monthly-recap', methods=['GET', 'POST'])
+@email_bp.route('/email-template/violation-monthly-recap', methods=['GET', 'POST'])
 @require_role(['super_admin'])
 def email_template_monthly_recap():
     return handle_email_template_recap('violation_monthly_recap')
@@ -76,6 +76,21 @@ def email_template_monthly_recap():
 @require_role(['super_admin'])
 def email_template_custom_report():
     return handle_email_template_recap('violation_custom_report')
+
+@email_bp.route('/email-templates/list', methods=['GET'])
+@require_role(['super_admin'])
+def get_template_keys():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        # Mengambil semua key yang aktif
+        cur.execute("SELECT template_key FROM email_templates WHERE is_active = true OR is_active IS NULL ORDER BY template_key ASC")
+        keys = cur.fetchall()
+        # Mengembalikan hanya list string
+        return jsonify([row['template_key'] for row in keys])
+    finally:
+        cur.close()
+        conn.close()
 
 @email_bp.route('/send-email/<int:violation_id>', methods=['POST'])
 @require_role(['super_admin', 'report_viewer'])
