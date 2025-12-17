@@ -3,13 +3,19 @@ import { FaPaperPlane } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
 import Multiselect from './Multiselect'; 
 
-const formatDate = (date) => date.toISOString().split('T')[0];
+const formatDate = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
     const { showAlert } = useAlert();
     const today = useMemo(() => formatDate(new Date()), []);
     
-    const [reportType, setReportType] = useState('Custom');
+    const [templateKey, setTemplateKey] = useState('Custom');
     const [startDate, setStartDate] = useState(formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
     const [endDate, setEndDate] = useState(today);
     const [loading, setLoading] = useState(false);
@@ -51,7 +57,6 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                         id: String(c.id) 
                     }));
                 }
-                console.log("DEBUG Map:", parsedMap);
                 setUserCCTVMap(parsedMap);
             } catch (err) {
                 showAlert('Error fetching CCTV map: ' + err.message, 'error');
@@ -112,40 +117,30 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
         const now = new Date();
         now.setHours(0, 0, 0, 0); 
         
-        if (reportType === 'Weekly') {
-            // Logika untuk periode MINGGU LALU (Senin s/d Minggu)
+        if (templateKey === 'Weekly') {
+            const currentDay = now.getDay(); 
+            // Hitung mundur ke Senin minggu ini, lalu ke Senin minggu lalu
+            const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
             
-            // Hitung hari untuk mundur ke HARI MINGGU sebelumnya
-            const daysToSunday = now.getDay() === 0 ? 0 : now.getDay(); 
-            const lastSunday = new Date(now);
-            lastSunday.setDate(now.getDate() - daysToSunday);
+            const lastMonday = new Date(now);
+            lastMonday.setDate(now.getDate() - daysToMonday - 7);
             
-            // Start Date: Mundur 7 hari dari Minggu lalu (yaitu Senin minggu lalu)
-            const weeklyStart = new Date(lastSunday);
-            weeklyStart.setDate(lastSunday.getDate() - 5);
-            
-            // End Date: Minggu lalu
-            const weeklyEnd = new Date(lastSunday);
-            weeklyEnd.setDate(lastSunday.getDate()); 
+            const lastSunday = new Date(lastMonday);
+            lastSunday.setDate(lastMonday.getDate() + 6);
 
-            setStartDate(formatDate(weeklyStart));
-            setEndDate(formatDate(new Date(weeklyEnd.getTime() + 24 * 60 * 60 * 1000 - 1))); 
+            setStartDate(formatDate(lastMonday));
+            setEndDate(formatDate(lastSunday));
 
-        } else if (reportType === 'Monthly') {
-            // Logika untuk periode BULAN LALU (Tanggal 1 s/d Tanggal Akhir Bulan)
-            
-            // End Date: Tanggal 1 bulan ini (tidak inklusif)
-            const monthlyEnd = new Date(now.getFullYear(), now.getMonth(), 2);
-            
-            // Start Date: Tanggal 1 bulan sebelumnya
-            const monthlyStart = new Date(now.getFullYear(), now.getMonth() - 1, 2);
+        } else if (templateKey === 'Monthly') {
+            // Tanggal 1 bulan lalu
+            const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            // Hari ke-0 bulan ini = Hari terakhir bulan lalu
+            const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-            setStartDate(formatDate(monthlyStart));
-            // End Date di sini adalah tanggal terakhir bulan lalu (monthlyEnd - 1 hari)
-            setEndDate(formatDate(new Date(monthlyEnd.getTime() - 24 * 60 * 60 * 1000)));
-            
-        } else if (reportType === 'Custom') {}
-    }, [reportType]);
+            setStartDate(formatDate(firstDayLastMonth));
+            setEndDate(formatDate(lastDayLastMonth));
+        }
+    }, [templateKey]);
     
     // --- Handler Pengiriman ---
     const handleSend = () => {
@@ -164,14 +159,11 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
         const userIdsToSend = selectedUserIds && selectedUserIds.length > 0 ? selectedUserIds : null;
         const cctvIdsToSend = selectedCctvIds && selectedCctvIds.length > 0 ? selectedCctvIds : null;
 
-        // Tambahkan Log untuk verifikasi akhir di browser sebelum dikirim
-        console.log("FINAL PAYLOAD TO BACKEND:", { userIdsToSend, cctvIdsToSend });
-
         const payload = {
             startDate,
             endDate,
-            reportType: reportType === 'Monthly' ? 'violation_monthly_recap' : 
-                        reportType === 'Weekly' ? 'violation_weekly_recap' : 'violation_custom_report',
+            templateKey: templateKey === 'Monthly' ? 'violation_monthly_recap' : 
+                        templateKey === 'Weekly' ? 'violation_weekly_recap' : 'violation_custom_report',
             selectedUserIds: userIdsToSend,
             selectedCctvIds: cctvIdsToSend,
         };
@@ -201,8 +193,8 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Recap Report Type</label>
                         <select
-                            value={reportType}
-                            onChange={(e) => setReportType(e.target.value)}
+                            value={templateKey}
+                            onChange={(e) => setTemplateKey(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                             disabled={loading}
                         >
@@ -220,9 +212,9 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${reportType !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
+                                className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${templateKey !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
                                 max={endDate}
-                                disabled={loading || reportType !== 'Custom'} 
+                                disabled={loading || templateKey !== 'Custom'} 
                             />
                         </div>
                         {/* Tanggal Akhir */}
@@ -232,10 +224,10 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${reportType !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
+                                className={`w-full px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 ${templateKey !== 'Custom' ? 'bg-gray-100 border-gray-300' : 'border-gray-300'}`}
                                 max={today}
                                 min={startDate}
-                                disabled={loading || reportType !== 'Custom'} 
+                                disabled={loading || templateKey !== 'Custom'} 
                             />
                         </div>
                     </div>
@@ -248,7 +240,7 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                         <Multiselect
                             options={userOptions}
                             selectedValues={selectedUserIds} 
-                            onSelect={(ids) => {console.log("IDs terpilih di UI:", ids); setSelectedUserIds(ids);}}
+                            onSelect={(ids) => setSelectedUserIds(ids)}
                             placeholder="Select users to receive report..."
                         />
                         <p className="text-xs text-gray-500 mt-1">Leave empty to send to all responsible users.</p>

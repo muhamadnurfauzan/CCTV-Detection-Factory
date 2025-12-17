@@ -98,22 +98,26 @@ def send_recap_manual():
     try:
         start_dt = datetime.strptime(data['start_date'], '%Y-%m-%d')
         end_dt = datetime.strptime(data['end_date'], '%Y-%m-%d')
-        # end_dt = datetime.strptime(data['end_date'], '%Y-%m-%d') + timedelta(days=1)
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
         # AMBIL DATA FILTER DARI REQUEST JSON
         selected_user_ids = data.get('selected_user_ids')
         selected_cctv_ids = data.get('selected_cctv_ids')
 
+        # Frontend mengirim 'template_key' (misal: 'violation_weekly_recap')
+        template_id = data.get('template_key')
+
         # TERUSKAN KE SERVICE
         success = notification_service.send_violation_recap_emails(
             start_date=start_dt,
             end_date=end_dt,
-            report_type=data['report_type'],
-            template_key=data['report_type'],
+            template_key=template_id,     
             selected_user_ids=selected_user_ids,
             selected_cctv_ids=selected_cctv_ids 
         )
         
+        logging.info(f"[EMAIL MANUAL] Recap email process completed with status: {success}")
+
         if success:
             return jsonify({"message": "Recap emails sent successfully."})
         else:

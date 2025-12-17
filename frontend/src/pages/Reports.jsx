@@ -231,12 +231,11 @@ export default function Reports() {
     const handleSendRecapManual = async ({ 
         startDate, 
         endDate, 
-        reportType: templateKey, 
+        templateKey, 
         selectedUserIds, 
         selectedCctvIds, 
         setLoading 
     }) => { 
-        console.log("REPORTS.JSX RECEIVED:", { selectedUserIds, selectedCctvIds });
         setLoading(true);
         showAlert(`Trigger Recap delivery (${startDate} to ${endDate})...`, 'info');
         
@@ -249,7 +248,7 @@ export default function Reports() {
                 body: JSON.stringify({
                     start_date: startDate,
                     end_date: endDate,
-                    report_type: templateKey,
+                    template_key: templateKey,
                     selected_user_ids: selectedUserIds, 
                     selected_cctv_ids: selectedCctvIds  
                 })
@@ -258,7 +257,12 @@ export default function Reports() {
             const data = await res.json();
             
             if (!res.ok) {
-                throw new Error(data.message || "Failed to trigger recap send.");
+                if (res.status === 404) {
+                    showAlert(data.message || "Data empty: No violations found for this period.", 'warning');
+                } else {
+                    throw new Error(data.message || "Failed to trigger recap send.");
+                }
+                return; // Berhenti di sini
             }
             
             showAlert(data.message || `Email Recap triggered successfully!`, 'success');
