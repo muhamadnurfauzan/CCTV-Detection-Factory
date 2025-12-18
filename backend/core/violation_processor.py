@@ -73,87 +73,81 @@ def upload_and_log_violation(cctv_id, class_name, image_bytes):
         logging.error(f"[CCTV {cctv_id}] UPLOAD GAGAL/LOG GAGAL: {e}")
 
 def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations):
-    """
-    Proses satu deteksi violation: crop → polaroid → siapkan data I/O.
-    Semua validasi dan I/O (DB, Upload, Email) dijalankan di thread terpisah.
-    """
-    cctv_cfg = state.cctv_configs[cctv_id]
-    roi_regions = cctv_cfg["roi"]
-    location = cctv_cfg["location"]
-    class_name = model.names[int(cls_id)]
-
-    # --- 1. Cek ROI, Confidence, Cooldown (Logika sudah benar) ---
-    center = ((x1 + x2) // 2, (y1 + y2) // 2)
+    # 1. Ambil Config & Metadata
+    cctv_cfg = state.cctv_configs.get(cctv_id, {})
+    roi_regions = cctv_cfg.get("roi", []) # Gunakan key 'roi' sesuai cctv_services.py
+    location = cctv_cfg.get("location", "Unknown Location") # Definisi location di sini
     
-    # Cek ROI
-    if not any(point_in_polygon(center, r["points"]) for r in roi_regions):
-        logging.warning(f"[VIOLATION] SKIP → {class_name} di luar ROI")
-        return
+    class_name = model.names[int(cls_id)]
+    class_info = state.OBJECT_CLASS_CACHE.get(class_name, {})
+    class_db_id = class_info.get("id")
+    
+    center = ((x1 + x2) // 2, (y1 + y2) // 2)
 
-    # Cek Confidence
+    # 2. Cari ROI target dan Filter Pelanggaran per ROI
+    target_roi = None
+    for region in roi_regions:
+        if point_in_polygon(center, region["points"]):
+            # Cek apakah class ID ini diizinkan melanggar di ROI khusus ini
+            allowed_ids = region.get("allowed_violations", [])
+            if class_db_id in allowed_ids:
+                target_roi = region
+                break
+            else:
+                # Objek ada di ROI, tapi class ini bukan pelanggaran di wilayah ini
+                return 
+
+    if not target_roi:
+        return # Objek di luar semua area pantauan ROI
+
+    # 3. Validasi Confidence & Cooldown
     if conf < CONFIDENCE_THRESHOLD:
-        logging.warning(f"[VIOLATION] SKIP → Confidence {conf:.2f} < {CONFIDENCE_THRESHOLD}")
         return
 
-    # Cooldown Check
     now = time.time()
     data = tracked_violations.setdefault(track_id, {"last_times": {}})
     last_time = data["last_times"].get(class_name, 0)
+    
     if now - last_time < COOLDOWN:
-        logging.warning(f"[VIOLATION] SKIP → Cooldown aktif ({now - last_time:.1f}s)")
         return
     
-    # --- 2. Crop, Resize, Polaroid ---
+    # --- 4. Visual Processing (Crop & Polaroid) ---
     h, w = frame.shape[:2]
     pad_w = int((x2 - x1) * PADDING_PERCENT)
     pad_h = int((y2 - y1) * PADDING_PERCENT)
-    x1e = max(0, x1 - pad_w)
-    y1e = max(0, y1 - pad_h)
-    x2e = min(w, x2 + pad_w)
-    y2e = min(h, y2 + pad_h)
+    x1e, y1e = max(0, x1 - pad_w), max(0, y1 - pad_h)
+    x2e, y2e = min(w, x2 + pad_w), min(h, y2 + pad_h)
+    
     crop = frame[y1e:y2e, x1e:x2e]
+    if crop.size == 0: return
 
-    if crop.size == 0:
-        logging.warning(f"[VIOLATION] SKIP → Crop kosong")
-        return
-
-    # Resize jika terlalu kecil
     if crop.shape[1] < TARGET_MAX_WIDTH:
         scale = TARGET_MAX_WIDTH / crop.shape[1]
-        new_h = int(crop.shape[0] * scale)
-        crop = cv2.resize(crop, (TARGET_MAX_WIDTH, new_h))
+        crop = cv2.resize(crop, (TARGET_MAX_WIDTH, int(crop.shape[0] * scale)))
 
-    # Buat Polaroid
+    # Tambahkan Label Informasi pada Polaroid
     label_height = 80
     polaroid = np.ones((crop.shape[0] + label_height, crop.shape[1], 3), dtype=np.uint8) * 255
     polaroid[:crop.shape[0], :] = crop
 
+    # Sekarang 'location' sudah aman digunakan
     texts = [
-        class_name.upper(),
+        f"VIOLATION: {class_name.upper()}",
         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        location
+        f"LOC: {location}" 
     ]
-    y_pos = crop.shape[0] + 20
+    
+    y_pos = crop.shape[0] + 25
     for text in texts:
-        cv2.putText(polaroid, text, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1)
-        y_pos += 22
+        cv2.putText(polaroid, text, (15, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        y_pos += 20
 
-    # Encode ke JPEG
+    # --- 5. Finalisasi & Upload ---
     success, buffer = cv2.imencode(".jpg", polaroid, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    if not success:
-        logging.error(f"[CCTV {cctv_id}] GAGAL → Encode gambar gagal")
-        return
-    image_bytes = buffer.tobytes()
-
-    # --- 3. Panggil Upload dan Logging Asinkron ---
-    
-    # Update cooldown sebelum I/O
-    data["last_times"][class_name] = now 
-    
-    # Panggil upload and logging ASINKRON (Tidak memblokir process thread!)
-    Thread(target=upload_and_log_violation, 
-           args=(cctv_id, class_name, image_bytes), 
-           daemon=True).start()
-    
-    # PENTING: RETURN SEGERA. Process thread akan melanjutkan ke frame_queue.pop() berikutnya.
-    return
+    if success:
+        data["last_times"][class_name] = now 
+        image_bytes = buffer.tobytes()
+        # Jalankan I/O berat di background thread
+        Thread(target=upload_and_log_violation, 
+               args=(cctv_id, class_name, image_bytes), 
+               daemon=True).start()

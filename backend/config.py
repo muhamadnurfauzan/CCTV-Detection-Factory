@@ -7,7 +7,7 @@ from shared_state import state
 load_dotenv()
 
 # --- Model dan Pengaturan Umum ---
-MODEL_PATH = "model/ppe_detection_rtdert.pt"
+MODEL_PATH = "model/ppe_detection_yolov12.pt"
 CCTV_RATIO = (1920, 1080)
 
 CONFIDENCE_THRESHOLD = state.detection_settings['confidence_threshold']

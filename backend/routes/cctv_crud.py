@@ -17,35 +17,6 @@ import services.cctv_services as cctv_service
 import services.config_service as config_service
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
-
-# --- Helper: Simpan JSON ke Supabase Bucket ---
-def save_roi_to_file(roi_data, cctv_id):
-    """Mengunggah data ROI JSON ke Supabase Storage."""
-    filename = f"cctv_{cctv_id}.json"
-    storage_path = f"{config.SUPABASE_ROI_DIR}/{filename}"
-    
-    try:
-        if roi_data is None: # Case: Clear ROI (Hapus file dari Supabase)
-            config.supabase.storage.from_(config.SUPABASE_BUCKET).remove([storage_path])
-            logging.info(f"[ROI] Removed file from Supabase: {storage_path}")
-            return None # Return None untuk update DB area=NULL
-
-        # Konversi JSON ke string Bytes untuk diunggah
-        json_string = json.dumps(roi_data, indent=2)
-        json_bytes = json_string.encode('utf-8')
-        
-        # Upload file dengan opsi upsert=True (menimpa jika sudah ada)
-        res = config.supabase.storage.from_(config.SUPABASE_BUCKET).upload(
-            file=json_bytes,
-            path=storage_path,
-            file_options={"content-type": "application/json", "upsert": "true"}
-        )
-        
-        logging.info(f"[ROI] Saved to Supabase: {storage_path}")
-        return filename  # Hanya return nama file
-    except Exception as e:
-        logging.error(f"[ROI SAVE ERROR TO SUPABASE]: {e}")
-        return None
     
 # --- Helper: Validasi IP Address ---
 def is_valid_ip(ip_address):
@@ -99,27 +70,6 @@ def save_cctv_schedules(conn, cur, cctv_id, schedules):
         """
         execute_batch(cur, schedule_query, insert_data)
 
-@cctv_bp.route('/roi/<filename>', methods=['GET'])
-@require_role(['super_admin'])
-def get_roi_file(filename):
-    """Mengambil dan mengirim file JSON ROI dari Supabase."""
-    storage_path = f"{config.SUPABASE_ROI_DIR}/{filename}"
-    
-    if not filename.endswith('.json'):
-        return jsonify({"error": "Invalid file type requested"}), 400
-        
-    try:
-        public_url = config.supabase.storage.from_(config.SUPABASE_BUCKET).get_public_url(storage_path)
-        
-        if not public_url:
-             return jsonify({"error": "ROI file not found or URL not generated"}), 404
-             
-        return redirect(public_url)
-        
-    except Exception as e:
-        logging.error(f"[ROI GET ERROR FROM SUPABASE]: {e}")
-        return jsonify({"error": "Failed to retrieve ROI file from storage"}), 500
-
 @cctv_bp.route("/cctv-add", methods=["POST"])
 @require_role(['super_admin'])
 def add_new_cctv():
@@ -157,27 +107,18 @@ def add_new_cctv():
         conn = get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        # 1. INSERT DATA KE DB (dengan area=NULL sementara)
+        # Simpan langsung ke database dalam bentuk JSON string (Psycopg2 akan menangani JSONB)
         cur.execute("""
             INSERT INTO cctv_data (name, ip_address, port, token, location, area, enabled)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             data['name'], data['ip_address'], data['port'], data['token'],
-            data.get('location'), None, data.get('enabled', False)
+            data.get('location'), 
+            json.dumps(roi_json) if roi_json else None,
+            data.get('enabled', False)
         ))
         cctv_id = cur.fetchone()['id']
-
-        # 2. SIMPAN ROI KE SUPABASE (jika ada)
-        if roi_json is not None:
-            filename = save_roi_to_file(roi_json, cctv_id) # <-- Upload ke Supabase
-            if filename:
-                # 3. UPDATE DB dengan nama file dari Supabase
-                cur.execute("UPDATE cctv_data SET area = %s WHERE id = %s", (filename, cctv_id))
-                area_path = filename
-            else:
-                raise Exception("Failed to save ROI file to Supabase")
-
         conn.commit()
 
         # --- LANGKAH PENTING: REFRESH CONFIG ---
@@ -311,41 +252,14 @@ def update_cctv(cctv_id):
             update_fields.append("enabled = %s")
             update_values.append(new_enabled_status)
         
-        area_path = old_area_filename
         if 'area' in data:
-            if data['area'] is None:
-                roi_json = None
-                raw_area_string = None 
-            else:
-                try:
-                    raw_area_string = data['area'].strip() 
-                    
-                    if not raw_area_string.startswith('{'):
-                         logging.warning(f"[ROI PARSE WARNING]: Ignoring invalid area string (looks like filename): {raw_area_string}")
-                         raw_area_string = None 
-                         roi_json = None
-
-                    if raw_area_string: 
-                        roi_json = json.loads(raw_area_string) 
-                        
-                        if not isinstance(roi_json, dict) or 'items' not in roi_json:
-                            raise ValueError("Invalid ROI format: Missing 'items' key or not a dictionary.")
-                
-                except (json.JSONDecodeError, ValueError) as e:
-                    logging.error(f"[ROI PARSE ERROR]: {e}")
-                    if raw_area_string:
-                        return jsonify({"error": f"Invalid ROI JSON format: {str(e)}"}), 400
-
-            if roi_json is not None or (data['area'] is None and 'area' in data):
-                filename = save_roi_to_file(roi_json, cctv_id)
-                
+            try:
+                roi_json = json.loads(data['area']) if isinstance(data['area'], str) else data['area']
                 update_fields.append("area = %s")
-                update_values.append(filename)
-                area_path = filename
-                # Cek apakah nama file ROI berubah (indikasi ROI baru/dihapus)
-                if filename != old_area_filename:
-                    needs_restart = True
-
+                update_values.append(json.dumps(roi_json))
+                needs_restart = True 
+            except Exception as e:
+                return jsonify({"error": f"Invalid ROI JSON: {str(e)}"}), 400
 
         if not update_fields:
             return jsonify({"error": "No fields to update"}), 400
@@ -415,15 +329,6 @@ def delete_cctv(cctv_id):
         
         # Hapus mapping user (jika user_cctv_map sudah diterapkan)
         # cur.execute("DELETE FROM user_cctv_map WHERE cctv_id = %s", (cctv_id,)) 
-        
-        # 2. Hapus ROI file dari SUPABASE (Ambil nama file dari DB sebelum dihapus)
-        cur.execute("SELECT area FROM cctv_data WHERE id = %s", (cctv_id,))
-        area = cur.fetchone()
-        if area and area[0]:
-            storage_path = f"{config.SUPABASE_ROI_DIR}/{area[0]}"
-            # Panggil Supabase client untuk menghapus file
-            config.supabase.storage.from_(config.SUPABASE_BUCKET).remove([storage_path])
-            logging.info(f"[DELETE] Removed ROI file from Supabase: {storage_path}")
 
         # 3. Hapus dari DB (Tabel Induk)
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))

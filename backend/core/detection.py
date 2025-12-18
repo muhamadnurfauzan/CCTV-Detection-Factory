@@ -11,7 +11,6 @@ from shared_state import state
 from config import (
     CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, MODEL_PATH, CCTV_RATIO
 )
-from services.cctv_services import refresh_all_cctv_configs
 from core.violation_processor import process_detection
 from utils.helpers import get_color_for_class
 

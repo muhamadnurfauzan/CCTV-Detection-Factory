@@ -338,12 +338,14 @@ const CCTVList = () => {
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSuccess={handleAddSuccess}
+        violations={violations}
       />
       <ModalEditCCTV
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
         onUpdate={handleUpdate}
         cctvData={selectedEditCCTV}
+        violations={violations}
       />
       <ModalDeleteCCTV
         open={showDeleteModal !== null}

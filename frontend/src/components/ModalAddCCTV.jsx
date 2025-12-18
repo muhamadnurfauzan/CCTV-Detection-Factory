@@ -1,16 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { FaTimes, FaUpload, FaCamera, FaPlusCircle } from 'react-icons/fa';
+import React, { useState, useRef, useEffect } from 'react';
+import { FaTimes, FaCamera, FaPlusCircle } from 'react-icons/fa';
 import { useAlert } from './AlertProvider';
 import CCTVScheduleInput from './CCTVScheduleInput';
 import RoleButton from './RoleButton';
 
-export default function ModalAddCCTV({ open, onClose, onSuccess }) {
+export default function ModalAddCCTV({ open, onClose, onSuccess, violations = [] }) {
     const [form, setForm] = useState({
         name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' // Tambah url di state
     });
-    const [roiMethod, setRoiMethod] = useState('upload');
-    const [roiFile, setRoiFile] = useState(null);
     const [drawing, setDrawing] = useState(false);
     const [points, setPoints] = useState([]);
     const [polygons, setPolygons] = useState([]);
@@ -19,7 +16,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     const [submitting, setSubmitting] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState(null);
-    const [uploadError, setUploadError] = useState(null);
     const [urlError, setUrlError] = useState(''); 
     const { showAlert } = useAlert();
 
@@ -27,9 +23,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     useEffect(() => {
         if (open) {
         setForm({ name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' });
-        setRoiMethod('upload'); setRoiFile(null); setPoints([]); setPolygons([]); setImageUrl(null); setDrawing(false);
+        setPoints([]); setPolygons([]); setImageUrl(null); setDrawing(false);
         setPreviewError(null);
-        setUrlError(''); // <-- Reset error URL
+        setUrlError(''); 
         }
     }, [open]);
     
@@ -80,22 +76,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
     };
     // =========================================================================
 
-    const onDrop = useCallback((files) => {
-        const file = files[0];
-        if (file.type === 'application/json') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try { setPolygons(JSON.parse(e.target.result).items || []); }
-            catch { showAlert('Invalid ROI JSON format.', 'error'); }
-        };
-        reader.readAsText(file);
-        setRoiFile(file);
-        } else if (file.type.startsWith('image/')) {
-            // Logika ini untuk load preview, tapi kita akan pakai loadStreamPreview
-            showAlert('Use "Draw on Stream" tab and "Take picture" button instead.', 'warning');
-        }
-    }, []);
-
     // Fungsi load preview dari stream
     const loadStreamPreview = async () => {
         if (!form.url || urlError) {
@@ -117,7 +97,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 const blob = await res.blob();
                 setImageUrl(URL.createObjectURL(blob));
                 setDrawing(false);
-                setRoiMethod('draw');
             } else {
             const err = await res.json();
             const message = err.error || 'Stream is not avaliable. Check your URL or network.';
@@ -131,8 +110,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             setPreviewLoading(false);
         }
         };
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
     // === 6. Canvas Helpers ===
     const startDrawing = () => setDrawing(true);
@@ -170,7 +147,15 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
     const closePolygon = () => {
         if (points.length < 3) return showAlert('Min 3 points.', 'warning');
-        setPolygons([...polygons, { type: 'polygon', points: [...points] }]);
+        
+        // Alih-alih langsung masuk ke state, buka form setting untuk ROI ini
+        const newPolygon = {
+            name: `Area ${polygons.length + 1}`,
+            points: [...points],
+            allowed_violations: [] 
+        };
+        
+        setPolygons([...polygons, newPolygon]);
         setPoints([]);
     };
 
@@ -189,18 +174,37 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 ctx.drawImage(img, 0, 0);
 
                 // 2. Gambar semua polygon yang sudah tersimpan
-                polygons.forEach(poly => {
+                // === Update Visualisasi ROI di Canvas ===
+                polygons.forEach((poly, index) => {
                     ctx.beginPath();
                     poly.points.forEach((pt, i) => {
                         if (i === 0) ctx.moveTo(pt.x, pt.y);
                         else ctx.lineTo(pt.x, pt.y);
                     });
                     ctx.closePath();
-                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                    ctx.lineWidth = 5;
+                    
+                    // Ganti ke warna Indigo/Ungu (Kontras tinggi terhadap lantai hijau)
+                    ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)'; 
+                    ctx.lineWidth = 4;
                     ctx.stroke();
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                    ctx.fillStyle = 'rgba(79, 70, 229, 0.2)';
                     ctx.fill();
+
+                    // --- RENDER NAMA ROI ---
+                    if (poly.name) {
+                        ctx.font = "bold 40px Arial";
+                        
+                        // Buat "Shadow" agar teks terbaca di background gelap maupun terang
+                        ctx.shadowBlur = 4;
+                        ctx.shadowColor = "black";
+                        ctx.fillStyle = "white";
+                        
+                        // Gambar teks di titik koordinat pertama (x, y-10 agar tidak menempel garis)
+                        ctx.fillText(poly.name, poly.points[0].x, poly.points[0].y - 12);
+                        
+                        // Reset shadow agar tidak mempengaruhi gambar poligon lainnya
+                        ctx.shadowBlur = 0;
+                    }
                 });
                 
                 // 3. Gambar garis yang sedang dibuat (current points)
@@ -240,64 +244,51 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
         }
     }, [imageUrl, polygons, points, drawing]);
 
-    // === 8. Handler Submit ===
+    // === 8. Submit ===
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // VALIDASI TERAKHIR: Pastikan tidak ada error inline yang tersisa
+        // 1. Validasi Dasar
         if (urlError) return showAlert(urlError, 'error');
-        
         if (!form.name?.trim()) return showAlert('CCTV Name is required.', 'warning'); 
         if (!form.location?.trim()) return showAlert('CCTV Location is required.', 'warning'); 
         if (!form.url?.trim()) return showAlert('CCTV URL is required.', 'warning');
-        
-        // Karena ip/port/token sudah diisi/divalidasi di updateFieldsFromUrl, kita bisa langsung pakai
-        if (!form.ip || !form.port || !form.token) return showAlert('IP, Port, and Token must be extracted from a valid URL.', 'error');
+        if (!form.ip || !form.port || !form.token) {
+            return showAlert('IP, Port, and Token must be extracted from a valid URL.', 'error');
+        }
 
         setSubmitting(true);
 
-        // === PARSE URL FINAL (Hanya untuk konsistensi) ===
-        // IP, port, token sudah ada di state form
-        const ip = form.ip;
-        const port = form.port;
-        const token = form.token;
+        // 2. Akses Canvas secara Aman (Mencegah ReferenceError)
+        const currentCanvas = canvasRef.current;
 
-        // === PROSES ROI ===
-        let area = null;
-        try {
-            if (roiMethod === 'upload' && roiFile) {
-            area = await roiFile.text();
-            JSON.parse(area);
-            } else if (roiMethod === 'draw' && polygons.length > 0) {
-            area = JSON.stringify({
-                items: polygons.map((p, i) => ({
-                item_number: i + 1,
-                type: p.type || 'polygon',
-                points: p.points.map(pt => [Math.round(pt.x), Math.round(pt.y)])
-                }))
-            });
-            }
-        } catch {
-            setSubmitting(false);
-            return showAlert('Invalid ROI JSON format. Please check the file content.', 'error');
-        }
+        // 3. Susun areaPayload dengan Fallback Resolusi
+        const areaPayload = JSON.stringify({
+            image_width: currentCanvas ? currentCanvas.width : 1280,
+            image_height: currentCanvas ? currentCanvas.height : 720,
+            items: polygons.map((p) => ({
+                name: p.name,
+                points: p.points.map(pt => [Math.round(pt.x), Math.round(pt.y)]),
+                allowed_violations: p.allowed_violations || []
+            }))
+        });
 
-        // === KIRIM KE BACKEND ===
+        // 4. Siapkan Payload untuk Backend
         const payload = {
             name: form.name.trim(),
-            ip_address: ip,
-            port: port,
-            token: token,
+            ip_address: form.ip,
+            port: form.port,
+            token: form.token,
             location: form.location?.trim(),
             enabled: form.enabled,
-            area
+            area: areaPayload // Kirim sebagai JSON string
         };
 
         try {
             const res = await fetch('/api/cctv-add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
             if (!res.ok) {
@@ -307,7 +298,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
 
             const newCctv = await res.json();
 
-            // === KIRIM JADWAL SETELAH DAPAT ID ===
+            // 5. Kirim Jadwal jika ada
             if (form.schedules && form.schedules.length > 0) {
                 await fetch(`/api/cctv-schedules/${newCctv.id}`, {
                     method: 'POST',
@@ -319,8 +310,8 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
             onSuccess(newCctv);
             onClose();
             showAlert(`CCTV '${newCctv.name}' successfully added!`, 'success');
-        } catch {
-            showAlert('Network error: Could not connect to the server.', 'error');
+        } catch (err) {
+            showAlert(err.message || 'Network error.', 'error');
         } finally {
             setSubmitting(false);
         }
@@ -382,129 +373,102 @@ export default function ModalAddCCTV({ open, onClose, onSuccess }) {
                 {/* ROI Section */}
                 <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700">ROI Area *</label>
-
-                {/* Tab Pilihan Metode */}
-                <div className="flex gap-2 border-b border-gray-200">
-                    <button
-                    type="button"
-                    onClick={() => setRoiMethod('upload')}
-                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${
-                        roiMethod === 'upload'
-                        ? 'bg-white text-indigo-600 border border-b-0 border-gray-300'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                    >
-                    Upload JSON File
-                    </button>
-                    <button
-                    type="button"
-                    onClick={() => setRoiMethod('draw')}
-                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition ${
-                        roiMethod === 'draw'
-                        ? 'bg-white text-indigo-600 border border-b-0 border-gray-300'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                    >
-                    Draw on Stream
-                    </button>
-                </div>
-
-                {/* Upload Mode */}
-                {roiMethod === 'upload' && (
-                    <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                        {/* Status File */}
-                        {roiFile && !uploadError && (
-                            <p className="text-sm text-green-600 bg-green-100 p-2 mb-2 rounded border border-green-300">File uploaded: <strong>{roiFile.name}</strong></p>
-                        )}
-                        
-                        {/* Error jika bukan JSON */}
-                        {uploadError && (
-                            <p className="text-sm text-red-600 bg-red-50 p-2 mb-2 rounded border border-red-200">
-                            {uploadError}
-                            </p>
-                        )}
-
-                        <div
-                        {...getRootProps()}
-                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition bg-white"
+                {/* Draw ROI */}
+                <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                    {/* Tombol Load Preview */}
+                    <div className="flex justify-between items-center">
+                        <p>Input CCTV URL first for drawing ROI!</p>
+                        <button
+                        type="button" 
+                        onClick={loadStreamPreview} 
+                        disabled={previewLoading || !form.ip || !form.port || !form.token || !!urlError}  
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                         >
-                        <input
-                            {...getInputProps()}
-                            accept=".json"
-                            onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                                if (file.type === 'application/json' || file.name.endsWith('.json')) {
-                                setRoiFile(file);
-                                setUploadError(null);
-                                } else {
-                                setRoiFile(null);
-                                setUploadError('Only JSON files are allowed');
-                                e.target.value = null; // Reset input
-                                }
-                            }
-                            }}
-                        />
-                        <FaUpload className="mx-auto text-4xl text-gray-400 mb-3" />
-                        {isDragActive ? (
-                            <p className="text-sm text-gray-600">Drop file here...</p>
-                        ) : (
-                            <p className="text-sm text-gray-600">
-                            Drag & drop <strong>ROI JSON file</strong> or click to select file.
-                            </p>
-                        )}
-                        </div>
+                        <FaCamera />
+                        {previewLoading ? 'Loading...' : 'Take picture from stream'}
+                        </button>
                     </div>
-                )}
 
-                {/* Draw Mode */}
-                {roiMethod === 'draw' && (
-                    <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                        {/* Tombol Load Preview */}
-                        <div className="flex justify-between items-center">
-                            <p>Input CCTV URL first for drawing ROI!</p>
-                            <button
-                            type="button" 
-                            onClick={loadStreamPreview} 
-                            disabled={previewLoading || !form.ip || !form.port || !form.token || !!urlError}  
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                            >
-                            <FaCamera />
-                            {previewLoading ? 'Loading...' : 'Take picture from stream'}
-                            </button>
-                        </div>
+                    {previewError && <p className="text-sm text-red-600 bg-red-50 p-2 mb-2 rounded border border-red-200">{previewError}</p>}
 
-                        {previewError && <p className="text-sm text-red-600 bg-red-50 p-2 mb-2 rounded border border-red-200">{previewError}</p>}
-
-                        {/* Canvas untuk Gambar */}
-                        {imageUrl ? (
-                            <div className="space-y-2">
-                                <div className="flex gap-2 justify-center">
-                                    <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">Start Drawing</button>
-                                    <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
-                                    <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
-                                </div>
-
-                                <canvas
-                                    ref={canvasRef}
-                                    className="w-full border border-gray-300 rounded-lg shadow-sm"
-                                    style={{ 
-                                        maxHeight: '420px', 
-                                        imageRendering: 'pixelated',
-                                        // --- PERBAIKAN: CURSOR ---
-                                        cursor: drawing ? 'crosshair' : 'default' 
-                                    }} 
-                                    onClick={handleCanvasClick}
-                                />
+                    {/* Canvas untuk Gambar */}
+                    {imageUrl ? (
+                        <div className="space-y-2">
+                            <div className="flex gap-2 justify-center">
+                                <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">Start Drawing</button>
+                                <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
+                                <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
                             </div>
-                        ) : (
-                        <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-lg bg-white p-8 text-center">
-                            <FaCamera className="text-4xl text-gray-400 mb-2" />
-                            <p className="text-sm text-gray-500">Click button above for take a picture from stream.</p>
+
+                            <canvas
+                                ref={canvasRef}
+                                className="w-full border border-gray-300 rounded-lg shadow-sm"
+                                style={{ 
+                                    maxHeight: '420px', 
+                                    imageRendering: 'pixelated',
+                                    cursor: drawing ? 'crosshair' : 'default' 
+                                }} 
+                                onClick={handleCanvasClick}
+                            />
                         </div>
-                        )}
+                    ) : (
+                    <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-lg bg-white p-8 text-center">
+                        <FaCamera className="text-4xl text-gray-400 mb-2" />
+                        <p className="text-sm text-gray-500">Click button above for take a picture from stream.</p>
                     </div>
-                )}
+                    )}
+                </div>
+                {/* Daftar ROI yang sudah digambar */}
+                <div className="mt-4 space-y-4">
+                    <h4 className="font-semibold text-gray-700">Configure Zones (ROI):</h4>
+                    {polygons.map((poly, idx) => (
+                        <div key={idx} className="p-4 border rounded-lg bg-white shadow-sm">
+                            <div className="flex gap-4 items-center mb-3">
+                                <div className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                                    {idx + 1}
+                                </div>
+                                <input 
+                                    className="flex-1 border-b focus:border-indigo-500 outline-none p-1 font-medium"
+                                    value={poly.name}
+                                    onChange={(e) => {
+                                        const newPolys = [...polygons];
+                                        newPolys[idx].name = e.target.value;
+                                        setPolygons(newPolys);
+                                    }}
+                                    placeholder="Area Name (e.g. Near Camera)"
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setPolygons(polygons.filter((_, i) => i !== idx))}
+                                    className="text-red-500 text-sm"
+                                >
+                                    Remove Area
+                                </button>
+                            </div>
+                            
+                            {/* Checklist Pelanggaran per ROI */}
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                                {(violations || []).map(v => (
+                                    <label key={v.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                        <input 
+                                            type="checkbox"
+                                            checked={poly.allowed_violations.includes(v.id)}
+                                            onChange={() => {
+                                                const newPolys = [...polygons];
+                                                const current = newPolys[idx].allowed_violations;
+                                                newPolys[idx].allowed_violations = current.includes(v.id)
+                                                    ? current.filter(id => id !== v.id)
+                                                    : [...current, v.id];
+                                                setPolygons(newPolys);
+                                            }}
+                                        />
+                                        {v.name}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
                 </div>
 
                 {/* === Field Schedule Input === */}
