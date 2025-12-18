@@ -8,7 +8,7 @@ from db.db_config import get_connection
 def get_all_active_cctv():
     conn = get_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM cctv_data WHERE enabled = true ORDER BY id ASC;")
+    cursor.execute("SELECT * FROM cctv_data WHERE enabled = True ORDER BY id ASC;")
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -41,8 +41,6 @@ def load_all_cctv_configs():
         area_data = cctv.get("area")
         
         regions = []
-        w, h = 0, 0
-        
         if area_data and isinstance(area_data, dict):
             for item in area_data.get("items", []):
                 regions.append({
@@ -50,10 +48,13 @@ def load_all_cctv_configs():
                     "allowed_violations": item.get("allowed_violations", []) 
                 })
         
+        # PERBAIKAN: Masukkan key "enabled" ke dalam dictionary configs
         configs[cctv_id] = {
             "name": cctv.get("name"),
             "roi": regions,
             "json_width": area_data.get("image_width", 0) if area_data else 0,
+            "json_height": area_data.get("image_height", 0) if area_data else 0, # Tambahkan height juga
+            "enabled": cctv.get("enabled", False), 
             "ip_address": cctv.get("ip_address"),
             "port": cctv.get("port"),
             "token": cctv.get("token"),

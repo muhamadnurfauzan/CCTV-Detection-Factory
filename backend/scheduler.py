@@ -32,7 +32,6 @@ def update_daily_log():
         # Menghapus loop dan query INSERT kedua yang tidak diperlukan.
         
         conn.commit()
-        logging.info(f"[SCHEDULER] Rekap harian diperbarui untuk {datetime.date.today()}.")
     except Exception as e:
         logging.error(f"[SCHEDULER] Gagal update rekap harian: {e}")
     finally:
@@ -54,7 +53,7 @@ def cleanup_old_data():
         # Hapus dari DB
         cur.execute("DELETE FROM violation_detection WHERE timestamp < %s", (cutoff,))
         conn.commit()
-        logging.info(f"[SCHEDULER] Data dan gambar >14 hari dihapus.")
+        logging.info(f"[SCHEDULER] Data dan gambar >32 hari dihapus.")
     except Exception as e:
         logging.error(f"[SCHEDULER] Gagal hapus data lama: {e}")
     finally:
@@ -63,7 +62,9 @@ def cleanup_old_data():
 
 def scheduler_thread():
     """Menjalankan update per jam & cleanup harian jam 00:05 + CCTV schedule check + Email Recap."""
+
     while True:
+        time.sleep(10)
         now = datetime.datetime.now()
         minute = now.minute
         hour = now.hour
@@ -74,9 +75,9 @@ def scheduler_thread():
         if minute == 0:
             update_daily_log()
 
-        # 2. KIRIM REKAP BULANAN (Setiap Tanggal 1 jam 07:00)
+        # 2. KIRIM REKAP BULANAN (Setiap Tanggal 1 jam 07:30)
         # Menghitung data bulan lalu (Tanggal 1 s/d Tanggal Terakhir bulan lalu)
-        if day_of_month == 1 and hour == 7 and minute == 0:
+        if day_of_month == 1 and hour == 7 and minute == 30:
             logging.info("[SCHEDULER] Triggering Monthly Violation Report Recap...")
             # end_date: Tanggal 1 bulan ini pukul 00:00 (Inklusif untuk operator '<' di DB)
             end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -90,9 +91,9 @@ def scheduler_thread():
                 template_key='violation_monthly_recap' 
             )
 
-        # 3. KIRIM REKAP MINGGUAN (Setiap Senin jam 07:00)
+        # 3. KIRIM REKAP MINGGUAN (Setiap Senin jam 07:30)
         # Menghitung data minggu lalu (Senin s/d Minggu)
-        if weekday == 0 and hour == 7 and minute == 0:
+        if weekday == 0 and hour == 7 and minute == 30:
             # Hindari double send jika Senin bertepatan dengan Tanggal 1
             if not (day_of_month == 1):
                 logging.info("[SCHEDULER] Triggering Weekly Violation Report Recap...")
@@ -117,5 +118,3 @@ def scheduler_thread():
         # 6. Refresh config tiap 10 menit
         if minute % 10 == 0:
             refresh_all_cctv_configs()
-
-        time.sleep(60)

@@ -74,8 +74,9 @@ def capture_thread(cctv_id, frame_queue, stop_event):
 
             # Masukkan ke queue hanya tiap FRAME_SKIP
             if frame_count % FRAME_SKIP == 0:
-                if len(frame_queue) < frame_queue.maxlen:
-                    frame_queue.append(frame.copy())
+                if len(frame_queue) >= frame_queue.maxlen:
+                    frame_queue.popleft() 
+                frame_queue.append(frame.copy())
             frame_count += 1
             fail_count = 0
         else:
@@ -119,24 +120,32 @@ def process_thread(cctv_id, frame_queue, stop_event):
     # Jalankan cleanup thread
     Thread(target=cleanup_thread, args=(tracked_violations,), daemon=True).start()
 
-    # Dapatkan konfigurasi CCTV
-    cctv_cfg = state.cctv_configs[cctv_id]
-    roi_regions = cctv_cfg["roi"]
-    
-    # Gunakan CCTV_RATIO sebagai fallback
-    json_width = cctv_cfg.get("json_width", CCTV_RATIO[0]) 
-    json_height = cctv_cfg.get("json_height", CCTV_RATIO[1])
-
     while not stop_event.is_set():
         # PROSES FRAME (SATU-SATUNYA YANG WRITE LOCK)
         if frame_queue:
+            # 1. SELALU ambil config terbaru dari state di setiap iterasi
+            cctv_cfg = state.cctv_configs.get(cctv_id, {})
+            roi_regions = cctv_cfg.get("roi", [])
+            
+            # --- Gunakan CCTV_RATIO sebagai fallback ---
+            json_width = cctv_cfg.get("json_width", CCTV_RATIO[0]) 
+            json_height = cctv_cfg.get("json_height", CCTV_RATIO[1])
+
+            # 2. Hitung Active IDs langsung dari ROI (BUKAN dari cache lama)
+            active_ids = set()
+            for region in roi_regions:
+                active_ids.update(region.get("allowed_violations", []))
+            active_ids = list(active_ids)
+
+            # 3. Ambil frame
             frame = frame_queue.popleft()
             start_time = time.time()
 
+            # --- Anotasi Frame ---
             annotated = frame.copy()
             frame_height, frame_width = frame.shape[:2]
 
-            # Hitung faktor skala (Cek untuk menghindari pembagian dengan nol)
+            # --- Hitung scaling factor ---
             scale_x = frame_width / json_width if json_width > 0 else 1.0
             scale_y = frame_height / json_height if json_height > 0 else 1.0
 
@@ -150,10 +159,7 @@ def process_thread(cctv_id, frame_queue, stop_event):
                 
                 cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
 
-            # --- Ambil active IDs ---
-            active_ids = state.ACTIVE_VIOLATION_CACHE.get(cctv_id, [])
-
-            # --- Bangun track_classes ---
+            # 4. Bangun track_classes berdasarkan active_ids dari ROI 
             track_classes = set(active_ids)
             for viol_id in active_ids:
                 ppe_id = state.PPE_VIOLATION_PAIRS.get(viol_id)
@@ -161,8 +167,9 @@ def process_thread(cctv_id, frame_queue, stop_event):
                     track_classes.add(ppe_id)
             track_classes = list(track_classes) if active_ids else None
 
-            print(f"[CCTV {cctv_id}] Active IDs: {active_ids} | Tracking: {track_classes}")
+            print(f"[CCTV {cctv_id}] Active IDs from ROI: {active_ids} | Tracking: {track_classes}")
 
+            # 5. Jalankan deteksi & tracking
             try:
                 results = model.track(
                     frame,
@@ -171,24 +178,26 @@ def process_thread(cctv_id, frame_queue, stop_event):
                     tracker="bytetrack.yaml"
                 )
 
+                # --- Proses setiap deteksi ---
                 for r in results:
                     for box in r.boxes:
                         if box.id is None:
                             continue
 
+                        # --- Ekstrak info box ---
                         x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
                         cls_id = int(box.cls[0])
                         conf = float(box.conf[0])
                         track_id = int(box.id[0])
                         class_name = model.names[cls_id]
 
-                        # Gambar box
+                        # --- Gambar box ---
                         color = get_color_for_class(class_name)
                         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                         cv2.putText(annotated, f"{class_name} {conf:.2f}",
                                     (x1, max(y1 - 10, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-                        # Validasi violation
+                        # --- Validasi violation ---
                         class_info = state.OBJECT_CLASS_CACHE.get(class_name)
                         if not class_info or not class_info["is_violation"]:
                             continue
@@ -203,18 +212,19 @@ def process_thread(cctv_id, frame_queue, stop_event):
             except Exception as e:
                 logging.error(f"[CCTV {cctv_id}] DETECTION ERROR → {e}")
 
-            # === SATU-SATUNYA WRITE LOCK (nol contention) ===
+            # --- Simpan annotated frame untuk streaming ---
             with state.ANNOTATED_FRAME_LOCK:
                 state.annotated_frames[cctv_id] = (annotated, time.time())
 
+            # --- Cleanup memori ---
             gc.collect()
             end_time = time.time()
             logging.info(f"[CCTV {cctv_id}] Processed frame in {end_time - start_time:.2f}s")
 
         else:
-            time.sleep(0.01)  # CPU friendly
+            time.sleep(0.01) 
 
-    # Cleanup
+    # 6. Hapus annotated frame saat thread berhenti
     with state.ANNOTATED_FRAME_LOCK:
         state.annotated_frames.pop(cctv_id, None)
     logging.info(f"[CCTV {cctv_id}] process_thread stopped.")
@@ -260,7 +270,6 @@ def start_detection_for_cctv(cctv_id: int, full_detection: bool = True):
 
     # HANYA restart jika mode berubah atau thread mati
     if current_mode == desired_mode and current.get('threads'):
-        # Sudah sesuai, tidak perlu apa-apa
         logging.info(f"[SCHEDULER] CCTV {cctv_id} sudah di mode {desired_mode}, skip restart.")
         return
 

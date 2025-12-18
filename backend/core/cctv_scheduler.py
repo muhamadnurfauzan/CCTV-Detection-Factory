@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 
 WEEKDAY_MAP = {
     0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
-    4: 'thrusday', 5: 'friday', 6: 'saturday'
+    4: 'thursday', 5: 'friday', 6: 'saturday'
 }
 
 def _current_wib_time():
@@ -45,20 +45,20 @@ def is_cctv_active_now(cctv_id: int) -> bool:
         return False 
 
 def get_active_cctv_ids_now() -> Set[int]:
-    """
-    Dipanggil saat startup atau refresh config.
-    Return semua CCTV yang sedang dalam jadwal aktif.
-    """
     now = _current_wib_time()
     current_day = (now.weekday() + 1) % 7
     current_time = now.time()
 
+    # JOIN dengan cctv_data untuk memvalidasi status enabled
     query = """
-        SELECT DISTINCT cctv_id FROM cctv_scheduler
-        WHERE day_of_week = %s
-          AND is_active = TRUE
-          AND start_time <= %s
-          AND end_time >= %s
+        SELECT DISTINCT s.cctv_id 
+        FROM cctv_scheduler s
+        JOIN cctv_data d ON s.cctv_id = d.id
+        WHERE s.day_of_week = %s
+          AND s.is_active = TRUE
+          AND d.enabled = TRUE
+          AND s.start_time <= %s
+          AND s.end_time >= %s
     """
 
     active_ids = set()
@@ -73,33 +73,38 @@ def get_active_cctv_ids_now() -> Set[int]:
 
     return active_ids
 
+# core/cctv_scheduler.py
 def refresh_scheduler_state():
     active_now = get_active_cctv_ids_now()
 
-    for cctv_id, config in state.cctv_configs.items():
+    configs = list(state.cctv_configs.items())
+    if not configs:
+        logging.warning("[DEBUG] state.cctv_configs is empty!")
+        return
+
+    for cctv_id, config in configs:
         enabled = config.get('enabled', False)
         thread_info = state.detection_threads.get(cctv_id, {})
-        current_mode = thread_info.get('mode')  # bisa None
-        should_have_yolo = cctv_id in active_now
         
-        # 3. CCTV disabled → matikan semua
+        # CEK FISIK: Apakah thread benar-benar hidup?
+        is_alive = False
+        if thread_info and 'threads' in thread_info:
+            is_alive = any(t.is_alive() for t in thread_info['threads'])
+
         if not enabled:
-            if cctv_id in state.detection_threads:
-                logging.info(f"[SCHEDULER] CCTV {cctv_id} → Disabled, stopping all threads.")
+            if is_alive:
+                logging.info(f"[SCHEDULER] CCTV {cctv_id} master disabled, stopping.")
                 stop_detection_for_cctv(cctv_id)
             continue
 
-        # Tentukan mode yang diinginkan
+        should_have_yolo = cctv_id in active_now
         desired_mode = 'full' if should_have_yolo else 'stream_only'
+        current_mode = thread_info.get('mode')
 
-        # Hanya lakukan sesuatu jika:
-        # - Belum ada thread sama sekali, ATAU
-        # - Mode saat ini berbeda dari yang diinginkan
-        if cctv_id not in state.detection_threads or current_mode != desired_mode:
-            logging.info(f"[SCHEDULER] CCTV {cctv_id} → Switching to {desired_mode.upper()} "
-                         f"(current: {current_mode})")
-            start_detection_for_cctv(cctv_id, full_detection=should_have_yolo)
-        else:
-            # Sudah sesuai, diam saja
-            pass
-            # logging.debug(f"[SCHEDULER] CCTV {cctv_id} already in correct mode: {desired_mode}")
+        # FORCE START jika thread mati atau mode salah
+        if not is_alive or current_mode != desired_mode:
+            logging.info(f"[SCHEDULER] TRIGGER START CCTV {cctv_id} Mode: {desired_mode}")
+            try:
+                start_detection_for_cctv(cctv_id, full_detection=should_have_yolo)
+            except Exception as e:
+                logging.error(f"[ERROR] Failed to start CCTV {cctv_id}: {e}")

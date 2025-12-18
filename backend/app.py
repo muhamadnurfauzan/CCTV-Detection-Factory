@@ -12,10 +12,11 @@ from flask_cors import CORS
 from threading import Thread
 from dotenv import load_dotenv
 
+from shared_state import state
 import utils.helpers as helpers
 import scheduler  
-from services import config_service
-from services import cctv_services
+from services import config_service, cctv_services
+from core.cctv_scheduler import refresh_scheduler_state
 
 # Import Blueprints dari routes
 import routes.cctv_crud as cctv_crud
@@ -45,18 +46,32 @@ app.register_blueprint(auth_routes.auth_bp)
 app.register_blueprint(email_routes.email_bp)
 
 if __name__ == "__main__":
+    # 1. Reset & Clear State
     helpers.reset_table_sequence('violation_detection')
     helpers.reset_table_sequence('cctv_data')
+    state.detection_threads.clear() 
+    state.raw_frames.clear()
+    state.annotated_frames.clear()
 
-    # Inisialisasi cache sebelum deteksi dimulai
-    cctv_services.refresh_all_cctv_configs()
+    # 2. Inisialisasi Konfigurasi Dasar
     config_service.load_email_config()
     config_service.load_object_classes()
     config_service.load_violation_pairs() 
     config_service.load_detection_settings()
 
-    # Jalankan scheduler
+    # 3. Refresh Config CCTV
+    cctv_services.refresh_all_cctv_configs() 
+
+    # 4. alankan inisialisasi jadwal secara SINKRON di sini
+    try:
+        logging.info("[STARTUP] Syncing initial CCTV schedules...")
+        refresh_scheduler_state() 
+    except Exception as e:
+        logging.error(f"[STARTUP] Critical Error during initial sync: {e}")
+
+    # 5. Jalankan Scheduler Thread untuk pengecekan rutin ke depannya
     Thread(target=scheduler.scheduler_thread, daemon=True).start()
     logging.info("DB/Global Scheduler thread started.")
 
+    # 6. Jalankan Server
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
