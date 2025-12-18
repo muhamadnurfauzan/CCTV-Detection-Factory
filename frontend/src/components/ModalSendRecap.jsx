@@ -21,8 +21,8 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
     const [loading, setLoading] = useState(false);
 
     // --- State Filter User and CCTV ---
-    const [selectedUserIds, setSelectedUserIds] = useState([]); // id
-    const [selectedCctvIds, setSelectedCctvIds] = useState([]); // id
+    const [selectedUserIds, setSelectedUserIds] = useState([]); 
+    const [selectedCctvIds, setSelectedCctvIds] = useState([]); 
     const [userCCTVMap, setUserCCTVMap] = useState({});
     const [filteredCCTVOptions, setFilteredCCTVOptions] = useState(allCCTVs);
 
@@ -179,7 +179,7 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={onClose}
         >
             <div 

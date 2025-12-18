@@ -178,6 +178,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
     setPoints([]);
     setPolygons([]);
     setImageUrl(null); 
+    setDrawing(false);
   };
 
   const handleCanvasClick = (e) => {
@@ -216,6 +217,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
     
     setPolygons([...polygons, newPolygon]);
     setPoints([]);
+    setDrawing(false);
   };
 
   // === 7. Gambar ROI Existing di Canvas ===
@@ -458,9 +460,38 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
             {imageUrl ? (
               <div className="space-y-2">
                 <div className="flex gap-2 justify-center">
-                  <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">Start Drawing</button>
-                  <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
-                  <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
+                  {/* Tombol Start/Drawing */}
+                  <button 
+                    type="button" 
+                    onClick={startDrawing} 
+                    className={`px-3 py-1 text-white text-xs rounded transition-all shadow-sm ${
+                      drawing 
+                      ? 'bg-orange-500 animate-pulse hover:bg-orange-600' 
+                      : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    {drawing ? 'Drawing...' : 'Start Drawing'}
+                  </button>
+
+                  {/* Tombol Close - Hanya muncul saat sedang menggambar */}
+                  {drawing && (
+                    <button 
+                      type="button" 
+                      onClick={closePolygon} 
+                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded shadow-md transition-all"
+                    >
+                      Close Polygon
+                    </button>
+                  )}
+
+                  {/* Tombol Delete */}
+                  <button 
+                    type="button" 
+                    onClick={clearDrawing}
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded shadow-sm transition-all"
+                  >
+                    Delete All
+                  </button>
                 </div>
 
                 <canvas 

@@ -118,7 +118,8 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
         if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         setPoints([]);
         setPolygons([]); 
-        setImageUrl(null); 
+        setImageUrl(null);
+        setDrawing(false); 
     };
 
     const handleCanvasClick = (e) => {
@@ -133,7 +134,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
         const clickY = e.clientY - rect.top;
 
         // 3. Hitung faktor skala: (Resolusi Internal / Resolusi Tampilan)
-        // canvas.width/height diisi oleh img.onload (Resolusi Asli)
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
@@ -148,7 +148,6 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
     const closePolygon = () => {
         if (points.length < 3) return showAlert('Min 3 points.', 'warning');
         
-        // Alih-alih langsung masuk ke state, buka form setting untuk ROI ini
         const newPolygon = {
             name: `Area ${polygons.length + 1}`,
             points: [...points],
@@ -156,9 +155,10 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
         };
         
         setPolygons([...polygons, newPolygon]);
-        setPoints([]);
+        setPoints([]); 
+        setDrawing(false); 
     };
-
+  
     // === 7. Gambar ROI Existing di Canvas ===
     useEffect(() => {
         // Logika ini dipanggil setiap kali imageUrl, polygons, atau points berubah
@@ -394,9 +394,38 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
                     {imageUrl ? (
                         <div className="space-y-2">
                             <div className="flex gap-2 justify-center">
-                                <button type="button" onClick={startDrawing} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">Start Drawing</button>
-                                <button type="button" onClick={closePolygon} className="px-3 py-1 bg-green-600 text-white text-xs rounded">Close Polygon</button>
-                                <button type="button" onClick={clearDrawing} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Delete</button>
+                                {/* Tombol Start/Drawing */}
+                                <button 
+                                    type="button" 
+                                    onClick={startDrawing} 
+                                    className={`px-3 py-1 text-white text-xs rounded transition-all shadow-sm ${
+                                        drawing 
+                                        ? 'bg-orange-500 animate-pulse hover:bg-orange-600' 
+                                        : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
+                                >
+                                    {drawing ? 'Drawing...' : 'Start Drawing'}
+                                </button>
+
+                                {/* Tombol Close - Hanya muncul saat sedang menggambar */}
+                                {drawing && (
+                                    <button 
+                                        type="button" 
+                                        onClick={closePolygon} 
+                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded shadow-md transition-all"
+                                    >
+                                        Close Polygon
+                                    </button>
+                                )}
+
+                                {/* Tombol Delete */}
+                                <button 
+                                    type="button" 
+                                    onClick={clearDrawing}
+                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded shadow-sm transition-all"
+                                >
+                                    Delete All
+                                </button>
                             </div>
 
                             <canvas
