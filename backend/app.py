@@ -50,7 +50,6 @@ if __name__ == "__main__":
 
     # Inisialisasi cache sebelum deteksi dimulai
     cctv_services.refresh_all_cctv_configs()
-    config_service.refresh_active_violations()
     config_service.load_email_config()
     config_service.load_object_classes()
     config_service.load_violation_pairs() 

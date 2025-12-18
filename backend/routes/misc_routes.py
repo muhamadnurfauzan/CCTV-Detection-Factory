@@ -55,12 +55,6 @@ def video_feed():
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@misc_bp.route('/refresh-config', methods=['POST'])
-@require_role(['super_admin', 'report_viewer', 'viewer'])
-def refresh_config():
-    config_service.refresh_active_violations()
-    return jsonify({"success": True})
-
 @misc_bp.route('/settings', methods=['GET', 'POST'])
 @require_role(['super_admin'])
 def handle_settings():

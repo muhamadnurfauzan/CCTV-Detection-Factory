@@ -129,8 +129,6 @@ def add_new_cctv():
             detection.start_detection_for_cctv(cctv_id)
             logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to adding as enabled.")
 
-        config_service.refresh_active_violations()
-
         return jsonify({
             "id": cctv_id,
             "name": data['name'],
@@ -292,8 +290,6 @@ def update_cctv(cctv_id):
                 detection.stop_detection_for_cctv(cctv_id)
                 detection.start_detection_for_cctv(cctv_id)
 
-            config_service.refresh_active_violations()
-
         return jsonify(updated_cctv), 200
     except Exception as e:
         if conn: conn.rollback()
@@ -318,9 +314,6 @@ def delete_cctv(cctv_id):
         # --- LANGKAH PENTING: CASCADE DELETION MANUAL ---
         logging.info(f"[DELETE] Deleting cascade data for CCTV {cctv_id}")
 
-        # Hapus konfigurasi violation (cctv_violation_config)
-        cur.execute("DELETE FROM cctv_violation_config WHERE cctv_id = %s", (cctv_id,))
-
         # Hapus log harian (violation_daily_log)
         cur.execute("DELETE FROM violation_daily_log WHERE id_cctv = %s", (cctv_id,))
 
@@ -336,8 +329,7 @@ def delete_cctv(cctv_id):
 
         # 4. FIX UTAMA: Refresh config setelah penghapusan
         cctv_service.refresh_all_cctv_configs() 
-        config_service.refresh_active_violations()
-
+        
         return jsonify({"success": True}), 200
     except Exception as e:
         if conn: conn.rollback()
@@ -346,64 +338,6 @@ def delete_cctv(cctv_id):
     finally:
         if cur: cur.close()
         if conn: conn.close()
-
-# --- API UNTUK MANAJEMEN USER DENGAN MAPPING CCTV ---
-@cctv_bp.route('/cctv-violations/<int:cctv_id>', methods=['GET', 'POST'])
-@require_role(['super_admin'])
-def cctv_violations(cctv_id):
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-
-    if request.method == 'GET':
-        cur.execute("""
-            SELECT class_id
-            FROM cctv_violation_config
-            WHERE cctv_id = %s AND is_active = TRUE
-        """, (cctv_id,))
-        rows = cur.fetchall()
-        result = [row['class_id'] for row in rows]
-        cur.close()
-        conn.close()
-        return jsonify(result)
-
-    data = request.json.get('enabled_class_ids', [])
-    logging.info(f"[POST] /api/cctv-violations/{cctv_id} enabled_class_ids={data}")
-    logging.info(f"===> REQUEST RECEIVED for CCTV {cctv_id}: {data}")
-    sys.stdout.flush()
-
-    try:
-        # Upsert aktif
-        for class_id in data:
-            cur.execute("""
-                INSERT INTO cctv_violation_config (cctv_id, class_id, is_active)
-                VALUES (%s, %s, TRUE)
-                ON CONFLICT (cctv_id, class_id)
-                DO UPDATE SET is_active = TRUE
-            """, (cctv_id, class_id))
-
-        # Nonaktifkan yang tidak dipilih
-        if data:
-            cur.execute("""
-                UPDATE cctv_violation_config
-                SET is_active = FALSE
-                WHERE cctv_id = %s AND NOT (class_id = ANY(%s))
-            """, (cctv_id, data))
-        else:
-            cur.execute("""
-                UPDATE cctv_violation_config
-                SET is_active = FALSE
-                WHERE cctv_id = %s
-            """, (cctv_id,))
-
-        conn.commit()
-        return jsonify({"success": True})
-    except Exception as e:
-        conn.rollback()
-        logging.error(f"[POST ERROR] /api/cctv-violations/{cctv_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()
 
 @cctv_bp.route("/cctv-all", methods=["GET"])
 @require_role(['super_admin', 'report_viewer', 'viewer'])

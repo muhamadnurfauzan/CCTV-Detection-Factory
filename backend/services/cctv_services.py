@@ -60,23 +60,6 @@ def load_all_cctv_configs():
             "location": cctv.get("location")
         }
     return configs
-
-def load_violation_filters():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT cctv_id, class_id 
-        FROM cctv_violation_config 
-        WHERE is_active = TRUE
-    """)
-    filters = {}
-    for cctv_id, class_id in cur.fetchall():
-        filters.setdefault(cctv_id, set()).add(class_id)
-    cur.close()
-    conn.close()
-    
-    state.CCTV_ALLOWED_VIOLATIONS = filters
-    logging.info(f"[VIOLATION FILTER] Loaded filters for {len(filters)} CCTVs")
     
 # --- Fungsi baru untuk merefresh cache konfigurasi CCTV secara penuh ---
 def refresh_all_cctv_configs():
@@ -84,8 +67,5 @@ def refresh_all_cctv_configs():
     configs = load_all_cctv_configs()
     state.cctv_configs.clear()
     state.cctv_configs.update(configs)
-    
-    # TAMBAHAN: Refresh violation filter juga
-    load_violation_filters()
     
     logging.info(f"[CONFIG] Loaded {len(state.cctv_configs)} active CCTV configs.")

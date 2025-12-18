@@ -1,11 +1,10 @@
 // CCTVList.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaSlidersH, FaArrowLeft, FaSearch } from 'react-icons/fa';
+import { FaPlus, FaArrowLeft, FaSearch } from 'react-icons/fa';
 import { useAlert } from '../components/AlertProvider';
 import RoleButton from '../components/RoleButton';
 import CCTVTable from '../components/CCTVTable';
 import CCTVStream from '../components/CCTVStream';
-import CCTVViolation from '../components/CCTVViolation';
 import ModalAddCCTV from '../components/ModalAddCCTV';
 import ModalEditCCTV from '../components/ModalEditCCTV';
 import ModalDeleteCCTV from '../components/ModalDeleteCCTV';
@@ -17,7 +16,6 @@ const CCTVList = () => {
   const [search, setSearch] = useState('');
   const [cctvs, setCctvs] = useState([]);
   const [violations, setViolations] = useState([]);
-  const [configs, setConfigs] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -37,38 +35,26 @@ const CCTVList = () => {
       setLoading(true);
       setError(null);
       try {
-        const [cctvRes, violRes] = await Promise.all([
+        // Gunakan Promise.all untuk mengambil data CCTV dan Violation sekaligus
+        const [cctvRes, violationRes] = await Promise.all([
           fetch('/api/cctv-all').then(r => r.ok ? r.json() : []),
-          fetch('/api/object/object-classes').then(r => r.ok ? r.json() : [])
+          fetch('/api/object/object-classes').then(r => r.ok ? r.json() : []) 
         ]);
 
-        const filteredViolations = violRes.filter(v => v.is_violation);
-        
-        // Sorting awal untuk menjaga urutan (misalnya berdasarkan ID)
         const sortedCctvs = cctvRes.sort((a, b) => a.id - b.id); 
         
         setCctvs(sortedCctvs);
-        setViolations(filteredViolations);
-
-        // Ambil semua config sekaligus
-        const configPromises = cctvRes.map(cctv =>
-          fetch(`/api/cctv-violations/${cctv.id}`)
-            .then(r => r.ok ? r.json() : [])
-            .then(data => ({ [cctv.id]: data }))
-        );
-
-        const configResults = await Promise.all(configPromises);
-        setConfigs(Object.assign({}, ...configResults));
+        setViolations(violationRes); 
       } catch (err) {
-        setError('Failed to load CCTV data.');
-        showAlert('Failed to load CCTV data.', 'error'); 
+        setError('Failed to load data.');
+        showAlert('Failed to load data.', 'error'); 
       } finally {
         setLoading(false);
       }
     };
 
     fetchAllData();
-  }, []);
+  }, [showAlert]);
   
   // --- Handler Pagination ---
   const handlePageChange = useCallback((page) => {
@@ -139,35 +125,6 @@ const CCTVList = () => {
     setSelectedCCTV(null);
   };
 
-  const handleOpenViolation = () => {
-    setView('violation');
-  };
-
-  const handleToggleViolation = async (cctv_id, class_id) => {
-    const current = configs[cctv_id] || [];
-    const newEnabled = current.includes(Number(class_id))
-      ? current.filter(id => id !== Number(class_id))
-      : [...current, Number(class_id)];
-
-    setConfigs(prev => ({ ...prev, [cctv_id]: newEnabled }));
-
-    try {
-      const res = await fetch(`/api/cctv-violations/${cctv_id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled_class_ids: newEnabled }),
-      });
-
-      if (!res.ok) throw new Error("Failed to save violation config.");
-
-      await fetch('/api/refresh-config', { method: 'POST' });
-      showAlert('Violation configuration saved successfully.', 'success'); 
-    } catch (e) {
-      showAlert(e.message || 'Failed to save configuration. Reverting changes.', 'error'); 
-      setConfigs(prev => ({ ...prev, [cctv_id]: current })); 
-    }
-  };
-
   const handleEdit = useCallback(async (id) => {
     const cctv = cctvs.find(c => c.id === id);
     if (cctv) {
@@ -214,12 +171,11 @@ const CCTVList = () => {
         <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">
         {view === 'table' && "CCTVs' List"}
         {view === 'stream' && `Streaming CCTV #${selectedCCTV}`}
-        {view === 'violation' && "Violation Configurations"}
         </h2>
 
         <div className='grid grid-flow-col justify-stretch items-center mb-4 bg-white p-3 rounded-lg shadow-md gap-2'>
             {/* Back Button - hanya muncul di stream/violation */}
-            {(view === 'stream' || view === 'violation') && (
+            {(view === 'stream') && (
                 <div className="flex justify-start" >
                     <RoleButton
                       allowedRoles={['super_admin', 'report_viewer', 'viewer']} 
@@ -239,41 +195,23 @@ const CCTVList = () => {
             )}
 
             {/* Toolbar - hanya di table & violation */}
-            {(view === 'table' || view === 'violation') && (
+            {(view === 'table') && (
                 <div className="flex items-center justify-end gap-2">
-                  {view === 'table' && (
-                    <div className='flex gap-2'>
-                      <RoleButton
-                        allowedRoles={['super_admin']} 
-                        disabled={error || currentItems.length === 0}
-                        onClick={handleOpenViolation}
-                        className={`
-                            flex items-center gap-2 p-3 text-white rounded-lg
-                            ${error || currentItems.length === 0
-                                ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-indigo-600 hover:bg-indigo-700 transition'}
-                            `}
-                        title="Configure Violations"
-                      >
-                        <FaSlidersH className='h-4 w-4'/>
-                      </RoleButton>
-                      
-                      <RoleButton
-                        allowedRoles={['super_admin']}
-                        disabled={error || currentItems.length === 0}
-                        onClick={() => setShowAddModal(true)}
-                        className={`
-                            flex items-center gap-2 p-3 text-white rounded-lg
-                            ${error || currentItems.length === 0
-                                ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-green-600 hover:bg-green-700 transition'}
-                            `}
-                        title="Add New CCTV"
-                      >
-                        <FaPlus className='h-4 w-4'/>
-                      </RoleButton>
-                    </div>
-                  )}
+                  <RoleButton
+                    allowedRoles={['super_admin']}
+                    disabled={error || currentItems.length === 0}
+                    onClick={() => setShowAddModal(true)}
+                    className={`
+                        flex items-center gap-2 p-3 text-white rounded-lg
+                        ${error || currentItems.length === 0
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-green-600 hover:bg-green-700 transition'}
+                        `}
+                    title="Add New CCTV"
+                  >
+                    <FaPlus className='h-4 w-4'/>
+                  </RoleButton>
+
                   <div className='flex items-center relative w-full max-w-sm'>
                     <input
                       disabled={error || currentItems.length === 0}
@@ -297,35 +235,21 @@ const CCTVList = () => {
           {view !== 'stream' ? (
             <>
               <div className='bg-white rounded-lg shadow-lg overflow-x-auto'>
-                {view === 'table' && (
-                    <CCTVTable
-                        cctvs={currentItems} 
-                        onSelect={handleSelect}
-                        onEdit={handleEdit}     
-                        onDelete={handleDelete}
-                        startNo={indexOfFirstItem + 1} 
-                    />
-                )}
-                {view === 'violation' && (
-                    <CCTVViolation
-                        cctvs={currentItems} 
-                        violations={violations}
-                        configs={configs}
-                        onToggle={handleToggleViolation}
-                        startNo={indexOfFirstItem + 1} 
-                    />
-                )}
+                <CCTVTable
+                  cctvs={currentItems} 
+                  onSelect={handleSelect}
+                  onEdit={handleEdit}     
+                  onDelete={handleDelete}
+                  startNo={indexOfFirstItem + 1} 
+                />
               </div>
-              {/* Komponen Pagination */}
-              {(view === 'table' || view === 'violation') && (
-                  <Pagination
-                      totalItems={filteredCctvs.length}
-                      itemsPerPage={itemsPerPage}
-                      currentPage={currentPage}
-                      onPageChange={handlePageChange}
-                      onItemsPerPageChange={handleItemsPerPageChange}
-                  />
-              )}
+              <Pagination
+                totalItems={filteredCctvs.length}
+                itemsPerPage={itemsPerPage}
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
             </>
           )
           : selectedCCTV && (

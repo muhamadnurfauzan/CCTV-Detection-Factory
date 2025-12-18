@@ -239,10 +239,10 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
           ctx.closePath();
             
           // Ganti ke warna Indigo/Ungu (Kontras tinggi terhadap lantai hijau)
-          ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)'; 
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; 
           ctx.lineWidth = 4;
           ctx.stroke();
-          ctx.fillStyle = 'rgba(79, 70, 229, 0.2)';
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
           ctx.fill();
 
           // --- RENDER NAMA ROI ---
@@ -509,13 +509,16 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
                     Remove Area
                   </button>
                 </div>
-                  
+                
+                {/* Checklist Pelanggaran per ROI */}
                 <p className="text-[10px] text-gray-500 uppercase font-bold mb-2">Allowed Violations in this zone:</p>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                  {(violations || []).map(v => (
-                    <label key={v.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded transition">
-                      <input 
-                        type="checkbox"
+                  {(violations || [])
+                    .filter(v => v.is_violation === true)
+                    .map(v => (
+                      <label key={v.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded transition">
+                        <input 
+                          type="checkbox"
                         className="rounded text-indigo-600"
                         checked={poly.allowed_violations.includes(v.id)}
                         onChange={() => {
@@ -528,9 +531,9 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
                           setPolygons(newPolys);
                         }}
                       />
-                      <span className="truncate">{v.name}</span>
-                    </label>
-                  ))}
+                        <span className="truncate">{v.name}</span>
+                      </label>
+                    ))}
                 </div>
               </div>
             ))}

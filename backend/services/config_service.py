@@ -54,25 +54,6 @@ def load_object_classes(force_refresh=False):
                 logging.warning("[CACHE] WARNING: Object classes kosong dari DB!")
         except Exception as e:
             logging.error(f"[CACHE] ERROR: Gagal load object_classes: {e}")
-
-# --- Fetch jenis violation yang aktif dari CCTV secara custom ---
-def get_active_violation_ids_for_cctv(cctv_id):
-    if cctv_id in state.ACTIVE_VIOLATION_CACHE:
-        return state.ACTIVE_VIOLATION_CACHE[cctv_id]
-    else:
-        # DB query sebagai fallback
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT oc.id 
-            FROM cctv_violation_config cvc
-            JOIN object_class oc ON cvc.class_id = oc.id
-            WHERE cvc.cctv_id = %s AND cvc.is_active = true
-        """, (cctv_id,))
-        ids = [row[0] for row in cur.fetchall()]
-        cur.close(); conn.close()
-        state.ACTIVE_VIOLATION_CACHE[cctv_id] = ids  
-        return ids
     
 # --- Muat pasangan pelanggaran PPE dari database ---
 def load_violation_pairs():
@@ -89,32 +70,6 @@ def load_violation_pairs():
 
     state.PPE_VIOLATION_PAIRS.clear()
     state.PPE_VIOLATION_PAIRS.update(pairs)
-
-# --- Cache aktif violation per CCTV ---
-def refresh_active_violations():
-    """Refresh cache violation aktif dari DB. Gunakan context manager untuk auto-close."""
-    state.ACTIVE_VIOLATION_CACHE.clear()
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT cvc.cctv_id, oc.id
-                    FROM cctv_violation_config cvc
-                    JOIN object_class oc ON cvc.class_id = oc.id
-                    WHERE cvc.is_active = true
-                """)
-                rows = cur.fetchall()  
-                
-        # Proses di luar context agar tidak blokir koneksi
-        for cctv_id, class_id in rows:
-            state.ACTIVE_VIOLATION_CACHE.setdefault(cctv_id, []).append(class_id)
-            
-        logging.info(f"[ACTIVE CACHE] Refreshed: {len(state.ACTIVE_VIOLATION_CACHE)} entries")
-        
-    except Exception as e:
-        logging.error(f"[ACTIVE CACHE] FAILED to refresh: {e}")
-        # Jangan biarkan cache kosong total jika error — fallback ke empty
-        state.ACTIVE_VIOLATION_CACHE.clear()
 
 # --- Reload detection settings ---
 def load_detection_settings(force=False):
