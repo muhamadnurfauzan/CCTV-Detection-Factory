@@ -64,7 +64,7 @@ def scheduler_thread():
     """Menjalankan update per jam & cleanup harian jam 00:05 + CCTV schedule check + Email Recap."""
 
     while True:
-        time.sleep(10)
+        time.sleep(60)
         now = datetime.datetime.now()
         minute = now.minute
         hour = now.hour

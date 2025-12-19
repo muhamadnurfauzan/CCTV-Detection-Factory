@@ -1,3 +1,4 @@
+import torch
 import time
 import cv2
 import gc
@@ -115,7 +116,14 @@ def process_thread(cctv_id, frame_queue, stop_event):
     Hanya 1 write lock per frame → nol contention dengan video_feed.
     """
     tracked_violations = {}
-    model = YOLO(MODEL_PATH).to("cpu")
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logging.info(f"[DEBUG] Program is using device: {device}")
+    try:
+        model = YOLO(MODEL_PATH).to(device)
+    except Exception as e:
+        logging.error(f"Failed to load model to {device}: {e}")
+        model = YOLO(MODEL_PATH).to("cpu")
 
     # Jalankan cleanup thread
     Thread(target=cleanup_thread, args=(tracked_violations,), daemon=True).start()
@@ -175,7 +183,8 @@ def process_thread(cctv_id, frame_queue, stop_event):
                     frame,
                     conf=CONFIDENCE_THRESHOLD,
                     persist=True,
-                    tracker="bytetrack.yaml"
+                    tracker="bytetrack.yaml",
+                    half=True if device == 'cuda' else False
                 )
 
                 # --- Proses setiap deteksi ---
