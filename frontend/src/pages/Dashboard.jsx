@@ -38,7 +38,12 @@ const Dashboard = () => {
       setObjectClasses(classesData);
 
       const comparisonData = cRes.ok ? await cRes.json() : null;
-      setComparison(comparisonData);
+      if (comparisonData) {
+        setComparison({
+          today_total: Number(comparisonData.today_total),
+          yesterday_total: Number(comparisonData.yesterday_total)
+        });
+      }
 
       if (!oRes.ok) {
         console.warn("Failed to fetch object_classes, using fallback colors");
@@ -133,41 +138,36 @@ const Dashboard = () => {
   const getComparisonData = () => {
     if (!comparison) return { data: null, message: "No data available." };
 
-    const today = comparison.today_total || 0;
-    const yesterday = comparison.yesterday_total || 0;
+    // PAKSA konversi ke Number menggunakan Number() atau parseInt()
+    const today = Number(comparison.today_total) || 0;
+    const yesterday = Number(comparison.yesterday_total) || 0;
+    
     let percentage = 0;
     let type = 'No Change';
 
     if (yesterday > 0) {
-      // Hitung persentase PERUBAHAN (bisa > 100% jika hari ini > 2x kemarin)
+      // Sekarang perhitungan aman karena menggunakan Number
       percentage = Math.round(((today - yesterday) / yesterday) * 100);
       type = percentage > 0 ? 'Increased' : (percentage < 0 ? 'Decreased' : 'No Change');
     } else if (today > 0 && yesterday === 0) {
       percentage = 100;
-      type = 'Increased'; // Peningkatan dari nol
+      type = 'Increased';
     }
 
     const absPercentage = Math.abs(percentage);
-    
-    // Nilai Donut (maks 100%)
-    const progress = Math.min(absPercentage, 100);
-    // Nilai sisa (jika > 100%)
-    const overProgress = Math.max(0, absPercentage - 100);
+    const visualProgress = Math.min(absPercentage, 100);
 
-    const data = [
-      { name: 'Progress', value: progress, type: type },
-      { name: 'Remaining', value: 100 - progress, type: 'Background' },
-    ];
-    
     return { 
-        data: data, 
+        data: [
+          { name: 'Progress', value: visualProgress },
+          { name: 'Remaining', value: 100 - visualProgress }
+        ], 
         percentage: absPercentage, 
-        progress: progress,        
-        overProgress: overProgress,  
+        progress: visualProgress,
         type: type, 
         difference: today - yesterday
     };
-  };
+};
 
   const comparisonData = getComparisonData();
   const PIE_COLORS = {
@@ -379,52 +379,41 @@ const Dashboard = () => {
               {comparisonData.data && comparisonData.difference !== 0 ? (
                   <SafeResponsiveContainer width="100%" height={300}>
                       <PieChart>
-                          {/* --- Lapisan 1: BACKGROUND (Lingkaran Penuh 100% Abu-abu) --- */}
-                          <Pie
-                              data={[{ value: 100 }]}
-                              dataKey="value"
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={80} 
-                              outerRadius={120}
-                              fill="#E5E7EB"
-                              startAngle={90}
-                              endAngle={-270} // 360 derajat penuh
-                              paddingAngle={0}
-                              isAnimationActive={false}
-                          />
+                        {/* Layer 1: Background (Lingkaran Abu-abu statis) */}
+                        <Pie
+                          data={[{ value: 100 }]}
+                          dataKey="value"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={80}
+                          outerRadius={100} // Tip: Buat sedikit lebih tipis agar elegan
+                          fill="#E5E7EB"
+                          startAngle={90}
+                          endAngle={-270}
+                          isAnimationActive={false}
+                          stroke="none"
+                        />
 
-                          {/* --- Lapisan 2: PROGRESS (0 - 100%, Mewakili Total Perubahan) --- */}
-                          <Pie
-                              data={comparisonData.data.map(item => ({ 
-                                  ...item, 
-                                  comparisonDetails: { // Tambahkan detail untuk Tooltip
-                                      difference: comparisonData.difference,
-                                      percentage: comparisonData.percentage,
-                                      type: comparisonData.type,
-                                      today_total: comparison.today_total,
-                                      yesterday_total: comparison.yesterday_total
-                                  }
-                              }))}
-                              dataKey="value"
-                              nameKey="name"
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={80} 
-                              outerRadius={120}
-                              startAngle={90}
-                              endAngle={90 + (comparisonData.progress * 3.6)} 
-                              paddingAngle={0}
-                              labelLine={false}
-                              isAnimationActive={false}
-                          >
-                              {/* Progress (Berwarna) */}
-                              <Cell fill={PIE_COLORS[comparisonData.type]} /> 
-                              {/* Sisa (Transparan) */}
-                              <Cell fill="transparent" /> 
-                          </Pie>
-
-                          <Tooltip content={<CustomPieTooltip />} />
+                        {/* Layer 2: Progress (Warna mengikuti persentase) */}
+                        <Pie
+                          data={[
+                            { value: comparisonData.progress }, // Bagian yang berwarna
+                            { value: 100 - comparisonData.progress } // Bagian transparan
+                          ]}
+                          dataKey="value"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={80}
+                          outerRadius={100}
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="none"
+                        >
+                          <Cell fill={PIE_COLORS[comparisonData.type]} />
+                          <Cell fill="transparent" /> {/* Ini triknya: bagian sisa dibuat transparan */}
+                        </Pie>
+                        
+                        <Tooltip content={<CustomPieTooltip />} />
                           
                           {/* Teks di tengah Donut */}
                           <text 
@@ -441,7 +430,7 @@ const Dashboard = () => {
                       </PieChart>
                   </SafeResponsiveContainer>
               ) : (
-                  <div className="flex p-10 justify-center text-gray-500 h-[328px] items-center">
+                  <div className="flex p-10 justify-center text-gray-500 h-[300px] items-center">
                       {comparisonData.type === 'No Change' 
                           ? "Total violation is the same as yesterday." 
                           : "Not enough data for comparison."
