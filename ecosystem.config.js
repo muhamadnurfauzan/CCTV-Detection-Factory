@@ -19,23 +19,6 @@ module.exports = {
       cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/frontend",
       watch: false,
       env: { NODE_ENV: "production", PORT: 3000 }
-    },
-
-    // 3. Monitoring 
-    {
-      name: "cctv-monitor",
-      script: "monitor.py",                                      
-      interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
-      cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
-      watch: false,
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      max_restarts: 20,
-      restart_delay: 5000,
-      env: {
-        PYTHONUNBUFFERED: "1"   
-      }
     }
   ]
 };
