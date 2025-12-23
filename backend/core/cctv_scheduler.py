@@ -3,7 +3,6 @@ import logging
 from typing import Set
 from db.db_config import get_connection
 from shared_state import state
-from core.detection import start_detection_for_cctv, stop_detection_for_cctv
 
 logging.basicConfig(level=logging.INFO)
 
@@ -72,39 +71,3 @@ def get_active_cctv_ids_now() -> Set[int]:
         logging.error(f"[SCHEDULER] Failed to get active CCTVs: {e}")
 
     return active_ids
-
-# core/cctv_scheduler.py
-def refresh_scheduler_state():
-    active_now = get_active_cctv_ids_now()
-
-    configs = list(state.cctv_configs.items())
-    if not configs:
-        logging.warning("[DEBUG] state.cctv_configs is empty!")
-        return
-
-    for cctv_id, config in configs:
-        enabled = config.get('enabled', False)
-        thread_info = state.detection_threads.get(cctv_id, {})
-        
-        # CEK FISIK: Apakah thread benar-benar hidup?
-        is_alive = False
-        if thread_info and 'threads' in thread_info:
-            is_alive = any(t.is_alive() for t in thread_info['threads'])
-
-        if not enabled:
-            if is_alive:
-                logging.info(f"[SCHEDULER] CCTV {cctv_id} master disabled, stopping.")
-                stop_detection_for_cctv(cctv_id)
-            continue
-
-        should_have_yolo = cctv_id in active_now
-        desired_mode = 'full' if should_have_yolo else 'stream_only'
-        current_mode = thread_info.get('mode')
-
-        # FORCE START jika thread mati atau mode salah
-        if not is_alive or current_mode != desired_mode:
-            logging.info(f"[SCHEDULER] TRIGGER START CCTV {cctv_id} Mode: {desired_mode}")
-            try:
-                start_detection_for_cctv(cctv_id, full_detection=should_have_yolo)
-            except Exception as e:
-                logging.error(f"[ERROR] Failed to start CCTV {cctv_id}: {e}")

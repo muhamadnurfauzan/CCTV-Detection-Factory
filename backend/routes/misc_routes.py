@@ -1,6 +1,7 @@
 import cv2
 import time
 import logging
+import redis
 import numpy as np
 
 from flask import Blueprint, request, Response, jsonify
@@ -11,6 +12,7 @@ from utils.auth import require_role
 import services.config_service as config_service
 from shared_state import state
 
+r = redis.Redis(host='localhost', port=6379, db=0)
 misc_bp = Blueprint('misc', __name__, url_prefix='/api')
 
 @misc_bp.route("/video-feed")
@@ -19,39 +21,31 @@ def video_feed():
     cctv_id = int(request.args.get("id", 1))
 
     def gen():
+        # Menyiapkan frame placeholder jika kamera offline
         placeholder_disconnected = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder_disconnected, "Camera Freeze", (30, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 255), 3)
-
-        last_warning = 0
+        cv2.putText(placeholder_disconnected, "Camera Offline/Freeze", (30, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        
+        # Encode placeholder ke JPEG sekali saja untuk efisiensi
+        _, placeholder_jpeg = cv2.imencode('.jpg', placeholder_disconnected)
+        placeholder_bytes = placeholder_jpeg.tobytes()
 
         while True:
-            now = time.time()
+            # Mengambil byte gambar dari Redis berdasarkan ID CCTV
+            # Key format: cctv_frame:[id] (sesuai dengan yang di-set di worker)
+            frame_bytes = r.get(f"cctv_frame:{cctv_id}")
 
-            # Prioritas: annotated (dengan box) → raw (polos) → placeholder
-            with state.ANNOTATED_FRAME_LOCK:
-                ann = state.annotated_frames.get(cctv_id)
-            with state.RAW_FRAME_LOCK:
-                raw = state.raw_frames.get(cctv_id)
-
-            if ann and ann[1] > now - 5:
-                frame = ann[0]  
-            elif raw and raw[1] > now - 10:
-                frame = raw[0]  
+            if frame_bytes:
+                # Jika data ada di Redis, kirim ke frontend
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             else:
-                if now - last_warning > 5:
-                    logging.warning(f"[CCTV {cctv_id}] NO FRAME → using disconnected placeholder")
-                    last_warning = now
-                frame = placeholder_disconnected
+                # Jika data kosong (worker mati atau key expired), kirim placeholder
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + placeholder_bytes + b'\r\n')
 
-            ret, jpeg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            if not ret:
-                time.sleep(0.05)
-                continue
-
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-            time.sleep(0.03)
+            # Berikan sedikit jeda untuk mengontrol FPS stream (sekitar 10-15 FPS)
+            time.sleep(0.07)
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

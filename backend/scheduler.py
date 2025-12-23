@@ -4,7 +4,6 @@ import datetime
 import logging
 from db.db_config import get_connection
 from supabase import create_client
-from core.cctv_scheduler import refresh_scheduler_state
 from services.cctv_services import refresh_all_cctv_configs
 from services.notification_service import send_violation_recap_emails
 import config
@@ -112,9 +111,6 @@ def scheduler_thread():
         if hour == 0 and minute == 5:
             cleanup_old_data()
 
-        # 5. Cek jadwal CCTV tiap menit
-        refresh_scheduler_state() 
-
-        # 6. Refresh config tiap 10 menit
+        # 5. Refresh config tiap 10 menit
         if minute % 10 == 0:
             refresh_all_cctv_configs()

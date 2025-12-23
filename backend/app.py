@@ -9,14 +9,11 @@ sys.path.insert(0, current_dir)
 
 from flask import Flask
 from flask_cors import CORS
-from threading import Thread
 from dotenv import load_dotenv
 
 from shared_state import state
 import utils.helpers as helpers
-import scheduler  
 from services import config_service, cctv_services
-from core.cctv_scheduler import refresh_scheduler_state
 
 # Import Blueprints dari routes
 import routes.cctv_crud as cctv_crud
@@ -62,16 +59,5 @@ if __name__ == "__main__":
     # 3. Refresh Config CCTV
     cctv_services.refresh_all_cctv_configs() 
 
-    # 4. alankan inisialisasi jadwal secara SINKRON di sini
-    try:
-        logging.info("[STARTUP] Syncing initial CCTV schedules...")
-        refresh_scheduler_state() 
-    except Exception as e:
-        logging.error(f"[STARTUP] Critical Error during initial sync: {e}")
-
-    # 5. Jalankan Scheduler Thread untuk pengecekan rutin ke depannya
-    Thread(target=scheduler.scheduler_thread, daemon=True).start()
-    logging.info("DB/Global Scheduler thread started.")
-
-    # 6. Jalankan Server
+    # 4. Jalankan Server
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

@@ -355,16 +355,6 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
 
       const updated = await res.json();
 
-      // === Update Jadwal ===
-      if (form.schedules !== undefined) {
-        await fetch(`/api/cctv-schedules/${cctvData.id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schedules: form.schedules || [] })
-        });
-        fetch('/api/refresh-scheduler', { method: 'POST' });
-      }
-
       onUpdate(cctvData.id, updated);
       onClose();
       showAlert(`CCTV '${updated.name}' successfully updated.`, 'success');

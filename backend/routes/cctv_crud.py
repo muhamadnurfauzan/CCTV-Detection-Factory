@@ -1,20 +1,15 @@
 # routes/cctv_crud.py
 import io
-import sys
 import cv2
 import json
 import logging
 
-from flask import Blueprint, request, jsonify, send_file, redirect
+from flask import Blueprint, request, jsonify, send_file
 from psycopg2.extras import RealDictCursor, execute_batch
 
 from db.db_config import get_connection
-from core.cctv_scheduler import refresh_scheduler_state
 from utils.auth import require_role
-import core.detection as detection
 import config as config
-import services.cctv_services as cctv_service
-import services.config_service as config_service
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
     
@@ -99,8 +94,6 @@ def add_new_cctv():
         except json.JSONDecodeError:
             return jsonify({"error": "Invalid JSON in area"}), 400
         
-    schedules = data.get("schedules", [])
-
     conn = None
     cur = None
     try:
@@ -120,14 +113,6 @@ def add_new_cctv():
         ))
         cctv_id = cur.fetchone()['id']
         conn.commit()
-
-        # --- LANGKAH PENTING: REFRESH CONFIG ---
-        cctv_service.refresh_all_cctv_configs()
-
-        if data.get('enabled', False):
-            # Jika enabled=True, mulai thread deteksi
-            detection.start_detection_for_cctv(cctv_id)
-            logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to adding as enabled.")
 
         return jsonify({
             "id": cctv_id,
@@ -172,7 +157,9 @@ def rtsp_snapshot():
         }
         
         # open_stream akan berhasil karena strukturnya kini benar
-        cap = detection.open_stream(temp_cctv) 
+        video_path = f"rtsps://{temp_cctv['ip_address']}:{temp_cctv['port']}/{temp_cctv['token']}?enableSrtp"
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG) 
+        
         if not cap:
             return jsonify({"error": "Cannot open stream. Check URL or network connection."}), 500
 
@@ -268,28 +255,6 @@ def update_cctv(cctv_id):
         updated_cctv = cur.fetchone()
         conn.commit()
 
-        # 2. FIX UTAMA: Refresh config untuk memuat data lengkap (termasuk ROI)
-        cctv_service.refresh_all_cctv_configs() 
-
-        # 3. FIX: Start/Stop Detection berdasarkan perubahan status
-        if updated_cctv:
-            
-            # Jika status berubah dari non-aktif ke aktif: START
-            if new_enabled_status and not old_enabled_status:
-                detection.start_detection_for_cctv(cctv_id)
-                logging.info(f"[THREAD] Started detection for CCTV {cctv_id} due to enabling.")
-                
-            # Jika status berubah dari aktif ke non-aktif: STOP
-            elif not new_enabled_status and old_enabled_status:
-                detection.stop_detection_for_cctv(cctv_id)
-                logging.info(f"[THREAD] Stopped detection for CCTV {cctv_id} due to disabling.")
-                
-            # Jika status tetap aktif, tapi ada perubahan konfigurasi koneksi/model
-            elif new_enabled_status and old_enabled_status and needs_restart:
-                logging.info(f"[THREAD] Restarting detection for CCTV {cctv_id} due to config change.")
-                detection.stop_detection_for_cctv(cctv_id)
-                detection.start_detection_for_cctv(cctv_id)
-
         return jsonify(updated_cctv), 200
     except Exception as e:
         if conn: conn.rollback()
@@ -305,9 +270,6 @@ def delete_cctv(cctv_id):
     conn = None
     cur = None
     try:
-        # 1. Hentikan thread deteksi (jika berjalan)
-        detection.stop_detection_for_cctv(cctv_id) 
-
         conn = get_connection()
         cur = conn.cursor()
 
@@ -326,9 +288,6 @@ def delete_cctv(cctv_id):
         # 3. Hapus dari DB (Tabel Induk)
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))
         conn.commit()
-
-        # 4. FIX UTAMA: Refresh config setelah penghapusan
-        cctv_service.refresh_all_cctv_configs() 
         
         return jsonify({"success": True}), 200
     except Exception as e:
@@ -425,8 +384,6 @@ def cctv_schedules(cctv_id):
                     execute_batch(cur, insert_query, data)
 
             conn.commit()
-            # Refresh scheduler state setelah ubah jadwal
-            refresh_scheduler_state()
             return jsonify({"success": True})
         except Exception as e:
             conn.rollback()
@@ -435,9 +392,3 @@ def cctv_schedules(cctv_id):
         finally:
             cur.close()
             conn.close()
-
-@cctv_bp.route('/refresh-scheduler', methods=['POST'])
-@require_role(['super_admin'])
-def refresh_scheduler_now():
-    refresh_scheduler_state()
-    return jsonify({"success": True, "message": "Scheduler refreshed"})
