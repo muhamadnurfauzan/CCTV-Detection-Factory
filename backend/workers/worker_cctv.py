@@ -25,6 +25,7 @@ if backend_dir not in sys.path:
 
 # Import dari modul yang sudah ada
 from shared_state import state
+import services.config_service as config_service
 from services.cctv_services import load_all_cctv_configs
 from core.violation_processor import process_detection
 from utils.helpers import get_color_for_class
@@ -49,7 +50,12 @@ class CCTVWorker:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def load_config(self):
-        """Mengambil konfigurasi spesifik CCTV dari database via service."""
+        """Mengambil konfigurasi spesifik CCTV dan GLOBAL CACHE dari database."""
+        # MUAT DATA PENDUKUNG KE MEMORI WORKER
+        config_service.load_object_classes()
+        config_service.load_violation_pairs()
+        config_service.load_detection_settings()
+
         configs = load_all_cctv_configs()
         self.cctv_config = configs.get(self.cctv_id)
         if not self.cctv_config:
@@ -116,13 +122,27 @@ class CCTVWorker:
                         pts = (region["points"] * [scale_x, scale_y]).astype(np.int32).reshape((-1, 1, 2))
                         cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
 
-                    # 5. Deteksi YOLO
+                    # 5. Bangun track_classes berdasarkan active_ids dari ROI (Logika Asli)
+                    track_classes = set(active_ids)
+                    for viol_id in active_ids:
+                        # Ambil pasangan PPE (misal: ID Orang jika ID Helm aktif)
+                        ppe_id = state.PPE_VIOLATION_PAIRS.get(viol_id)
+                        if ppe_id:
+                            track_classes.add(ppe_id)
+
+                    track_classes_list = list(track_classes) if active_ids else None
+                    logging.info(f"[CCTV {self.cctv_id}] Active IDs from ROI: {active_ids} | Tracking: {track_classes_list}")
+
+                    # 6. Deteksi YOLO
                     results = self.model.track(
-                        frame, conf=CONFIDENCE_THRESHOLD, persist=True, 
-                        tracker="bytetrack.yaml", half=(self.device == 'cuda')
+                        frame, 
+                        conf=CONFIDENCE_THRESHOLD, 
+                        persist=True, 
+                        tracker="bytetrack.yaml", 
+                        half=(self.device == 'cuda')
                     )
 
-                    # 6. Proses Deteksi (Sesuai Logika Asli di detection.py)
+                    # 7. Proses Deteksi (Sesuai Logika Asli di detection.py)
                     for r in results:
                         for box in r.boxes:
                             if box.id is None: continue
@@ -146,7 +166,7 @@ class CCTVWorker:
                                     cls_id, conf, track_id, self.model, self.tracked_violations
                                 )
 
-                    # 7. Kirim ke Redis & Streaming
+                    # 8. Kirim ke Redis & Streaming
                     _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     redis_client.set(f"cctv_frame:{self.cctv_id}", buffer.tobytes(), ex=5)
 
