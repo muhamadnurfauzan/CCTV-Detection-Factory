@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FaTimes, FaTrash, FaFileImage } from 'react-icons/fa'; 
+import { createPortal } from 'react-dom';
 import { useAlert } from './AlertProvider'; 
 import RoleButton from './RoleButton';
 
@@ -64,7 +65,9 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
     }
   };
 
-  return (
+  if (!open) return null;
+
+  return createPortal(
     <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-md w-full">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2">
@@ -114,6 +117,7 @@ export default function ModalDeleteReport({ open, onClose, onConfirm, reportData
           {submitting ? 'Deleting...' : 'Delete'}
         </RoleButton>
       </div>
-    </dialog>
+    </dialog>,
+    document.body
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaTimes, FaUserEdit, FaUsers, FaEye, FaEyeSlash } from 'react-icons/fa'; 
+import { createPortal } from 'react-dom';
 import { useAlert } from './AlertProvider'; 
 import Multiselect from './Multiselect'; 
 import RoleButton from './RoleButton';
@@ -226,7 +227,9 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
         );
     };
 
-    return (
+    if (!open) return null;
+
+    return createPortal(
         <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 border-b pb-2">
                 <h2 className="text-2xl font-bold flex items-center gap-2 text-indigo-700">
@@ -416,6 +419,7 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
                     </RoleButton>
                 </div>
             </form>
-        </dialog>
+        </dialog>,
+        document.body
     );
 }

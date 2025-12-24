@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaPaperPlane } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
 import { useAlert } from './AlertProvider';
 import Multiselect from './Multiselect'; 
 
@@ -177,7 +178,7 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
 
     if (!open) return null;
 
-    return (
+    return createPortal(
         <div 
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={onClose}
@@ -285,7 +286,8 @@ const ModalSendRecap = ({ open, onClose, onSend, allUsers, allCCTVs }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

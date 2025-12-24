@@ -1,6 +1,7 @@
 // components/ModalEditCCTV.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { FaTimes, FaCamera, FaPenSquare } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
 import { useAlert } from './AlertProvider';
 import CCTVScheduleInput from './CCTVScheduleInput';
 import RoleButton from './RoleButton';
@@ -366,8 +367,10 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
     }
   };
 
+  if (!open) return null;
+
   // === RENDER ===
-  return (
+  return createPortal(
     <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
       <div className="flex justify-between items-center mb-6 border-b pb-2">
         <h2 className="text-2xl font-bold flex items-center gap-2 text-indigo-700">
@@ -598,6 +601,7 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
           </div>
         </div>
       </form>
-    </dialog>
+    </dialog>,
+    document.body
   );
 }

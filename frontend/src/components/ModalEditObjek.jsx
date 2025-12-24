@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FaSave, FaTimes, FaPalette, FaHashtag, FaRulerHorizontal } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
 import RoleButton from './RoleButton';
 
 // --- HELPER CONVERSIONS (Penting) ---
@@ -211,8 +212,9 @@ const ModalEditObjek = ({
         }
     };
 
+    if (!open) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6">
                 <h3 className="text-xl font-bold mb-4 border-b pb-2">Edit Object Class: {editingItem?.name}</h3>
@@ -327,7 +329,8 @@ const ModalEditObjek = ({
                     </RoleButton>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

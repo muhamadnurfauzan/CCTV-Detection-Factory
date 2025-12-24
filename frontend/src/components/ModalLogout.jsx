@@ -1,6 +1,7 @@
 // components/ModalLogout.jsx
 import React, { useState } from 'react';
 import { FaTimes, FaSignOutAlt } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -24,7 +25,7 @@ export default function ModalLogout({ open, onClose }) {
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
         {/* Header */}
@@ -77,6 +78,7 @@ export default function ModalLogout({ open, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

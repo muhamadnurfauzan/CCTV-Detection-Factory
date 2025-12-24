@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaTimes, FaCamera, FaPlusCircle } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
 import { useAlert } from './AlertProvider';
 import CCTVScheduleInput from './CCTVScheduleInput';
 import RoleButton from './RoleButton';
 
 export default function ModalAddCCTV({ open, onClose, onSuccess, violations = [] }) {
     const [form, setForm] = useState({
-        name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' // Tambah url di state
+        name: '', location: '', ip: '', port: '', token: '', enabled: false, url: '' 
     });
     const [drawing, setDrawing] = useState(false);
     const [points, setPoints] = useState([]);
@@ -316,7 +317,9 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
         }
     };
 
-    return (
+    if (!open) return null;
+
+    return createPortal(
         <dialog open={open} className="fixed inset-0 z-50 p-6 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 border-b pb-2">
                 <h2 className="text-2xl font-bold flex items-center gap-2 text-green-700">
@@ -538,6 +541,7 @@ export default function ModalAddCCTV({ open, onClose, onSuccess, violations = []
                     </div>
                 </div>
             </form>
-        </dialog>
+        </dialog>,
+        document.body
     );
 }
