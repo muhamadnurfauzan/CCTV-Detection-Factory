@@ -1,205 +1,194 @@
 # CCTV-Detection-Factory
 
-Lightweight prototype for CCTV-based PPE (helmet/vest/shoes/glasses/gloves) detection with violation cropping, timestamp/location metadata, and a web UI.  
-Backend handles video capture, detection, tracking (SORT: `bytetrack.yml`), and violation processing. Frontend is a Vite/React admin UI and stream proxy.
+Prototype system for CCTV-based PPE (helmet/vest/etc.) detection with per-object tracking, deduplicated violation captures, and a web dashboard. The system uses a Python Flask backend for detection and workers, a Vite + React frontend (stream proxy and UI), PM2 for process orchestration, and Redis for shared state/stream coordination.
 
 ---
 
 ## Key features
-- YOLO-based PPE detection (YOLOv12 model in `backend/model/`)
-- Object tracking via SORT to avoid spamming violation captures
-- Violation crops saved with timestamp & location
-- Simple REST endpoints and a React-based dashboard
-- Modular structure: backend services, detection core, and frontend UI
+- YOLO-based PPE detection (models in `backend/model/`)
+- SORT-based tracking and per-object violation deduplication
+- Per-camera worker processes managed by PM2 orchestrator (dynamic start/stop)
+- Violation crops saved with timestamp, camera/location, and object ID
+- React dashboard + MJPEG/stream proxy (frontend)
+- Optional Redis for shared state, stream coordination and lightweight queues
 
 ---
 
 ## Repository layout
-- `/backend` — Flask backend, detection core, routes, services, shared state, `requirements.txt`
-- `/frontend` — Vite + React UI, components, static assets, `server.mjs` proxy
-- `/model` (backend/model) — detection model files (example: `best.pt`)
+- `backend/` — Flask app, detection core, workers, routes, services, `requirements.txt`
+  - `core/` — detection, scheduler, violation processor
+  - `workers/` — pm2 manager and per-CCTV worker scripts
+- `frontend/` — Vite + React app, `server.mjs` proxy, build output
+- `ecosystem.config.js` — PM2 process config (edit before use)
+- `model/` — detection model files
+- `violations/` — runtime: saved violation crops
+- `.env` / `backend/.env` — environment variables
 
 ---
 
-## Requirements / Prerequisites
-- Python 3.10+ (use a clean virtualenv or a separate conda env; avoid base conda)
+## Environment / prerequisites
+- Python 3.10+ (use a dedicated venv; avoid Anaconda base)
 - Node.js 18+ and npm
-- GPU users: compatible PyTorch + CUDA versions
-- Recommended: use a dedicated env to avoid package conflicts
-
-Important packages (backend): torch, torchvision, ultralytics, opencv-python (or opencv-python-headless), filterpy, flask, flask-cors, Pillow.  
-Frontend: react, react-dom, vite and related dev deps.
+- Redis (recommended for orchestrator / shared state)
+- GPU users: install PyTorch wheel compatible with your CUDA
+- Install backend deps from `backend/requirements.txt` and frontend deps from `frontend/package.json`
 
 ---
 
-## Quick start — Backend
-1. Create & activate a virtual environment
-   - macOS / Linux:
+## Configuration (env)
+Create `.env` in repo root or `backend/.env`. 
+Do not commit secrets.
+
+---
+
+## Development quick start
+
+1. Setup Environtment
+    - Install Anaconda https://www.anaconda.com/download
+    - Agree the Term of Services (ToS)
+        ```bash
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2
+        ```
+    - Make new environtment 
+        ```bash
+        conda create -n your_env_name python=3.10 -y
+        conda activate your_env_name
+        ```
+    - Install some dependencies
+        ```bash
+        pip install -r backend/requirements.txt
+        pip install redis ultralytics
+        npm install
+        npm install pm2 -g
+        ```
+
+2. Start Redis 
+    - macOS Homebrew:
      ```bash
-     python3 -m venv .venv
-     source .venv/bin/activate
+     brew install redis
+     brew services start redis
      ```
-2. Install backend dependencies
-   ```bash
-   pip install --upgrade pip setuptools wheel
-   pip install -r backend/requirements.txt
-   ```
-   - If filterpy fails in your Anaconda base environment, either:
-        - Use conda-forge: `bash conda install -c conda-forge filterpy`
-        - Or use the virtualenv above (recommended)
-3. Run Flask backend
+    - Windows: You can install manually example in here: https://github.com/tporadowski/redis/releases, after that you shoud start Redis
     ```bash
+    ./redis-server --service-install
+    ./redis-server --service-start
+    ```
+
+3. Backend
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install --upgrade pip setuptools wheel
+   cp backend/.env.example backend/.env 
    python backend/app.py
    ```
-   Backend listens (by default) on HTTP; check app.py for port config.
 
-Notes: segmentation faults at startup usually indicate native binary incompatibilities (torch / opencv). Recreate a clean env or install versions of torch/opencv compatible with your platform.
-
----
-
-## Quick start — Frontend
-1. Install deps
+4. Frontend
     ```bash
     cd frontend
-    npm install
-    ```
-2. Development (vite)
-    ```bash
-    npm run dev
-    # open the displayed URL
-    ```
-3. Production build + proxy (serve static via server.mjs)
-    ```bash
     npm run build
     node server.mjs
-    # open http://localhost:3000 (server.mjs defaults to 3000 in this repo)
     ```
-
-If you use a separate proxy, ensure port is not blocked by the browser (avoid unsafe ports like 6000). Use 3000 or 5173 for local dev.
 
 ---
 
-## PM2: process management with ecosystem file
-This project includes an example `ecosystem.config.js` for running backend, frontend proxy and monitor with PM2. The file in the repo contains Windows-style paths — you should edit it for your environment (paths, Python interpreter, working directories).
-- Example (Windows-style, provided in repo):
+## PM2 orchestration (production / multi-process)
+
+1. Install PM2 (if you haven't installed it before):
     ```bash
-    // example: original windows-style ecosystem.config.js (edit to match your machine)
-    module.exports = {
-        apps: [
-            {
-            name: "cctv-backend",
-            script: "app.py",
-            interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
-            cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
-            watch: false,
-            autorestart: true,
-            env: { FLASK_ENV: "production" }
-            },
-            {
-            name: "cctv-frontend",
-            script: "server.mjs",
-            interpreter: "node",
-            cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/frontend",
-            watch: false,
-            env: { NODE_ENV: "production", PORT: 3000 }
-            }
-        ]
-    };
-    ```
-- Example (Unix / macOS) — recommended adjustments:
-    ```bash
-    // example: unix/macos-friendly ecosystem.config.js
-    module.exports = {
-        apps: [
-            {
-            name: "cctv-backend",
-            script: "app.py",
-            interpreter: "/path/to/venv/bin/python", // change to your venv python
-            cwd: "/Users/macbook/Documents/CCTV-Detection-Factory/backend",
-            watch: false,
-            autorestart: true,
-            env: { FLASK_ENV: "production", PORT: 5000 }
-            },
-            {
-            name: "cctv-frontend",
-            script: "server.mjs",
-            interpreter: "node",
-            cwd: "/Users/macbook/Documents/CCTV-Detection-Factory/frontend",
-            watch: false,
-            env: { NODE_ENV: "production", PORT: 3000 }
-            }
-        ]
-    };
+    npm install -g pm2
     ```
 
-How to use PM2 with the ecosystem file:
-1. Install PM2 (global):
-    `bash npm install -g pm2`
-2. Start processes:
-    `bash pm2 start ecosystem.config.js`
-3. View status/logs:
+2. Edit file `ecosystem.config.js` to match your environtment:
+    - Set `interpreter` for Python apps to your venv python (e.g.`/full/path/to/.venv/bin/python`).
+        Notes:
+        Make sure `ecosystem.config.js` points to `pythonw.exe` (Windows) to prevent repeated CMD windows from appearing:
+        ```bash interpreter: "C:/ProgramData/miniconda3/envs/cctv/pythonw.exe"```
+    - Ensure `cwd` points to backend/frontend directories.
+    - Do not hardcode secrets — use `.env` or PM2 env variables.
+
+3. Start processes:
     ```bash
+    pm2 start ecosystem.config.js
     pm2 list
-    pm2 logs cctv-backend
-    pm2 logs cctv-frontend
     ```
-4. Save startup (so pm2 restarts on machine boot):
+
+4. Logs and management:
     ```bash
+    pm2 logs cctv-backend # Or you can simply type id 1, 2, etc. 
+    pm2 restart cctv-orchestrator  # You can also type `pm2 restart all`. 
     pm2 save
-    pm2 startup    
+    pm2 startup
     ```
-5. Stop / restart / delete:
+
+Notes:
+- Use venv python in PM2 to avoid native binary mismatches (segfaults).
+- The orchestrator uses Redis to coordinate per-camera workers; ensure Redis is running when using PM2 orchestrator.
+- Self-Healing Mechanism: The CCTV worker is equipped with an internal *Watchdog*. If the stream is stuck for 15 seconds, the worker will shut itself down (`os._exit(1)`) and PM2 will restart automatically.
+- Dual-Mode Logic: The system does not kill workers when they are not scheduled, but instead switches to power saving mode (Stream Only) to ensure the Dashboard continues to display video without YOLO GPU load.
+
+---
+
+## Redis usage
+
+- Recommended for shared state (active camera list, per-object dedupe caches) and simple job queues.
+- Set `REDIS_HOST/PORT/DB` in .env.
+- Orchestrator (pm2_manager.py) and workers use Redis to coordinate worker lifecycle and lightweight message passing.
+
+---
+
+## Troubleshooting (common issues)
+
+- filterpy install errors in Anaconda: use a clean venv or `conda install -c conda-forge filterpy`.
+- Segmentation fault at Flask start: likely incompatible native libs (torch/opencv). Recreate venv and install appropriate wheels.
+- Frontend "useRef" / hooks error: duplicate React instances. Check:
     ```bash
-    pm2 restart cctv-backend
-    pm2 stop cctv-frontend
-    pm2 delete cctv-monitor
+    cd frontend
+    npm ls react react-dom
     ```
-
-Notes & best practices:
-- Use the Python interpreter from the activated virtualenv `(e.g. .venv/bin/python)` instead of a global Anaconda base to avoid dependency errors and segmentation faults.
-- Ensure `cwd` points correctly to the `backend` / `frontend` directories
-- For production, prefer `server.mjs` (Node) serving the built frontend and proxying to the Flask API; ensure ports used are allowed and open.
-- Set environment variables (DB, secrets, model paths) in `.env` or in the ecosystem `env` object (do not commit secrets).
-
----
-
-## Troubleshooting & common issues
-- filterpy install errors in Anaconda base: prefer a fresh venv or `bash conda install -c conda-forge filterpy`.
-- Segmentation faults at Flask startup: check native libs (torch/opencv) and use matching binary wheels for your system.
-- Frontend Hooks error ("useRef" on null): caused by duplicate React instances in the dependency tree. Run:
-    `bash cd frontend && npm ls react react-dom`
-    If duplicates exist: remove node_modules + lockfile and reinstall (rm -rf node_modules package-lock.json && npm install).
-
----
-
-## Development tips
-- Keep `requirements.txt` and `package.json` in sync with runtime needs.
-- Separate concerns: detection logic (core), services (storage/notifications), web routes, and UI components.
-- Use logging and small reproducible test videos when debugging detection/tracking.
+    If duplicates exist: remove node_modules and lockfile and reinstall:
+    ```bash
+    rm -rf node_modules package-lock.json
+    npm install
+    npm run build
+    ```
+- Browser blocks unsafe ports (ERR_UNSAFE_PORT): use safe ports like 3000, 5173, 5000.
 
 ---
 
 ## Useful commands
-- Backend lint/test/run: from repo root
+
+- Backend (venv):
     ```bash
     source .venv/bin/activate
     python backend/app.py
     ```
-- Frontend dev:
+
+- Frontend dev: 
     ```bash
     cd frontend
-    npm install
-    npm start
+    npm run dev # Or you can simply type `npm run dev`
     ```
-- PM2 control:
+
+- PM2:
     ```bash
     pm2 start ecosystem.config.js
+    pm2 logs
     pm2 save
-    pm2 logs 
-    pm2 monit
     ```
 
 ---
 
-## License
-© 2025 PT Summit Adyawinsa Indonesia.
+## Useful commands
+
+- Keep detection, worker orchestration, and web routes separated (see `core` and `workers`).
+- Use Redis for production orchestration to avoid race conditions.
+- Use the venv Python interpreter in PM2 to ensure compatibility with compiled Python wheels.
+- Add basic health endpoints for backend and frontend to let PM2 and load balancers detect service health.
+
+---
+
+## License & attribution
+© 2025 PT Summit Adyawinsa Indonesia. See LICENSE if provided.
