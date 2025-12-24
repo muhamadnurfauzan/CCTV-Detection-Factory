@@ -8,15 +8,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/supabase-api': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         ws: true,
       },
-      '/invalidate-cache': 'http://localhost:3000',
+      '/invalidate-cache': 'http://127.0.0.1:3000',
     }
   }
 });

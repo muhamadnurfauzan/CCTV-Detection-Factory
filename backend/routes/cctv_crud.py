@@ -32,9 +32,9 @@ def is_valid_ip(ip_address):
 
 # --- Helper: Menghapus dan menyimpan jadwal CCTV ---
 def save_cctv_schedules(conn, cur, cctv_id, schedules):
-    """Menghapus jadwal lama dan menyimpan jadwal baru untuk CCTV ID tertentu."""
+    """Menghapus jadwal lama dan menyimpan jadwal baru secara satu per satu hari."""
     # 1. Hapus semua jadwal lama
-    cur.execute("DELETE FROM cctv_schedule WHERE cctv_id = %s", (cctv_id,))
+    cur.execute("DELETE FROM cctv_scheduler WHERE cctv_id = %s", (cctv_id,))
 
     if not schedules:
         return
@@ -47,20 +47,21 @@ def save_cctv_schedules(conn, cur, cctv_id, schedules):
         end_time = schedule.get('end_time')
         active = schedule.get('active', True)
 
-        # Pastikan data lengkap
         if start_time and end_time and days_array:
-            insert_data.append((
-                cctv_id,
-                start_time,
-                end_time,
-                days_array, # PostgreSQL akan menerima list/array Python untuk kolom text[]
-                active
-            ))
+            for day in days_array:
+                insert_data.append((
+                    cctv_id,
+                    day,        
+                    start_time,
+                    end_time,
+                    active
+                ))
 
-    # 3. Insert massal jadwal baru
+    # 3. Insert massal jadwal baru dengan urutan kolom yang benar
     if insert_data:
+        # Sesuaikan urutan kolom agar konsisten dengan data yang di-append di atas
         schedule_query = """
-            INSERT INTO cctv_schedule (cctv_id, start_time, end_time, days, active)
+            INSERT INTO cctv_scheduler (cctv_id, day_of_week, start_time, end_time, is_active)
             VALUES (%s, %s, %s, %s, %s)
         """
         execute_batch(cur, schedule_query, insert_data)
@@ -193,14 +194,10 @@ def update_cctv(cctv_id):
             return jsonify({"error": "CCTV not found"}), 404
             
         old_enabled_status = old_cctv['enabled']
-        old_area_filename = old_cctv['area']
 
         # Update fields yang ada
         update_fields = []
         update_values = []
-        
-        # Tentukan apakah ada perubahan yang memerlukan restart thread
-        needs_restart = False
 
         if 'name' in data:
             update_fields.append("name = %s")
@@ -245,6 +242,9 @@ def update_cctv(cctv_id):
                 needs_restart = True 
             except Exception as e:
                 return jsonify({"error": f"Invalid ROI JSON: {str(e)}"}), 400
+
+        if 'schedules' in data:
+            save_cctv_schedules(conn, cur, cctv_id, data['schedules'])
 
         if not update_fields:
             return jsonify({"error": "No fields to update"}), 400

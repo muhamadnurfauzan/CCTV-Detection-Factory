@@ -338,7 +338,8 @@ export default function ModalEditCCTV({ open, onClose, onUpdate, cctvData, viola
       port: String(form.port).trim(),
       token: String(form.token).trim(),
       enabled: form.enabled,
-      area: areaPayload // Selalu sertakan ROI terbaru agar tidak hilang
+      area: areaPayload,
+      schedules: form.schedules
     };
 
     try {

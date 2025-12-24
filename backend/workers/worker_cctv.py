@@ -48,6 +48,7 @@ class CCTVWorker:
         self.cctv_config = None
         self.model = None
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.frame_count = 0
 
     def load_config(self):
         """Mengambil konfigurasi spesifik CCTV dan GLOBAL CACHE dari database."""
@@ -62,35 +63,51 @@ class CCTVWorker:
             raise Exception(f"Konfigurasi untuk CCTV ID {self.cctv_id} tidak ditemukan.")
 
     def open_stream(self):
-        """Logika pembukaan stream dari detection.py."""
+        """Membuka stream RTSP dengan validasi ketat."""
         cctv = self.cctv_config
         video_path = f"rtsps://{cctv['ip_address']}:{cctv['port']}/{cctv['token']}?enableSrtp"
-        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp'
+        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|stimeout;5000000'
         
+        logging.info(f"[CCTV {self.cctv_id}] Connecting to: {video_path}")
         cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+        
         if not cap.isOpened():
-            # Fallback ke RTSP biasa seperti di detection.py
+            # Fallback ke RTSP biasa
             rtsp_url = video_path.replace("rtsps://", "rtsp://").replace(":7441", ":7447")
+            logging.info(f"[CCTV {self.cctv_id}] Fallback to: {rtsp_url}")
             cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+            
+        if not cap.isOpened():
+            # Jika tetap gagal, lempar error agar PM2 mengambil alih
+            raise ConnectionError(f"Gagal membuka stream untuk CCTV ID {self.cctv_id}")
+            
         return cap
 
     def capture_loop(self):
-        """Thread untuk mengambil frame (capture_thread di detection.py)."""
-        cap = self.open_stream()
-        frame_count = 0
-        
-        while not self.stop_event.is_set():
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                if frame_count % FRAME_SKIP == 0:
-                    self.frame_queue.append(frame.copy())
-                frame_count += 1
-            else:
-                logging.warning(f"Gagal membaca frame, mencoba reconnect...")
-                cap.release()
-                time.sleep(5)
-                cap = self.open_stream()
-        cap.release()
+        """Thread pengambilan frame."""
+        try:
+            cap = self.open_stream()
+            consecutive_failures = 0
+            
+            while not self.stop_event.is_set():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    consecutive_failures = 0
+                    if self.frame_count % FRAME_SKIP == 0:
+                        self.frame_queue.append(frame.copy())
+                    self.frame_count += 1
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures > 10:
+                        logging.error(f"[CCTV {self.cctv_id}] Stream terputus permanen.")
+                        break
+                time.sleep(0.001)
+        except Exception as e:
+            logging.error(f"[FATAL CAPTURE] {e}")
+        finally:
+            # PAKSA MATI: Jika thread ini berhenti, matikan seluruh proses
+            logging.info("Mematikan seluruh proses worker...")
+            os._exit(1)
 
     def process_loop(self):
         """Thread utama deteksi: Integrasi total dari process_thread."""
@@ -200,28 +217,48 @@ class CCTVWorker:
             time.sleep(CLEANUP_INTERVAL)
 
     def run(self):
-        """Menjalankan semua komponen worker."""
+        """Menjalankan semua komponen worker dengan pengawasan ketat."""
         try:
             self.load_config()
             logging.info(f"Worker dimulai untuk {self.cctv_config['name']}")
             
-            # Tambahkan thread cleanup di sini
-            t_cap = Thread(target=self.capture_loop, daemon=True)
-            t_proc = Thread(target=self.process_loop, daemon=True)
-            t_clean = Thread(target=self.cleanup_loop, daemon=True) # JALANKAN CLEANUP
+            # Mendefinisikan thread
+            t_cap = Thread(target=self.capture_loop, daemon=True, name="CapThread")
+            t_proc = Thread(target=self.process_loop, daemon=True, name="ProcThread")
+            t_clean = Thread(target=self.cleanup_loop, daemon=True, name="CleanThread")
             
             t_cap.start()
             t_proc.start()
             t_clean.start()
             
+            last_count = 0
+            last_check_time = time.time()
+
             while not self.stop_event.is_set():
-                time.sleep(1)
+                current_time = time.time()
                 
+                # Cek setiap 15 detik jika frame tidak bertambah
+                if current_time - last_check_time > 15:
+                    if self.frame_count == last_count:
+                        logging.error(f"[CCTV {self.cctv_id}] Frame macet selama 15 detik! Memaksa restart...")
+                        os._exit(1) # PM2 akan otomatis restart
+                    
+                    last_count = self.frame_count
+                    last_check_time = current_time
+
+                if not t_cap.is_alive() or not t_proc.is_alive():
+                    logging.error("Thread vital mati!")
+                    os._exit(1)
+                    
+                time.sleep(2)
+                                
         except KeyboardInterrupt:
+            logging.info("Berhenti via KeyboardInterrupt...")
             self.stop_event.set()
+            os._exit(0) # Keluar normal
         except Exception as e:
-            logging.error(f"Worker Error: {e}")
-            self.stop_event.set()
+            logging.error(f"Worker Fatal Error: {e}")
+            os._exit(1) # Keluar dengan error agar PM2 restart
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

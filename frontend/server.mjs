@@ -259,7 +259,7 @@ app.get('/api/sse', (req, res) => {
 app.use(
   '/api',
   createProxyMiddleware({
-    target: 'http://localhost:5000',
+    target: 'http://127.0.0.1:5000',
     changeOrigin: true,
     logLevel: 'debug',
     onProxyReq: (proxyReq, req) => {

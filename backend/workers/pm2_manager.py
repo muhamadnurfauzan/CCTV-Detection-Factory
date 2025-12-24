@@ -1,6 +1,7 @@
 # pm2_manager.py
 import sys
 import os
+import shutil
 
 # Mendapatkan path absolut dari direktori 'backend'
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,9 +20,19 @@ from core.cctv_scheduler import get_active_cctv_ids_now
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
+def get_pm2_cmd():
+    """Mencari perintah PM2 yang tepat sesuai OS."""
+    # Mencari pm2.cmd (Windows) atau pm2 (Linux/Mac) di dalam PATH
+    cmd = shutil.which("pm2")
+    if not cmd:
+        # Fallback manual jika shutil.which gagal di beberapa env Windows
+        cmd = "pm2.cmd" if os.name == 'nt' else "pm2"
+    return cmd
+
 def get_running_pm2_processes():
+    pm2_executable = get_pm2_cmd()
     # Menambahkan --json agar output konsisten
-    result = subprocess.run(['pm2', 'jlist'], capture_output=True, text=True)
+    result = subprocess.run([pm2_executable, 'jlist'], capture_output=True, text=True)
     try:
         processes = json.loads(result.stdout)
         return processes
@@ -30,6 +41,7 @@ def get_running_pm2_processes():
 
 def sync_cctv_workers():
     logging.info("[SYNC] Checking database and schedules...")
+    pm2_executable = get_pm2_cmd()
     
     # Ambil ID yang AKTIF secara jadwal dan ENABLED di DB
     active_ids_by_schedule = get_active_cctv_ids_now()
@@ -63,16 +75,22 @@ def sync_cctv_workers():
         if c_id not in running_id_map:
             logging.info(f"[START] Launching: {desired_process_name}")
             subprocess.run([
-                'pm2', 'start', 'workers/worker_cctv.py',
+                pm2_executable, 'start', 'workers/worker_cctv.py',
                 '--name', desired_process_name,
+                '--exp-backoff-restart-delay', '100',
+                '--max-restarts', '50',
+                '--kill-timeout', '3000',
                 '--', '--cctv_id', str(c_id)
             ])
         elif running_id_map[c_id] != desired_process_name:
             logging.info(f"[RENAME/UPDATE] {running_id_map[c_id]} -> {desired_process_name}")
-            subprocess.run(['pm2', 'delete', running_id_map[c_id]])
+            subprocess.run([pm2_executable, 'delete', running_id_map[c_id]])
             subprocess.run([
-                'pm2', 'start', 'workers/worker_cctv.py',
+                pm2_executable, 'start', 'workers/worker_cctv.py',
                 '--name', desired_process_name,
+                '--exp-backoff-restart-delay', '100',
+                '--max-restarts', '50',
+                '--kill-timeout', '3000',
                 '--', '--cctv_id', str(c_id)
             ])
 
@@ -80,7 +98,7 @@ def sync_cctv_workers():
     for r_id, r_name in running_id_map.items():
         if r_id not in final_active_ids:
             logging.info(f"[STOP] Deleting worker: {r_name} (out of schedule or disabled)")
-            subprocess.run(['pm2', 'delete', r_name])
+            subprocess.run([pm2_executable, 'delete', r_name])
 
 if __name__ == "__main__":
     # Saat pertama kali manager jalan, sebaiknya bersihkan worker lama yang nyangkut
