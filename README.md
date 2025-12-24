@@ -103,9 +103,9 @@ Do not commit secrets.
 
 2. Edit file `ecosystem.config.js` to match your environtment:
     - Set `interpreter` for Python apps to your venv python (e.g.`/full/path/to/.venv/bin/python`).
-        Notes:
-        Make sure `ecosystem.config.js` points to `pythonw.exe` (Windows) to prevent repeated CMD windows from appearing:
-        ```bash interpreter: "C:/ProgramData/miniconda3/envs/cctv/pythonw.exe"```
+        - Notes:
+            Make sure `ecosystem.config.js` points to `pythonw.exe` (Windows) to prevent repeated CMD windows from appearing:
+            ``` interpreter: "C:/ProgramData/miniconda3/envs/cctv/pythonw.exe"```
     - Ensure `cwd` points to backend/frontend directories.
     - Do not hardcode secrets — use `.env` or PM2 env variables.
 
@@ -169,7 +169,7 @@ Notes:
 - Frontend dev: 
     ```bash
     cd frontend
-    npm run dev # Or you can simply type `npm run dev`
+    npm run dev # Or you can simply type `npm start`
     ```
 
 - PM2:
@@ -181,7 +181,7 @@ Notes:
 
 ---
 
-## Useful commands
+## Notes & recommendations
 
 - Keep detection, worker orchestration, and web routes separated (see `core` and `workers`).
 - Use Redis for production orchestration to avoid race conditions.
@@ -191,4 +191,4 @@ Notes:
 ---
 
 ## License & attribution
-© 2025 PT Summit Adyawinsa Indonesia. See LICENSE if provided.
+© 2025 PT Summit Adyawinsa Indonesia.
