@@ -40,16 +40,13 @@ def get_running_pm2_processes():
         return []
 
 def sync_cctv_workers():
-    logging.info("[SYNC] Checking database and schedules...")
+    logging.info("[SYNC] Checking database for all enabled CCTVs...")
     pm2_executable = get_pm2_cmd()
     
-    # Ambil ID yang AKTIF secara jadwal dan ENABLED di DB
-    active_ids_by_schedule = get_active_cctv_ids_now()
-    all_cctvs = get_all_active_cctv()
-    
-    # Filter: Hanya yang enabled DAN masuk jadwal aktif
-    final_active_cctvs = [c for c in all_cctvs if c['id'] in active_ids_by_schedule]
-    final_active_ids = [c['id'] for c in final_active_cctvs]
+    # 1. Tidak lagi memfilter berdasarkan jadwal untuk menjalankan proses
+    # Cukup ambil semua CCTV yang statusnya Enabled di database
+    all_enabled_cctvs = get_all_active_cctv()
+    final_active_ids = [c['id'] for c in all_enabled_cctvs] # Gunakan list ini untuk kontrol proses
     
     running_processes = get_running_pm2_processes()
     running_id_map = {}
@@ -66,14 +63,15 @@ def sync_cctv_workers():
             except (ValueError, IndexError):
                 continue
 
-    # 1. START atau UPDATE worker (Gunakan list object, bukan list ID)
-    for cctv in final_active_cctvs: 
+    # 2. START atau UPDATE worker
+    # Loop sekarang menggunakan all_enabled_cctvs
+    for cctv in all_enabled_cctvs: 
         c_id = cctv['id']
         c_name = "".join(x for x in cctv['name'] if x.isalnum() or x == '-').replace(" ", "-")
         desired_process_name = f"CCTV-{c_id}_{c_name}"
         
         if c_id not in running_id_map:
-            logging.info(f"[START] Launching: {desired_process_name}")
+            logging.info(f"[START] Launching Worker: {desired_process_name}")
             subprocess.run([
                 pm2_executable, 'start', 'workers/worker_cctv.py',
                 '--name', desired_process_name,
@@ -94,10 +92,11 @@ def sync_cctv_workers():
                 '--', '--cctv_id', str(c_id)
             ])
 
-    # 2. STOP & DELETE jika sudah tidak dijadwalkan atau disabled
+    # 3. STOP & DELETE
+    # Sekarang worker hanya dihapus jika r_id tidak ada di daftar Enabled (final_active_ids)
     for r_id, r_name in running_id_map.items():
         if r_id not in final_active_ids:
-            logging.info(f"[STOP] Deleting worker: {r_name} (out of schedule or disabled)")
+            logging.info(f"[STOP] Deleting worker: {r_name} (Status is DISABLED in database)")
             subprocess.run([pm2_executable, 'delete', r_name])
 
 if __name__ == "__main__":

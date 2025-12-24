@@ -28,6 +28,7 @@ from shared_state import state
 import services.config_service as config_service
 from services.cctv_services import load_all_cctv_configs
 from core.violation_processor import process_detection
+from core.cctv_scheduler import is_cctv_active_now
 from utils.helpers import get_color_for_class
 from config import (
     CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, 
@@ -110,80 +111,75 @@ class CCTVWorker:
             os._exit(1)
 
     def process_loop(self):
-        """Thread utama deteksi: Integrasi total dari process_thread."""
+        """Thread utama deteksi dengan mode Dual: Stream Only vs Full Detection."""
         self.model = YOLO(MODEL_PATH).to(self.device)
         
         while not self.stop_event.is_set():
             if self.frame_queue:
                 try:
-                    # 1. Ambil config terbaru (worker memegang config-nya sendiri)
-                    roi_regions = self.cctv_config.get("roi", [])
-                    json_w = self.cctv_config.get("json_width", CCTV_RATIO[0])
-                    json_h = self.cctv_config.get("json_height", CCTV_RATIO[1])
-
-                    # 2. Filter Active IDs
-                    active_ids = set()
-                    for region in roi_regions:
-                        active_ids.update(region.get("allowed_violations", []))
-                    active_ids = list(active_ids)
-
-                    # 3. Ambil frame & Anotasi awal
+                    # 1. Ambil frame & siapkan anotasi
                     frame = self.frame_queue.popleft()
                     annotated = frame.copy()
                     h, w = frame.shape[:2]
 
-                    scale_x, scale_y = w / json_w, h / json_h
+                    # 2. Cek Jadwal Aktif (WIB)
+                    active_by_schedule = is_cctv_active_now(self.cctv_id)
+                    
+                    # 3. Ambil Konfigurasi ROI
+                    roi_regions = self.cctv_config.get("roi", [])
+                    json_w = self.cctv_config.get("json_width", CCTV_RATIO[0])
+                    json_h = self.cctv_config.get("json_height", CCTV_RATIO[1])
 
-                    # 4. Gambar ROI
-                    for region in roi_regions:
-                        pts = (region["points"] * [scale_x, scale_y]).astype(np.int32).reshape((-1, 1, 2))
-                        cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
+                    # KONDISI: Jalankan deteksi HANYA JIKA dalam jadwal DAN ada ROI
+                    if active_by_schedule and roi_regions:
+                        # --- [A] MODE FULL DETECTION ---
+                        scale_x, scale_y = w / json_w, h / json_h
 
-                    # 5. Bangun track_classes berdasarkan active_ids dari ROI (Logika Asli)
-                    track_classes = set(active_ids)
-                    for viol_id in active_ids:
-                        # Ambil pasangan PPE (misal: ID Orang jika ID Helm aktif)
-                        ppe_id = state.PPE_VIOLATION_PAIRS.get(viol_id)
-                        if ppe_id:
-                            track_classes.add(ppe_id)
+                        # Filter Active IDs & ROI Drawing
+                        active_ids = set()
+                        for region in roi_regions:
+                            active_ids.update(region.get("allowed_violations", []))
+                            pts = (region["points"] * [scale_x, scale_y]).astype(np.int32).reshape((-1, 1, 2))
+                            cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
+                        
+                        active_ids = list(active_ids)
 
-                    track_classes_list = list(track_classes) if active_ids else None
-                    logging.info(f"[CCTV {self.cctv_id}] Active IDs from ROI: {active_ids} | Tracking: {track_classes_list}")
+                        # Deteksi YOLO (Langkah Berat)
+                        results = self.model.track(
+                            frame, 
+                            conf=CONFIDENCE_THRESHOLD, 
+                            persist=True, 
+                            tracker="bytetrack.yaml", 
+                            half=(self.device == 'cuda')
+                        )
 
-                    # 6. Deteksi YOLO
-                    results = self.model.track(
-                        frame, 
-                        conf=CONFIDENCE_THRESHOLD, 
-                        persist=True, 
-                        tracker="bytetrack.yaml", 
-                        half=(self.device == 'cuda')
-                    )
+                        # Proses Deteksi & Pelanggaran
+                        for r in results:
+                            for box in r.boxes:
+                                if box.id is None: continue
+                                x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                                cls_id, conf, track_id = int(box.cls[0]), float(box.conf[0]), int(box.id[0])
+                                class_name = self.model.names[cls_id]
 
-                    # 7. Proses Deteksi (Sesuai Logika Asli di detection.py)
-                    for r in results:
-                        for box in r.boxes:
-                            if box.id is None: continue
-                            
-                            x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
-                            cls_id, conf, track_id = int(box.cls[0]), float(box.conf[0]), int(box.id[0])
-                            class_name = self.model.names[cls_id]
+                                color = get_color_for_class(class_name)
+                                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                                cv2.putText(annotated, f"{class_name} {conf:.2f}", (x1, max(y1-10, 10)), 
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-                            # Gambar Box & Label
-                            color = get_color_for_class(class_name)
-                            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                            cv2.putText(annotated, f"{class_name} {conf:.2f}", (x1, max(y1-10, 10)), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-                            # Validasi Pelanggaran
-                            class_info = state.OBJECT_CLASS_CACHE.get(class_name)
-                            if class_info and class_info["is_violation"] and class_info["id"] in active_ids:
-                                # KIRIM self.tracked_violations AGAR COOLDOWN BEKERJA
-                                process_detection(
-                                    self.cctv_id, frame, annotated, x1, y1, x2, y2,
-                                    cls_id, conf, track_id, self.model, self.tracked_violations
-                                )
-
-                    # 8. Kirim ke Redis & Streaming
+                                class_info = state.OBJECT_CLASS_CACHE.get(class_name)
+                                if class_info and class_info["is_violation"] and class_info["id"] in active_ids:
+                                    process_detection(
+                                        self.cctv_id, frame, annotated, x1, y1, x2, y2,
+                                        cls_id, conf, track_id, self.model, self.tracked_violations
+                                    )
+                    else:
+                        # --- [B] MODE STREAM ONLY (Outside Schedule / No ROI) ---
+                        # Menambahkan label status pada frame agar user tahu alasannya
+                        status_msg = "STREAMING ONLY (Outside Schedule)" if not active_by_schedule else "STREAMING ONLY (No ROI set)"
+                        cv2.putText(annotated, status_msg, (20, 1440), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                        
+                    # 4. SELALU Kirim ke Redis agar frontend tidak freeze
                     _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     redis_client.set(f"cctv_frame:{self.cctv_id}", buffer.tobytes(), ex=5)
 
