@@ -4,13 +4,9 @@ module.exports = {
     {
       name: "cctv-backend",
       script: "app.py",
-      // Mac
       interpreter: "/Users/macbook/opt/anaconda3/envs/comvis/bin/python", 
-      // Win
       // interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
-      // Mac
       cwd: "./backend",
-      // Win
       // cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
       watch: false,
       autorestart: true,
@@ -21,13 +17,9 @@ module.exports = {
     {
       name: "cctv-orchestrator",
       script: "workers/pm2_manager.py", 
-      // Mac
       interpreter: "/Users/macbook/opt/anaconda3/envs/comvis/bin/python",
-      // Win
       // interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
-      // Mac
       cwd: "./backend",
-      // Win
       // cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
       watch: false,
       autorestart: true

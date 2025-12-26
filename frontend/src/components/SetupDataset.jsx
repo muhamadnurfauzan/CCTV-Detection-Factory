@@ -260,8 +260,8 @@ const PairInfoTooltip = React.memo(({ pairDetails }) => {
                 <p className="font-bold border-b pb-1 mb-1 text-gray-800">Pair Details</p>
                 <p className="text-gray-700">Name: <span className="font-medium">{pairDetails.name}</span></p>
                 <p className="text-gray-700">Status: 
-                    <span className={`font-semibold ml-1 ${pairDetails.is_violation ? 'text-red-600' : 'text-green-600'}`}>
-                        {pairDetails.is_violation ? 'VIOLATION' : 'SAFETY'}
+                    <span className={`font-semibold ml-1 ${pairDetails.is_violation ? 'text-green-600' : 'text-red-600'}`}>
+                        {pairDetails.is_violation ? 'SAFETY' : 'VIOLATION'}
                     </span>
                 </p>
             </div>
