@@ -14,9 +14,6 @@ from threading import Thread, Event
 import sys
 import os
 
-# Mendapatkan path absolut dari direktori 'backend'
-# __file__ adalah path pm2_manager.py, dirname pertama adalah folder 'workers', 
-# dirname kedua adalah folder 'backend'
 current_dir = os.path.dirname(os.path.abspath(__file__))
 backend_dir = os.path.dirname(current_dir)
 
@@ -29,7 +26,7 @@ import services.config_service as config_service
 from services.cctv_services import load_all_cctv_configs
 from core.violation_processor import process_detection
 from core.cctv_scheduler import is_cctv_active_now
-from utils.helpers import get_color_for_class
+from utils.helpers import get_color_for_class, point_in_polygon
 from config import (
     CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, 
     MODEL_PATH, CCTV_RATIO
@@ -39,17 +36,27 @@ from config import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [WORKER] - %(message)s")
 
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
 class CCTVWorker:
     def __init__(self, cctv_id):
         self.cctv_id = int(cctv_id)
         self.stop_event = Event()
         self.frame_queue = deque(maxlen=QUEUE_SIZE)
         self.tracked_violations = {}
+        self.violation_gate = {}
         self.cctv_config = None
         self.model = None
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.frame_count = 0
+
+    def should_call_processor(self, track_id, class_id, roi_name):
+        gate = self.violation_gate.setdefault(track_id, set())
+        key = (class_id, roi_name)
+
+        if key in gate:
+            return False
+
+        gate.add(key)
+        return True
 
     def load_config(self):
         """Mengambil konfigurasi spesifik CCTV dan GLOBAL CACHE dari database."""
@@ -117,34 +124,48 @@ class CCTVWorker:
         while not self.stop_event.is_set():
             if self.frame_queue:
                 try:
-                    # 1. Ambil frame & siapkan anotasi
                     frame = self.frame_queue.popleft()
+                    target_w, target_h = CCTV_RATIO[0], CCTV_RATIO[1]
+                    frame = cv2.resize(frame, (target_w, target_h))
+                    
                     annotated = frame.copy()
-                    h, w = frame.shape[:2]
-
-                    # 2. Cek Jadwal Aktif (WIB)
                     active_by_schedule = is_cctv_active_now(self.cctv_id)
                     
-                    # 3. Ambil Konfigurasi ROI
-                    roi_regions = self.cctv_config.get("roi", [])
-                    json_w = self.cctv_config.get("json_width", CCTV_RATIO[0])
-                    json_h = self.cctv_config.get("json_height", CCTV_RATIO[1])
+                    roi_raw = self.cctv_config.get("roi", {})
+                    
+                    # Standarisasi: Pastikan kita punya dict untuk metadata dan list untuk loop
+                    if isinstance(roi_raw, dict) and "items" in roi_raw:
+                        roi_list = roi_raw["items"]
+                        json_w = roi_raw.get("image_width", 2688) 
+                        json_h = roi_raw.get("image_height", 1512)
+                    else:
+                        roi_list = roi_raw if isinstance(roi_raw, list) else []
+                        json_w = 2688 
+                        json_h = 1512
 
-                    # KONDISI: Jalankan deteksi HANYA JIKA dalam jadwal DAN ada ROI
-                    if active_by_schedule and roi_regions:
-                        # --- [A] MODE FULL DETECTION ---
-                        scale_x, scale_y = w / json_w, h / json_h
-
-                        # Filter Active IDs & ROI Drawing
-                        active_ids = set()
-                        for region in roi_regions:
-                            active_ids.update(region.get("allowed_violations", []))
-                            pts = (region["points"] * [scale_x, scale_y]).astype(np.int32).reshape((-1, 1, 2))
-                            cv2.polylines(annotated, [pts], True, (0, 0, 255), 2)
+                    if active_by_schedule and roi_list:
+                        scale_x = target_w / json_w
+                        scale_y = target_h / json_h
                         
-                        active_ids = list(active_ids)
+                        # 1. Pre-calculate scaled ROI points 
+                        processed_rois = []
+                        for region in roi_list:
+                            if "name" not in region:
+                                logging.warning(
+                                    f"[CCTV {self.cctv_id}] ROI without name detected: {region}"
+                                )
+                            area_name = region.get("name", "Unknown Area")
+                            points = np.array(region["points"])
+                            scaled_pts = (points * [scale_x, scale_y]).astype(np.int32)
+                            
+                            processed_rois.append({
+                                "name": area_name,
+                                "points": scaled_pts,
+                                "allowed": region.get("allowed_violations", []) 
+                            })
+                            cv2.polylines(annotated, [scaled_pts.reshape((-1, 1, 2))], True, (0, 0, 255), 2)
 
-                        # Deteksi YOLO (Langkah Berat)
+                        # 2. Jalankan YOLO
                         results = self.model.track(
                             frame, 
                             conf=CONFIDENCE_THRESHOLD, 
@@ -153,25 +174,55 @@ class CCTVWorker:
                             half=(self.device == 'cuda')
                         )
 
-                        # Proses Deteksi & Pelanggaran
+                        # 3. Loop Objek
                         for r in results:
                             for box in r.boxes:
                                 if box.id is None: continue
                                 x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
                                 cls_id, conf, track_id = int(box.cls[0]), float(box.conf[0]), int(box.id[0])
                                 class_name = self.model.names[cls_id]
+                                class_info = state.OBJECT_CLASS_CACHE.get(class_name)
+                                
+                                if not class_info: continue
+                                center = ((x1 + x2) // 2, (y1 + y2) // 2)
 
                                 color = get_color_for_class(class_name)
                                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                                 cv2.putText(annotated, f"{class_name} {conf:.2f}", (x1, max(y1-10, 10)), 
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-                                class_info = state.OBJECT_CLASS_CACHE.get(class_name)
-                                if class_info and class_info["is_violation"] and class_info["id"] in active_ids:
-                                    process_detection(
-                                        self.cctv_id, frame, annotated, x1, y1, x2, y2,
-                                        cls_id, conf, track_id, self.model, self.tracked_violations
+                                # 4. Cek ROI
+                                matched_roi = None
+                                for roi in processed_rois:
+                                    if point_in_polygon(center, roi["points"]):
+                                        matched_roi = roi
+                                        break 
+
+                                if matched_roi:
+                                    print(
+                                        f"[CCTV {self.cctv_id}] ROI: {matched_roi['name']} | "
+                                        f"Violation(s) allowed: {matched_roi['allowed']}"
                                     )
+
+                                    if class_info["id"] in matched_roi["allowed"]:
+                                        if self.should_call_processor(
+                                            track_id,
+                                            cls_id,
+                                            matched_roi["name"]
+                                        ):
+                                            process_detection(
+                                                self.cctv_id,
+                                                frame,
+                                                annotated,
+                                                x1, y1, x2, y2,
+                                                cls_id,
+                                                conf,
+                                                track_id,
+                                                self.model,
+                                                self.tracked_violations,
+                                                location=f"{self.cctv_config['location']} - {matched_roi['name']}"
+                                            )
+                                
                     else:
                         # --- [B] MODE STREAM ONLY (Outside Schedule / No ROI) ---
                         # Menambahkan label status pada frame agar user tahu alasannya

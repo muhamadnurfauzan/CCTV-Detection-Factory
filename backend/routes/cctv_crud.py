@@ -84,7 +84,7 @@ def add_new_cctv():
     if not is_valid_ip(data['ip_address']):
         return jsonify({"error": "Invalid IP Address value (must be 0.0.0.0 to 255.255.255.255)"}), 400
 
-    # --- Simpan ROI ke file ---
+    # --- Simpan ROI ---
     area_path = None
     roi_json = None
     if data.get('area'):

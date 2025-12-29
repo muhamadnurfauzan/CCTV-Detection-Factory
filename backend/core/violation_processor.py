@@ -7,10 +7,9 @@ import logging
 from services import notification_service
 from shared_state import state
 from services.cloud_storage import upload_violation_image
-from utils.helpers import point_in_polygon
 from db.db_config import get_connection
 from config import (
-    CONFIDENCE_THRESHOLD, COOLDOWN, TARGET_MAX_WIDTH, PADDING_PERCENT 
+    COOLDOWN, TARGET_MAX_WIDTH, PADDING_PERCENT 
     )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -27,7 +26,7 @@ def log_violation_async(cctv_id, class_name, public_url, image_bytes):
 
         # Insert violation_detection
         cur.execute("""
-            INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
+            INSERT INTO violation_detection (id_cctv, id_violation, image, location, timestamp)
             VALUES (%s, (SELECT id FROM object_class WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
             RETURNING id;
         """, (cctv_id, class_name, public_url))
@@ -72,43 +71,12 @@ def upload_and_log_violation(cctv_id, class_name, image_bytes):
     except Exception as e:
         logging.error(f"[CCTV {cctv_id}] UPLOAD GAGAL/LOG GAGAL: {e}")
 
-def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations):
-    # 1. Ambil Config & Metadata
-    cctv_cfg = state.cctv_configs.get(cctv_id, {})
-    roi_regions = cctv_cfg.get("roi", []) # Gunakan key 'roi' sesuai cctv_services.py
-    location = cctv_cfg.get("location", "Unknown Location") # Definisi location di sini
-    
+def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations, location):
     class_name = model.names[int(cls_id)]
-    class_info = state.OBJECT_CLASS_CACHE.get(class_name, {})
-    class_db_id = class_info.get("id")
-    
-    center = ((x1 + x2) // 2, (y1 + y2) // 2)
-
-    # 2. Cari ROI target dan Filter Pelanggaran per ROI
-    target_roi = None
-    for region in roi_regions:
-        if point_in_polygon(center, region["points"]):
-            # Cek apakah class ID ini diizinkan melanggar di ROI khusus ini
-            allowed_ids = region.get("allowed_violations", [])
-            if class_db_id in allowed_ids:
-                target_roi = region
-                break
-            else:
-                # Objek ada di ROI, tapi class ini bukan pelanggaran di wilayah ini
-                return 
-
-    if not target_roi:
-        return # Objek di luar semua area pantauan ROI
-
-    # 3. Validasi Confidence & Cooldown
-    if conf < CONFIDENCE_THRESHOLD:
-        return
-
     now = time.time()
-    data = tracked_violations.setdefault(track_id, {"last_times": {}})
-    last_time = data["last_times"].get(class_name, 0)
     
-    if now - last_time < COOLDOWN:
+    data = tracked_violations.setdefault(track_id, {"last_times": {}})
+    if now - data["last_times"].get(class_name, 0) < COOLDOWN:
         return
     
     # --- 4. Visual Processing (Crop & Polaroid) ---

@@ -22,6 +22,5 @@ TARGET_MAX_WIDTH = state.detection_settings['target_max_width']
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "violations")
-SUPABASE_ROI_DIR = "roi_json"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)

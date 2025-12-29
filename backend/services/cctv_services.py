@@ -13,24 +13,6 @@ def get_all_active_cctv():
     cursor.close()
     conn.close()
     return rows
-
-# --- Load ROI dari Supabase Storage ---
-def load_roi_from_db(area_data):
-    if not area_data:
-        return [], 0, 0
-    
-    # area_data sekarang adalah dict (karena psycopg2 RealDictCursor)
-    width = area_data.get("image_width", 0)
-    height = area_data.get("image_height", 0)
-    regions = []
-    
-    for item in area_data.get("items", []):
-        regions.append({
-            "name": item.get("name"),
-            "points": np.array(item["points"], dtype=np.float32),
-            "allowed_violations": item.get("allowed_violations", [])
-        })
-    return regions, width, height
     
 # --- Muat konfigurasi semua CCTV aktif ---
 def load_all_cctv_configs():
@@ -44,6 +26,7 @@ def load_all_cctv_configs():
         if area_data and isinstance(area_data, dict):
             for item in area_data.get("items", []):
                 regions.append({
+                    "name": item.get("name", "Unknown Area"),
                     "points": np.array(item["points"], dtype=np.float32),
                     "allowed_violations": item.get("allowed_violations", []) 
                 })
