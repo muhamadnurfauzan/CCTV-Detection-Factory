@@ -3,6 +3,7 @@ import io
 import cv2
 import json
 import logging
+import redis
 
 from flask import Blueprint, request, jsonify, send_file
 from psycopg2.extras import RealDictCursor, execute_batch
@@ -12,6 +13,7 @@ from utils.auth import require_role
 import config as config
 
 cctv_bp = Blueprint('cctv', __name__, url_prefix='/api')
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
     
 # --- Helper: Validasi IP Address ---
 def is_valid_ip(ip_address):
@@ -254,6 +256,10 @@ def update_cctv(cctv_id):
         cur.execute(update_query, update_values)
         updated_cctv = cur.fetchone()
         conn.commit()
+
+        if updated_cctv:
+            redis_client.publish('cctv_config_updated', str(cctv_id)) 
+            logging.info(f"[REDIS] Sent refresh signal for CCTV {cctv_id}")
 
         return jsonify(updated_cctv), 200
     except Exception as e:

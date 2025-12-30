@@ -25,6 +25,7 @@ from shared_state import state
 import services.config_service as config_service
 from services.cctv_services import load_all_cctv_configs
 from core.violation_processor import process_detection
+from core.violation_gate import ViolationGate
 from core.cctv_scheduler import is_cctv_active_now
 from utils.helpers import get_color_for_class, point_in_polygon
 from config import (
@@ -42,7 +43,7 @@ class CCTVWorker:
         self.stop_event = Event()
         self.frame_queue = deque(maxlen=QUEUE_SIZE)
         self.tracked_violations = {}
-        self.violation_gate = {}
+        self.violation_gate = ViolationGate(ttl=CLEANUP_INTERVAL)
         self.cctv_config = None
         self.model = None
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -150,19 +151,19 @@ class CCTVWorker:
                         # 1. Pre-calculate scaled ROI points 
                         processed_rois = []
                         for region in roi_list:
-                            if "name" not in region:
-                                logging.warning(
-                                    f"[CCTV {self.cctv_id}] ROI without name detected: {region}"
-                                )
                             area_name = region.get("name", "Unknown Area")
                             points = np.array(region["points"])
                             scaled_pts = (points * [scale_x, scale_y]).astype(np.int32)
                             
+                            allowed = region.get("allowed_violations", [])
                             processed_rois.append({
                                 "name": area_name,
                                 "points": scaled_pts,
-                                "allowed": region.get("allowed_violations", []) 
+                                "allowed": allowed
                             })
+                            
+                            print(f"[CCTV {self.cctv_id}] ROI: {area_name} | Violation(s) allowed: {allowed}")
+                            
                             cv2.polylines(annotated, [scaled_pts.reshape((-1, 1, 2))], True, (0, 0, 255), 2)
 
                         # 2. Jalankan YOLO
@@ -186,9 +187,10 @@ class CCTVWorker:
                                 if not class_info: continue
                                 center = ((x1 + x2) // 2, (y1 + y2) // 2)
 
+                                # Drawing box
                                 color = get_color_for_class(class_name)
                                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                                cv2.putText(annotated, f"{class_name} {conf:.2f}", (x1, max(y1-10, 10)), 
+                                cv2.putText(annotated, f"{track_id} {class_name} {conf:.2f}", (x1, max(y1-10, 10)), 
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
                                 # 4. Cek ROI
@@ -197,19 +199,20 @@ class CCTVWorker:
                                     if point_in_polygon(center, roi["points"]):
                                         matched_roi = roi
                                         break 
-
-                                if matched_roi:
-                                    print(
-                                        f"[CCTV {self.cctv_id}] ROI: {matched_roi['name']} | "
-                                        f"Violation(s) allowed: {matched_roi['allowed']}"
-                                    )
-
+                                
+                                if matched_roi is not None:
                                     if class_info["id"] in matched_roi["allowed"]:
-                                        if self.should_call_processor(
-                                            track_id,
-                                            cls_id,
-                                            matched_roi["name"]
-                                        ):
+                                        cx, cy = center
+                                        spatial_key = (cx // 300, cy // 300) 
+                                        gate_key = (
+                                            self.cctv_id, 
+                                            cls_id, 
+                                            matched_roi["name"], 
+                                            track_id, 
+                                            spatial_key
+                                        )
+
+                                        if self.violation_gate.should_report(gate_key):
                                             process_detection(
                                                 self.cctv_id,
                                                 frame,
@@ -217,9 +220,9 @@ class CCTVWorker:
                                                 x1, y1, x2, y2,
                                                 cls_id,
                                                 conf,
-                                                track_id,
                                                 self.model,
-                                                self.tracked_violations,
+                                                track_id=track_id,
+                                                tracked_violations=self.tracked_violations,
                                                 location=f"{self.cctv_config['location']} - {matched_roi['name']}"
                                             )
                                 
@@ -262,6 +265,23 @@ class CCTVWorker:
                 logging.info(f"[CLEANUP {self.cctv_id}] Berhasil menghapus {removed_count} track lama.")
             
             time.sleep(CLEANUP_INTERVAL)
+    
+    def listen_for_updates(self):
+        """Thread untuk mendengarkan perubahan konfigurasi dari Redis."""
+        pubsub = redis_client.pubsub()
+        pubsub.subscribe('cctv_config_updated')
+        logging.info(f"[CCTV {self.cctv_id}] Listening for config updates...")
+        
+        for message in pubsub.listen():
+            if message['type'] == 'message':
+                updated_id = int(message['data'])
+                if updated_id == self.cctv_id:
+                    logging.info(f"[CCTV {self.cctv_id}] Refreshing configuration...")
+                    try:
+                        self.load_config() # Panggil ulang fungsi load_config
+                        logging.info(f"[CCTV {self.cctv_id}] Configuration updated successfully.")
+                    except Exception as e:
+                        logging.error(f"Failed to reload config: {e}")
 
     def run(self):
         """Menjalankan semua komponen worker dengan pengawasan ketat."""
@@ -273,10 +293,12 @@ class CCTVWorker:
             t_cap = Thread(target=self.capture_loop, daemon=True, name="CapThread")
             t_proc = Thread(target=self.process_loop, daemon=True, name="ProcThread")
             t_clean = Thread(target=self.cleanup_loop, daemon=True, name="CleanThread")
+            t_listen = Thread(target=self.listen_for_updates, daemon=True, name="ListenThread")
             
             t_cap.start()
             t_proc.start()
             t_clean.start()
+            t_listen.start()
             
             last_count = 0
             last_check_time = time.time()

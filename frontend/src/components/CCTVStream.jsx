@@ -1,6 +1,6 @@
 // CCTVStream.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { FaExclamationTriangle, FaCheckCircle, FaRedo } from 'react-icons/fa';
+import { FaRedo } from 'react-icons/fa';
 
 function CCTVStream({ cctvId }) {
   const [status, setStatus] = useState('Connecting...');
@@ -65,19 +65,6 @@ function CCTVStream({ cctvId }) {
             <FaRedo />
           </button>
         )}
-      </div>
-
-      <div
-        className={`mt-4 p-3 text-center font-semibold transition-all ${
-          status.includes('Failed') ? 'text-red-600' : 'text-green-600'
-        }`}
-      >
-        {status.includes('Failed') ? (
-          <FaExclamationTriangle className="inline mr-2" />
-        ) : (
-          <FaCheckCircle className="inline mr-2" />
-        )}
-        {status}
       </div>
     </div>
   );

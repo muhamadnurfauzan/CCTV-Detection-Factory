@@ -26,7 +26,7 @@ def log_violation_async(cctv_id, class_name, public_url, image_bytes):
 
         # Insert violation_detection
         cur.execute("""
-            INSERT INTO violation_detection (id_cctv, id_violation, image, location, timestamp)
+            INSERT INTO violation_detection (id_cctv, id_violation, image, timestamp)
             VALUES (%s, (SELECT id FROM object_class WHERE name=%s LIMIT 1), %s, NOW() AT TIME ZONE 'Asia/Jakarta')
             RETURNING id;
         """, (cctv_id, class_name, public_url))
@@ -71,7 +71,7 @@ def upload_and_log_violation(cctv_id, class_name, image_bytes):
     except Exception as e:
         logging.error(f"[CCTV {cctv_id}] UPLOAD GAGAL/LOG GAGAL: {e}")
 
-def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, track_id, model, tracked_violations, location):
+def process_detection(cctv_id, frame, annotated, x1, y1, x2, y2, cls_id, conf, model, track_id, tracked_violations, location):
     class_name = model.names[int(cls_id)]
     now = time.time()
     
