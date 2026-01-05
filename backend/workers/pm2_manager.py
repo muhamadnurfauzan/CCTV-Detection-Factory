@@ -16,9 +16,17 @@ import json
 import time
 import logging
 from services.cctv_services import get_all_active_cctv
-from core.cctv_scheduler import get_active_cctv_ids_now
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+
+def get_startup_info():
+    """Mengonfigurasi agar tidak muncul pop-up CMD di Windows."""
+    if os.name == 'nt':  # Cek jika OS adalah Windows
+        info = subprocess.STARTUPINFO()
+        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        info.wShowWindow = 0  # SW_HIDE: Sembunyikan jendela
+        return info
+    return None
 
 def get_pm2_cmd():
     """Mencari perintah PM2 yang tepat sesuai OS."""
@@ -32,7 +40,7 @@ def get_pm2_cmd():
 def get_running_pm2_processes():
     pm2_executable = get_pm2_cmd()
     # Menambahkan --json agar output konsisten
-    result = subprocess.run([pm2_executable, 'jlist'], capture_output=True, text=True)
+    result = subprocess.run([pm2_executable, 'jlist'], capture_output=True, text=True, startupinfo=get_startup_info())
     try:
         processes = json.loads(result.stdout)
         return processes
@@ -79,10 +87,10 @@ def sync_cctv_workers():
                 '--max-restarts', '50',
                 '--kill-timeout', '3000',
                 '--', '--cctv_id', str(c_id)
-            ])
+            ], startupinfo=get_startup_info())
         elif running_id_map[c_id] != desired_process_name:
             logging.info(f"[RENAME/UPDATE] {running_id_map[c_id]} -> {desired_process_name}")
-            subprocess.run([pm2_executable, 'delete', running_id_map[c_id]])
+            subprocess.run([pm2_executable, 'delete', running_id_map[c_id]], startupinfo=get_startup_info())
             subprocess.run([
                 pm2_executable, 'start', 'workers/worker_cctv.py',
                 '--name', desired_process_name,
@@ -90,14 +98,14 @@ def sync_cctv_workers():
                 '--max-restarts', '50',
                 '--kill-timeout', '3000',
                 '--', '--cctv_id', str(c_id)
-            ])
+            ], startupinfo=get_startup_info())
 
     # 3. STOP & DELETE
     # Sekarang worker hanya dihapus jika r_id tidak ada di daftar Enabled (final_active_ids)
     for r_id, r_name in running_id_map.items():
         if r_id not in final_active_ids:
             logging.info(f"[STOP] Deleting worker: {r_name} (Status is DISABLED in database)")
-            subprocess.run([pm2_executable, 'delete', r_name])
+            subprocess.run([pm2_executable, 'delete', r_name], startupinfo=get_startup_info())
 
 if __name__ == "__main__":
     # Saat pertama kali manager jalan, sebaiknya bersihkan worker lama yang nyangkut
