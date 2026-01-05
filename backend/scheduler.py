@@ -114,3 +114,7 @@ def scheduler_thread():
         # 5. Refresh config tiap 10 menit
         if minute % 10 == 0:
             refresh_all_cctv_configs()
+
+if __name__ == "__main__":
+    logging.info("Starting standalone Scheduler service...")
+    scheduler_thread()

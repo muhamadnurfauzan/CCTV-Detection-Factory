@@ -13,7 +13,19 @@ module.exports = {
       env: { FLASK_ENV: "production" }
     },
 
-    // 2. PM2 Orchestrator (Manager yang mengatur hidup/mati kamera secara dinamis)
+    // 2. Scheduler (Menjalankan tugas terjadwal harian)
+    {
+      name: "cctv-scheduler",
+      script: "scheduler.py",
+      interpreter: "/Users/macbook/opt/anaconda3/envs/comvis/bin/python",
+      // interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
+      cwd: "./backend",
+      // cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
+      watch: false,
+      autorestart: true
+    },
+
+    // 3. PM2 Orchestrator (Manager yang mengatur hidup/mati kamera secara dinamis)
     {
       name: "cctv-orchestrator",
       script: "workers/pm2_manager.py", 
@@ -25,7 +37,7 @@ module.exports = {
       autorestart: true
     },
 
-    // 3. Frontend Server Mac
+    // 4. Frontend Server Mac
     {
       name: "cctv-frontend",
       script: "npm",
@@ -34,7 +46,7 @@ module.exports = {
       env: { NODE_ENV: "development" }
     }
 
-    // 3. Frontend Server Win
+    // 4. Frontend Server Win
     // {
     //   name: "cctv-frontend",
     //   script: "server.mjs",
