@@ -142,7 +142,7 @@ const SetupConfig = () => {
         }
 
         // Cooldown Seconds – Pills
-        const cooldownOptions = [5, 10, 15, 20, 30, 60];
+        const cooldownOptions = [1, 3, 5, 10, 15, 20, 30, 60];
         if (key === 'cooldown_seconds') {
             return <PillGroup options={cooldownOptions} current={val} onChange={(v) => updateValue(key, v)} unit="s" />;
         }
