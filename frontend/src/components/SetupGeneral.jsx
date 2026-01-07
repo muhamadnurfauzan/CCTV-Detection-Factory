@@ -5,33 +5,46 @@ import RoleButton from './RoleButton';
 
 const SetupGeneral = () => {
     const { showAlert } = useAlert();
-    const [settings, setSettings] = useState([]);
-    const [originalSettings, setOriginalSettings] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [detectionSettings, setDetectionSettings] = useState([]);
+    const [originalDetection, setOriginalDetection] = useState([]);
+
+    const [schedulerSettings, setSchedulerSettings] = useState([]);
+    const [originalScheduler, setOriginalScheduler] = useState([]);
+
+    const [isEditingDetection, setIsEditingDetection] = useState(false);
+    const [isEditingScheduler, setIsEditingScheduler] = useState(false);
+
     const [savingDetection, setSavingDetection] = useState(false);
     const [savingScheduler, setSavingScheduler] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
 
-    const hasChanges = settings.some((current, index) => {
-        const original = originalSettings[index];
+    const detectionHasChanges = detectionSettings.some((current, index) => {
+        const original = originalDetection[index];
+        if (!original) return true;
+        return current.value !== original.value;
+    });
+
+    const schedulerHasChanges = schedulerSettings.some((current, index) => {
+        const original = originalScheduler[index];
         if (!original) return true;
         return current.value !== original.value;
     });
 
     const fetchSettings = async () => {
         try {
-            const res = await fetch('/api/detection-settings');
-            if (!res.ok) throw new Error('Failed to fetch settings');
-            const data = await res.json();
+            // Fetch Detection Settings
+            const resDet = await fetch('/api/detection-settings');
+            const dataDet = await resDet.json();
+            setDetectionSettings(dataDet);
+            setOriginalDetection(JSON.parse(JSON.stringify(dataDet)));
 
-            // Konversi semua value jadi number agar aman
-            const normalized = data.map(item => ({
-                ...item,
-                value: parseFloat(item.value) || 0
-            }));
+            // Fetch Scheduler Settings
+            const resSched = await fetch('/api/scheduler-settings');
+            const dataSched = await resSched.json();
+            setSchedulerSettings(dataSched);
+            setOriginalScheduler(JSON.parse(JSON.stringify(dataSched)));
 
-            setSettings(normalized);
-            setOriginalSettings(JSON.parse(JSON.stringify(normalized))); // Deep copy
             setLoading(false);
         } catch (err) {
             showAlert('Error: ' + err.message, 'error');
@@ -43,39 +56,40 @@ const SetupGeneral = () => {
         fetchSettings();
     }, []);
 
-    const handleSave = async () => {
+    const formatLabel = (key) => key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    // Detection Handlers
+    const handleSaveDetection = async () => {
         setSavingDetection(true);
         try {
             const res = await fetch('/api/detection-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
+                body: JSON.stringify(detectionSettings)
             });
             if (!res.ok) throw new Error('Failed to save');
             showAlert('Settings successfully saved & active immediately!', 'success');
-            setOriginalSettings(JSON.parse(JSON.stringify(settings)));
+            setOriginalDetection(JSON.parse(JSON.stringify(detectionSettings)));
         } catch (err) {
             showAlert('Error: ' + err.message, 'error');
         } finally {
             setSavingDetection(false);
-            setIsEditing(false);
+            setIsEditingDetection(false);
         }
     };
 
-    const formatLabel = (key) => key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-
-    const groups = {
+    const detectionGroups = {
         'Detection Accuracy': ['confidence_threshold', 'frame_skip', 'queue_size'],
         'Violation Timing': ['cleanup_interval', 'cooldown_seconds'],
         'Image Processing': ['padding_percent', 'target_max_width']
     };
 
-    const getSetting = (key) => settings.find(s => s.key === key) || {};
-    const getValue = (key) => getSetting(key).value ?? 0;
+    const getDetectionSetting = (key) => detectionSettings.find(s => s.key === key) || {};
+    const getDetectionValue = (key) => getDetectionSetting(key).value ?? 0;
 
-    const updateValue = (key, value) => {
+    const updateValueDetection = (key, value) => {
         const numValue = parseFloat(value) || 0;
-        setSettings(prev => prev.map(s =>
+        setDetectionSettings(prev => prev.map(s =>
             s.key === key ? { ...s, value: numValue } : s
         ));
     };
@@ -86,14 +100,14 @@ const SetupGeneral = () => {
                 <button
                     key={val}
                     onClick={() => onChange(val)}
-                    disabled={!isEditing}
+                    disabled={!isEditingDetection}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition ${
                         current === val
                             ? 'bg-indigo-600 text-white shadow-md'
-                            : isEditing
+                            : isEditingDetection
                                 ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 : 'bg-gray-100 text-gray-500'
-                    } ${!isEditing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                    } ${!isEditingDetection ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                     {val}{unit}
                 </button>
@@ -101,10 +115,10 @@ const SetupGeneral = () => {
         </div>
     );
 
-    const renderControl = (key) => {
-        const s = getSetting(key);
-        const val = getValue(key);
-        const disabled = !isEditing;
+    const renderDetectionControl = (key) => {
+        const s = getDetectionSetting(key);
+        const val = getDetectionValue(key);
+        const disabled = !isEditingDetection;
 
         // Confidence Threshold – Enhanced slider dengan step 0.05 + marker
         if (key === 'confidence_threshold') {
@@ -118,7 +132,7 @@ const SetupGeneral = () => {
                             step="0.05"
                             value={val}
                             disabled={disabled}
-                            onChange={(e) => updateValue(key, e.target.value)}
+                            onChange={(e) => updateValueDetection(key, e.target.value)}
                             className={`w-full h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb ${
                                 disabled ? 'opacity-60' : ''
                             }`}
@@ -139,13 +153,13 @@ const SetupGeneral = () => {
         // Cleanup Interval – Pills
         const cleanupOptions = [30, 60, 120, 180, 300, 600, 1800];
         if (key === 'cleanup_interval') {
-            return <PillGroup options={cleanupOptions} current={val} onChange={(v) => updateValue(key, v)} unit="s" />;
+            return <PillGroup options={cleanupOptions} current={val} onChange={(v) => updateValueDetection(key, v)} unit="s" />;
         }
 
         // Cooldown Seconds – Pills
         const cooldownOptions = [1, 3, 5, 10, 15, 20, 30, 60];
         if (key === 'cooldown_seconds') {
-            return <PillGroup options={cooldownOptions} current={val} onChange={(v) => updateValue(key, v)} unit="s" />;
+            return <PillGroup options={cooldownOptions} current={val} onChange={(v) => updateValueDetection(key, v)} unit="s" />;
         }
 
         // Default number inputs (frame_skip, queue_size, padding_percent, target_max_width)
@@ -164,13 +178,108 @@ const SetupGeneral = () => {
                 max={s.max_value}
                 value={val}
                 disabled={disabled}
-                onChange={(e) => updateValue(key, e.target.value)}
+                onChange={(e) => updateValueDetection(key, e.target.value)}
                 className={`w-full max-w-32 p-2 text-center font-medium rounded-lg border-2 transition ${
                     disabled
                         ? 'bg-gray-50 border-gray-300 text-gray-500'
                         : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
                 }`}
             />
+        );
+    };
+
+    // Scheduler Handlers
+    const updateSchedulerValue = (key, value) => {
+        const numValue = parseFloat(value) || 0;
+        setSchedulerSettings(prev => prev.map(s =>
+            s.key === key ? { ...s, value: numValue } : s
+        ));
+    };
+
+    const handleSaveScheduler = async () => {
+        setSavingScheduler(true);
+        try {
+            const res = await fetch('/api/scheduler-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(schedulerSettings)
+            });
+            if (!res.ok) throw new Error('Failed to save scheduler settings');
+            showAlert('Scheduler configuration updated!', 'success');
+            setOriginalScheduler(JSON.parse(JSON.stringify(schedulerSettings)));
+            setIsEditingScheduler(false);
+        } catch (err) {
+            showAlert('Error: ' + err.message, 'error');
+        } finally {
+            setSavingScheduler(false);
+        }
+    };
+
+    const schedulerGroups = {
+        'Automation Timing': ['sched_daily_recap_minute', 'sched_refresh_config_interval'],
+        'System Maintenance': ['cleanup_time'] 
+    };
+
+    const renderSchedulerControl = (groupKey) => {
+        const disabled = !isEditingScheduler;
+
+        // Logika Khusus untuk menggabungkan Jam dan Menit
+        if (groupKey === 'cleanup_time') {
+            const hSetting = schedulerSettings.find(s => s.key === 'sched_cleanup_hour') || {};
+            const mSetting = schedulerSettings.find(s => s.key === 'sched_cleanup_minute') || {};
+
+            return (
+                <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 w-fit">
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1">Hour (0-23)</span>
+                        <input
+                            type="number"
+                            min="0" max="23"
+                            value={hSetting.value ?? 0}
+                            disabled={disabled}
+                            onChange={(e) => updateSchedulerValue('sched_cleanup_hour', e.target.value)}
+                            className={`w-16 p-2 text-center font-bold rounded-lg border-2 transition ${
+                                disabled ? 'bg-transparent border-transparent' : 'border-indigo-400 bg-white'
+                            }`}
+                        />
+                    </div>
+                    <span className="text-2xl font-bold text-gray-400 self-end mb-1">:</span>
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1">Minute (0-59)</span>
+                        <input
+                            type="number"
+                            min="0" max="59"
+                            value={mSetting.value ?? 0}
+                            disabled={disabled}
+                            onChange={(e) => updateSchedulerValue('sched_cleanup_minute', e.target.value)}
+                            className={`w-16 p-2 text-center font-bold rounded-lg border-2 transition ${
+                                disabled ? 'bg-transparent border-transparent' : 'border-indigo-400 bg-white'
+                            }`}
+                        />
+                    </div>
+                </div>
+            );
+        }
+
+        // Default Control untuk Schedulers lainnya (Interval & Recap)
+        const s = schedulerSettings.find(item => item.key === groupKey) || {};
+        return (
+            <div className="flex items-center gap-3">
+                <input
+                    type="number"
+                    min={s.min_value}
+                    max={s.max_value}
+                    value={s.value ?? 0}
+                    disabled={disabled}
+                    onChange={(e) => updateSchedulerValue(s.key, e.target.value)}
+                    className={`w-24 p-2 text-center font-bold rounded-lg border-2 transition ${
+                        disabled ? 'bg-gray-50 border-gray-200' : 'border-indigo-400 bg-white'
+                    }`}
+                />
+                <span className="text-sm font-medium text-gray-500">
+                    Minutes
+                </span>
+            </div>
         );
     };
 
@@ -186,8 +295,8 @@ const SetupGeneral = () => {
                 ) : (
                     <>
                         {/* Field */}
-                        <div className="p-4 sm:p-6 space-y-8">
-                            {Object.entries(groups).map(([groupName, keys]) => (
+                        <div className="p-4 sm:p-6 space-y-6">
+                            {Object.entries(detectionGroups).map(([groupName, keys]) => (
                                 <section key={groupName}>
                                     <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
                                         {groupName}
@@ -195,7 +304,7 @@ const SetupGeneral = () => {
 
                                     <div className="space-y-8">
                                         {keys.map(key => {
-                                            const s = getSetting(key);
+                                            const s = getDetectionSetting(key);
                                             return (
                                                 <div key={key} className="grid sm:grid-cols-3 gap-4 items-start">
                                                     <div className="sm:col-span-1">
@@ -207,7 +316,7 @@ const SetupGeneral = () => {
                                                         </p>
                                                     </div>
                                                     <div className="sm:col-span-2">
-                                                        {renderControl(key)}
+                                                        {renderDetectionControl(key)}
                                                     </div>
                                                 </div>
                                             );
@@ -226,12 +335,12 @@ const SetupGeneral = () => {
 
                         {/* Edit/save button */}
                         <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
-                            {isEditing ? (
+                            {isEditingDetection ? (
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => {
-                                            setSettings(JSON.parse(JSON.stringify(originalSettings)));
-                                            setIsEditing(false);
+                                            setDetectionSettings(JSON.parse(JSON.stringify(originalDetection)));
+                                            setIsEditingDetection(false);
                                         }}
                                         disabled={savingDetection}
                                         className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
@@ -240,10 +349,10 @@ const SetupGeneral = () => {
                                     </button>
                                     <RoleButton
                                         allowedRoles={['super_admin']}
-                                        onClick={handleSave}
-                                        disabled={savingDetection || !hasChanges}
+                                        onClick={handleSaveDetection}
+                                        disabled={savingDetection || !detectionHasChanges}
                                         className={`py-3 px-4 rounded-lg font-medium text-white transition ${
-                                            savingDetection || !hasChanges
+                                            savingDetection || !detectionHasChanges
                                                 ? 'bg-gray-400 cursor-not-allowed'
                                                 : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
@@ -255,8 +364,8 @@ const SetupGeneral = () => {
                                 <RoleButton
                                     allowedRoles={['super_admin']}
                                     onClick={() => {
-                                        setOriginalSettings(JSON.parse(JSON.stringify(settings)));
-                                        setIsEditing(true);
+                                        setOriginalDetection(JSON.parse(JSON.stringify(detectionSettings)));
+                                        setIsEditingDetection(true);
                                     }}
                                     className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
                                 >
@@ -277,12 +386,39 @@ const SetupGeneral = () => {
                 ) : (
                     <>
                         {/* Field */}
-                        <div className='div className="p-4 sm:p-6 space-y-8'>
-                            <p>1. Recap harian (per jam)</p>
-                            <p>2. Recap mingguan (notif email)</p>
-                            <p>3. Recap bulanan (notif email)</p>
-                            <p>4. Clean up data lama</p>
-                            <p>5. Waktu refresh</p>
+                        <div className="p-4 sm:p-6 space-y-6">
+                            {Object.entries(schedulerGroups).map(([groupName, keys]) => (
+                                <section key={groupName}>
+                                    <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
+                                        {groupName}
+                                    </h4>
+                                    <div className="space-y-6">
+                                        {keys.map(key => {
+                                            // Cari deskripsi untuk label (ambil dari jam jika cleanup_time)
+                                            const displayKey = key === 'cleanup_time' ? 'sched_cleanup_hour' : key;
+                                            const s = schedulerSettings.find(item => item.key === displayKey) || {};
+                                            
+                                            return (
+                                                <div key={key} className="grid sm:grid-cols-2 gap-4 items-start">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-900">
+                                                            {key === 'cleanup_time' ? 'System Cleanup' : formatLabel(key.replace('sched_', ''))}
+                                                        </label>
+                                                        <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                                                            {key === 'cleanup_time' 
+                                                                ? "Set the specific time (hour and minute) for the system to automatically delete logs and images older than 32 days."
+                                                                : s.description}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        {renderSchedulerControl(key)}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
                         </div>
 
                         {/* Banner */}
@@ -294,23 +430,23 @@ const SetupGeneral = () => {
 
                         {/* Edit/save button */}
                         <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
-                            {isEditing ? (
+                            {isEditingScheduler ? (
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => {
-                                            // TODO: Implement cancel scheduler edit functionality
+                                            setSchedulerSettings(JSON.parse(JSON.stringify(originalScheduler)));
+                                            setIsEditingScheduler(false);
                                         }}
-                                        disabled={savingScheduler}
-                                        className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
+                                        className="py-2 bg-gray-200 rounded-lg"
                                     >
                                         Cancel
                                     </button>
                                     <RoleButton
                                         allowedRoles={['super_admin']}
-                                        onClick={handleSave}
-                                        disabled={savingScheduler || !hasChanges}
+                                        onClick={handleSaveScheduler}
+                                        disabled={savingScheduler || !schedulerHasChanges}
                                         className={`py-3 px-4 rounded-lg font-medium text-white transition ${
-                                            savingScheduler || !hasChanges
+                                            savingScheduler || !schedulerHasChanges
                                                 ? 'bg-gray-400 cursor-not-allowed'
                                                 : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
@@ -322,12 +458,14 @@ const SetupGeneral = () => {
                                 <RoleButton
                                     allowedRoles={['super_admin']}
                                     onClick={() => {
-                                        //  TODO: Implement edit scheduler functionality
+                                        setOriginalScheduler(JSON.parse(JSON.stringify(schedulerSettings)));
+                                        setIsEditingScheduler(true);
                                     }}
                                     className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
                                 >
                                     Edit Scheduler
                                 </RoleButton>
+                                
                             )}
                         </div>
                     </>
