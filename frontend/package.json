@@ -25,6 +25,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "framer-motion": "^12.24.7",
     "http-proxy-middleware": "^2.0.9",
     "node-cache": "^5.1.2",
     "postcss": "^8.5.6",
