@@ -42,10 +42,17 @@ class SharedState:
                     'target_max_width': 320,
                 }
                 cls._instance.scheduler_settings = {
-                    'sched_daily_recap_minute': 0,
+                    'sched_cleanup_cutoff_days': 30,
                     'sched_cleanup_hour': 0,
                     'sched_cleanup_minute': 5,
-                    'sched_refresh_config_interval': 10
+                    'sched_daily_recap_minute': 0,
+                    'sched_refresh_config_interval': 10,
+                    'sched_monthly_date': 1,
+                    'sched_monthly_hour': 7,
+                    'sched_monthly_minute': 30,
+                    'sched_weekly_day': 0,
+                    'sched_weekly_hour': 7,
+                    'sched_weekly_minute': 30,
                 }
 
                 cls._instance.DETECTION_SETTINGS_LOCK = Lock()

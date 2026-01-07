@@ -216,68 +216,109 @@ const SetupGeneral = () => {
     };
 
     const schedulerGroups = {
-        'Automation Timing': ['sched_daily_recap_minute', 'sched_refresh_config_interval'],
-        'System Maintenance': ['cleanup_time'] 
+        'Automation Timing': [
+            'sched_daily_recap_minute', 
+            'sched_refresh_config_interval'
+        ],
+        'Weekly Report Schedule': [
+            'sched_weekly_day', 
+            'weekly_time'      
+        ],
+        'Monthly Report Schedule': [
+            'sched_monthly_date', 
+            'monthly_time'      
+        ],
+        'System Maintenance': [
+            'sched_cleanup_cutoff_days',
+            'cleanup_time'      
+        ]
     };
 
     const renderSchedulerControl = (groupKey) => {
         const disabled = !isEditingScheduler;
 
-        // Logika Khusus untuk menggabungkan Jam dan Menit
-        if (groupKey === 'cleanup_time') {
-            const hSetting = schedulerSettings.find(s => s.key === 'sched_cleanup_hour') || {};
-            const mSetting = schedulerSettings.find(s => s.key === 'sched_cleanup_minute') || {};
+        // A. LOGIKA TIME PICKER (JAM : MENIT)
+        if (['weekly_time', 'monthly_time', 'cleanup_time'].includes(groupKey)) {
+            const prefix = groupKey.split('_')[0]; // weekly, monthly, atau cleanup
+            const hKey = `sched_${prefix}_hour`;
+            const mKey = `sched_${prefix}_minute`;
+            
+            const hSetting = schedulerSettings.find(s => s.key === hKey) || { value: 0 };
+            const mSetting = schedulerSettings.find(s => s.key === mKey) || { value: 0 };
 
             return (
-                <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 w-fit">
+                <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border-2 border-gray-300 w-fit">
                     <div className="flex flex-col items-center">
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1">Hour (0-23)</span>
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Hour</span>
                         <input
-                            type="number"
-                            min="0" max="23"
-                            value={hSetting.value ?? 0}
+                            type="number" min="0" max="23"
+                            value={hSetting.value}
                             disabled={disabled}
-                            onChange={(e) => updateSchedulerValue('sched_cleanup_hour', e.target.value)}
-                            className={`w-16 p-2 text-center font-bold rounded-lg border-2 transition ${
-                                disabled ? 'bg-transparent border-transparent' : 'border-indigo-400 bg-white'
-                            }`}
+                            onChange={(e) => updateSchedulerValue(hKey, e.target.value)}
+                            className={`w-14 p-1 text-center font-bold rounded-md transition ${
+                                disabled 
+                                    ? 'bg-transparent border-none' 
+                                    : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'}
+                                `}
                         />
                     </div>
-                    <span className="text-2xl font-bold text-gray-400 self-end mb-1">:</span>
+                    <span className="text-xl font-bold text-gray-300">:</span>
                     <div className="flex flex-col items-center">
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1">Minute (0-59)</span>
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Min</span>
                         <input
-                            type="number"
-                            min="0" max="59"
-                            value={mSetting.value ?? 0}
+                            type="number" min="0" max="59"
+                            value={mSetting.value}
                             disabled={disabled}
-                            onChange={(e) => updateSchedulerValue('sched_cleanup_minute', e.target.value)}
-                            className={`w-16 p-2 text-center font-bold rounded-lg border-2 transition ${
-                                disabled ? 'bg-transparent border-transparent' : 'border-indigo-400 bg-white'
-                            }`}
+                            onChange={(e) => updateSchedulerValue(mKey, e.target.value)}
+                            className={`w-14 p-1 text-center font-bold rounded-md transition ${
+                                disabled 
+                                    ? 'bg-transparent border-none' 
+                                    : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'}
+                                `}
                         />
                     </div>
                 </div>
             );
         }
 
-        // Default Control untuk Schedulers lainnya (Interval & Recap)
+        // B. LOGIKA DROPDOWN HARI (WEEKLY)
+        if (groupKey === 'sched_weekly_day') {
+            const s = schedulerSettings.find(item => item.key === groupKey) || { value: 0 };
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            return (
+                <select
+                    value={s.value}
+                    disabled={disabled}
+                    onChange={(e) => updateSchedulerValue(groupKey, e.target.value)}
+                    className={`w-full max-w-32 p-2 text-center font-medium rounded-lg border-2 transition ${
+                        disabled 
+                            ? 'bg-gray-50 border-gray-300 text-gray-500' 
+                            : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'}
+                        `}
+                >
+                    {days.map((day, idx) => <option key={idx} value={idx}>{day}</option>)}
+                </select>
+            );
+        }
+
+        // C. LOGIKA DEFAULT NUMBER (INTERVAL, DATE, CUTOFF)
         const s = schedulerSettings.find(item => item.key === groupKey) || {};
         return (
             <div className="flex items-center gap-3">
                 <input
                     type="number"
-                    min={s.min_value}
-                    max={s.max_value}
+                    min={s.min_value} max={s.max_value}
                     value={s.value ?? 0}
                     disabled={disabled}
                     onChange={(e) => updateSchedulerValue(s.key, e.target.value)}
-                    className={`w-24 p-2 text-center font-bold rounded-lg border-2 transition ${
-                        disabled ? 'bg-gray-50 border-gray-200' : 'border-indigo-400 bg-white'
-                    }`}
+                    className={`w-full max-w-32 p-2 text-center font-medium rounded-lg border-2 transition ${
+                        disabled 
+                            ? 'bg-gray-50 border-gray-300 text-gray-500' 
+                            : 'border-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'}
+                        `}
                 />
-                <span className="text-sm font-medium text-gray-500">
-                    Minutes
+                <span className="text-sm text-gray-500">
+                    {s.key?.includes('date') ? 'Date of month' : s.key?.includes('cutoff') ? 'Days' : 'Minutes'}
                 </span>
             </div>
         );
@@ -306,8 +347,8 @@ const SetupGeneral = () => {
                                         {keys.map(key => {
                                             const s = getDetectionSetting(key);
                                             return (
-                                                <div key={key} className="grid sm:grid-cols-3 gap-4 items-start">
-                                                    <div className="sm:col-span-1">
+                                                <div key={key} className="grid sm:grid-cols-2 gap-4 items-start">
+                                                    <div>
                                                         <label className="block text-sm font-medium text-gray-900">
                                                             {formatLabel(key)}
                                                         </label>
@@ -315,7 +356,7 @@ const SetupGeneral = () => {
                                                             {s.description}
                                                         </p>
                                                     </div>
-                                                    <div className="sm:col-span-2">
+                                                    <div>
                                                         {renderDetectionControl(key)}
                                                     </div>
                                                 </div>
@@ -388,26 +429,22 @@ const SetupGeneral = () => {
                         {/* Field */}
                         <div className="p-4 sm:p-6 space-y-6">
                             {Object.entries(schedulerGroups).map(([groupName, keys]) => (
-                                <section key={groupName}>
-                                    <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">
-                                        {groupName}
-                                    </h4>
-                                    <div className="space-y-6">
+                                <div key={groupName}>
+                                    <h4 className="text-lg font-semibold text-gray-700 mb-5 pb-2 border-b border-gray-100">{groupName}</h4>
+                                    <div className="space-y-8">
                                         {keys.map(key => {
-                                            // Cari deskripsi untuk label (ambil dari jam jika cleanup_time)
-                                            const displayKey = key === 'cleanup_time' ? 'sched_cleanup_hour' : key;
+                                            // Cari data untuk label/deskripsi
+                                            const displayKey = key.includes('time') ? `sched_${key.split('_')[0]}_hour` : key;
                                             const s = schedulerSettings.find(item => item.key === displayKey) || {};
                                             
                                             return (
-                                                <div key={key} className="grid sm:grid-cols-2 gap-4 items-start">
+                                                <div key={key} className="grid sm:grid-cols-2 gap-4 items-center">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-900">
-                                                            {key === 'cleanup_time' ? 'System Cleanup' : formatLabel(key.replace('sched_', ''))}
+                                                            {key.includes('time') ? 'Execution Time' : formatLabel(key.replace('sched_', ''))}
                                                         </label>
                                                         <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-                                                            {key === 'cleanup_time' 
-                                                                ? "Set the specific time (hour and minute) for the system to automatically delete logs and images older than 32 days."
-                                                                : s.description}
+                                                            {key.includes('time') ? '': s.description}
                                                         </p>
                                                     </div>
                                                     <div>
@@ -417,7 +454,7 @@ const SetupGeneral = () => {
                                             );
                                         })}
                                     </div>
-                                </section>
+                                </div>
                             ))}
                         </div>
 
@@ -437,7 +474,7 @@ const SetupGeneral = () => {
                                             setSchedulerSettings(JSON.parse(JSON.stringify(originalScheduler)));
                                             setIsEditingScheduler(false);
                                         }}
-                                        className="py-2 bg-gray-200 rounded-lg"
+                                        className="py-3 px-4 bg-gray-200 rounded-lg"
                                     >
                                         Cancel
                                     </button>
