@@ -125,14 +125,14 @@ def detection_settings():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         if request.method == 'GET':
-            cur.execute("SELECT key, value, description, min_value, max_value FROM general_settings ORDER BY key")
+            cur.execute("SELECT key, value, description, min_value, max_value FROM general_settings WHERE key NOT LIKE 'sched_%%' ORDER BY key")
             return jsonify(cur.fetchall())
 
         else:  # POST
             data = request.json
             for item in data:
                 cur.execute("""
-                    UPDATE detection_settings 
+                    UPDATE general_settings 
                     SET value = %s
                     WHERE key = %s
                 """, (item['value'], item['key']))
