@@ -1,31 +1,28 @@
 // Settings.jsx
 import React, { useState } from 'react';
 import RoleButton from '../components/RoleButton';
-import ConfigSetup from '../components/SetupConfig'; 
+import GeneralSetup from '../components/SetupGeneral'; 
 import DatasetSetup from '../components/SetupDataset'; 
 import EmailSetup from '../components/SetupEmail'; 
 
 const Settings = () => {
-    const [settingButton, setSettingButton] = useState('config'); 
+    const [settingButton, setSettingButton] = useState('general'); 
 
     const menuItems = [
-        { key: 'config', label: 'Detection Settings' },
+        { key: 'general', label: 'General Settings' },
         { key: 'dataset', label: 'Dataset Setup' },
         { key: 'email', label: 'Email Setup' },
-        { key: 'comingsoon', label: 'Coming Soon' },
     ];
 
     // Fungsi untuk merender konten berdasarkan tab yang aktif
     const renderContent = () => {
         switch (settingButton) {
-            case 'config':
-                return <ConfigSetup />;
+            case 'general':
+                return <GeneralSetup />;
             case 'dataset':
                 return <DatasetSetup />;
             case 'email':
                 return <EmailSetup />;
-            case 'comingsoon':
-                return <p className="text-gray-600 p-6 bg-white shadow rounded-lg">This is the Coming Soon page. Content will be added here later.</p>;
             default:
                 return null;
         }

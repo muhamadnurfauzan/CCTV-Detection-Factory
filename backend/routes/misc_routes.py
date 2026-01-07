@@ -125,7 +125,7 @@ def detection_settings():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         if request.method == 'GET':
-            cur.execute("SELECT key, value, description, min_value, max_value FROM detection_settings ORDER BY key")
+            cur.execute("SELECT key, value, description, min_value, max_value FROM general_settings ORDER BY key")
             return jsonify(cur.fetchall())
 
         else:  # POST
@@ -139,9 +139,31 @@ def detection_settings():
             conn.commit()
             
             # Reload ke memory
-            from services.config_service import load_detection_settings
-            load_detection_settings()
+            config_service.load_detection_settings()
             
+            return jsonify({"success": True})
+    finally:
+        cur.close()
+        conn.close()
+
+@misc_bp.route('/scheduler-settings', methods=['GET', 'POST'])
+@require_role(['super_admin'])
+def scheduler_settings():
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        if request.method == 'GET':
+            cur.execute("SELECT key, value, description, min_value, max_value FROM general_settings WHERE key LIKE 'sched_%%' ORDER BY key")
+            return jsonify(cur.fetchall())
+
+        else:  # POST
+            data = request.json # List of {key, value}
+            for item in data:
+                cur.execute("UPDATE general_settings SET value = %s WHERE key = %s", (item['value'], item['key']))
+            conn.commit()
+            
+            # Reload ke memory
+            config_service.load_scheduler_settings()
             return jsonify({"success": True})
     finally:
         cur.close()

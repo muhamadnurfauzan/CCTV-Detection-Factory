@@ -41,8 +41,15 @@ class SharedState:
                     'padding_percent': 0.5,
                     'target_max_width': 320,
                 }
+                cls._instance.scheduler_settings = {
+                    'sched_daily_recap_minute': 0,
+                    'sched_cleanup_hour': 0,
+                    'sched_cleanup_minute': 5,
+                    'sched_refresh_config_interval': 10
+                }
 
                 cls._instance.DETECTION_SETTINGS_LOCK = Lock()
+                cls._instance.SCHEDULER_SETTINGS_LOCK = Lock()
                 cls._instance.ANNOTATED_FRAME_LOCK = Lock()          
                 cls._instance.RAW_FRAME_LOCK = Lock()
         return cls._instance

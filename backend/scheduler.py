@@ -2,11 +2,13 @@
 import time
 import datetime
 import logging
+from shared_state import state
 from db.db_config import get_connection
 from supabase import create_client
 from services.cctv_services import refresh_all_cctv_configs
 from services.notification_service import send_violation_recap_emails
-import config
+from services.config_service import load_scheduler_settings
+import config as config
 
 supabase = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
 
@@ -63,16 +65,12 @@ def scheduler_thread():
     """Menjalankan update per jam & cleanup harian jam 00:05 + CCTV schedule check + Email Recap."""
 
     while True:
-        time.sleep(60)
+        load_scheduler_settings()
         now = datetime.datetime.now()
         minute = now.minute
         hour = now.hour
         weekday = now.weekday() # Senin=0, Minggu=6
         day_of_month = now.day
-
-        # 1. Rekap harian tiap awal jam
-        if minute == 0:
-            update_daily_log()
 
         # 2. KIRIM REKAP BULANAN (Setiap Tanggal 1 jam 07:30)
         # Menghitung data bulan lalu (Tanggal 1 s/d Tanggal Terakhir bulan lalu)
@@ -107,13 +105,25 @@ def scheduler_thread():
                     template_key='violation_weekly_recap'
                 )
 
-        # 4. Cleanup data lama → jam 00:05
-        if hour == 0 and minute == 5:
-            cleanup_old_data()
+        while True:
+            time.sleep(60)
+            now = datetime.datetime.now()
+            s = state.scheduler_settings 
 
-        # 5. Refresh config tiap 10 menit
-        if minute % 10 == 0:
-            refresh_all_cctv_configs()
+            # 1. Rekap harian (Dinamis menitnya)
+            if now.minute == s.get('sched_daily_recap_minute', 0):
+                update_daily_log()
+
+            # 2. Cleanup data lama (Dinamis jam & menitnya)
+            if now.hour == s.get('sched_cleanup_hour', 0) and \
+            now.minute == s.get('sched_cleanup_minute', 5):
+                cleanup_old_data()
+
+            # 3. Refresh config (Dinamis intervalnya)
+            refresh_interval = s.get('sched_refresh_config_interval', 10)
+            if now.minute % refresh_interval == 0:
+                refresh_all_cctv_configs()
+                load_scheduler_settings()
 
 if __name__ == "__main__":
     logging.info("Starting standalone Scheduler service...")

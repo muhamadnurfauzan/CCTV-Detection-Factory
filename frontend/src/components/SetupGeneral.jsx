@@ -1,14 +1,15 @@
-// src/components/SetupConfig.jsx
+// src/components/SetupGeneral.jsx
 import React, { useState, useEffect } from 'react';
 import { useAlert } from './AlertProvider';
 import RoleButton from './RoleButton';
 
-const SetupConfig = () => {
+const SetupGeneral = () => {
     const { showAlert } = useAlert();
     const [settings, setSettings] = useState([]);
     const [originalSettings, setOriginalSettings] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const [savingDetection, setSavingDetection] = useState(false);
+    const [savingScheduler, setSavingScheduler] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
 
     const hasChanges = settings.some((current, index) => {
@@ -43,7 +44,7 @@ const SetupConfig = () => {
     }, []);
 
     const handleSave = async () => {
-        setSaving(true);
+        setSavingDetection(true);
         try {
             const res = await fetch('/api/detection-settings', {
                 method: 'POST',
@@ -56,7 +57,7 @@ const SetupConfig = () => {
         } catch (err) {
             showAlert('Error: ' + err.message, 'error');
         } finally {
-            setSaving(false);
+            setSavingDetection(false);
             setIsEditing(false);
         }
     };
@@ -174,8 +175,8 @@ const SetupConfig = () => {
     };
 
     return (
-        <div className="max-w-4xl sm:mx-auto">
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-4'>
+            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden'>
                 <div className="border-b border-gray-200">
                     <h3 className="p-4 text-xl font-bold text-gray-800">Detection System Settings</h3>
                 </div>
@@ -232,7 +233,7 @@ const SetupConfig = () => {
                                             setSettings(JSON.parse(JSON.stringify(originalSettings)));
                                             setIsEditing(false);
                                         }}
-                                        disabled={saving}
+                                        disabled={savingDetection}
                                         className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
                                     >
                                         Cancel
@@ -240,14 +241,14 @@ const SetupConfig = () => {
                                     <RoleButton
                                         allowedRoles={['super_admin']}
                                         onClick={handleSave}
-                                        disabled={saving || !hasChanges}
+                                        disabled={savingDetection || !hasChanges}
                                         className={`py-3 px-4 rounded-lg font-medium text-white transition ${
-                                            saving || !hasChanges
+                                            savingDetection || !hasChanges
                                                 ? 'bg-gray-400 cursor-not-allowed'
                                                 : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
                                     >
-                                        {saving ? 'Saving...' : 'Save Changes'}
+                                        {savingDetection ? 'Saving...' : 'Save Changes'}
                                     </RoleButton>
                                 </div>
                             ) : (
@@ -259,7 +260,73 @@ const SetupConfig = () => {
                                     }}
                                     className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
                                 >
-                                    Edit Settings
+                                    Edit Detection
+                                </RoleButton>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden'>
+                <div className="border-b border-gray-200">
+                    <h3 className="p-4 text-xl font-bold text-gray-800">Scheduler System Settings</h3>
+                </div>
+                {loading ? (
+                    <p className="text-center py-8 text-gray-600">Loading scheduler settings...</p>
+                ) : (
+                    <>
+                        {/* Field */}
+                        <div className='div className="p-4 sm:p-6 space-y-8'>
+                            <p>1. Recap harian (per jam)</p>
+                            <p>2. Recap mingguan (notif email)</p>
+                            <p>3. Recap bulanan (notif email)</p>
+                            <p>4. Clean up data lama</p>
+                            <p>5. Waktu refresh</p>
+                        </div>
+
+                        {/* Banner */}
+                        <div className="mx-6 sm:mx-8 mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                            <p className="text-sm font-medium text-amber-800 text-center">
+                                All changes take effect immediately – no restart needed
+                            </p>
+                        </div>
+
+                        {/* Edit/save button */}
+                        <div className="px-6 sm:px-8 py-6 bg-gray-50 border-t border-gray-200">
+                            {isEditing ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => {
+                                            // TODO: Implement cancel scheduler edit functionality
+                                        }}
+                                        disabled={savingScheduler}
+                                        className="py-3 px-4 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <RoleButton
+                                        allowedRoles={['super_admin']}
+                                        onClick={handleSave}
+                                        disabled={savingScheduler || !hasChanges}
+                                        className={`py-3 px-4 rounded-lg font-medium text-white transition ${
+                                            savingScheduler || !hasChanges
+                                                ? 'bg-gray-400 cursor-not-allowed'
+                                                : 'bg-indigo-600 hover:bg-indigo-700'
+                                        }`}
+                                    >
+                                        {savingScheduler ? 'Saving...' : 'Save Changes'}
+                                    </RoleButton>
+                                </div>
+                            ) : (
+                                <RoleButton
+                                    allowedRoles={['super_admin']}
+                                    onClick={() => {
+                                        //  TODO: Implement edit scheduler functionality
+                                    }}
+                                    className="w-full py-3 px-6 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition"
+                                >
+                                    Edit Scheduler
                                 </RoleButton>
                             )}
                         </div>
@@ -270,4 +337,4 @@ const SetupConfig = () => {
     );
 };
 
-export default SetupConfig;
+export default SetupGeneral;

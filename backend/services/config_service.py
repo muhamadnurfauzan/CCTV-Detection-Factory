@@ -80,7 +80,7 @@ def load_detection_settings(force=False):
     with state.DETECTION_SETTINGS_LOCK:
         conn = get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT key, value FROM detection_settings")
+        cur.execute("SELECT key, value FROM general_settings WHERE key NOT LIKE 'sched_%%'")
         new_settings = {row[0]: float(row[1]) for row in cur.fetchall()}
         cur.close()
         conn.close()
@@ -89,3 +89,19 @@ def load_detection_settings(force=False):
         state.detection_settings.update(new_settings)
         
         logging.info("[CONFIG] Detection settings reloaded from DB loaded")
+
+# --- Reload scheduler settings ---
+def load_scheduler_settings(force=False):
+    """Memuat pengaturan scheduler dari general_settings ke state."""
+    with state.SCHEDULER_SETTINGS_LOCK:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT key, value FROM general_settings WHERE key LIKE 'sched_%%'")
+        new_sched = {row[0]: int(float(row[1])) for row in cur.fetchall()}
+        cur.close()
+        conn.close()
+
+        state.scheduler_settings.clear()
+        state.scheduler_settings.update(new_sched)
+        logging.info("[CONFIG] Scheduler settings from DB reloaded.")
+    
