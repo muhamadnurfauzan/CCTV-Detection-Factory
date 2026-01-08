@@ -445,7 +445,7 @@ const ImagesShow = () => {
             </motion.div>
             {/* INFO DI BAWAH */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
-              <p className='text-base'>Clik here to close the image.</p>
+              <p className='text-sm font-medium opacity-70'>Click anywhere outside or use the button to close</p>
             </div>
           </motion.div>
         )}

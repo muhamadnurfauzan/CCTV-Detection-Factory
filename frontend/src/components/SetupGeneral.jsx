@@ -330,6 +330,24 @@ const SetupGeneral = () => {
         );
     };
 
+    // General Skeleton for Scheduler Loading State
+    const GeneralSkeleton = () => (
+        <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden p-6'>
+            <div className="animate-pulse space-y-8">
+                <div className="h-6 bg-gray-200 rounded w-1/2 mb-10" />
+                {[...Array(3)].map((_, i) => (
+                    <div key={i} className="grid sm:grid-cols-2 gap-4 items-start">
+                        <div className="space-y-3">
+                            <div className="h-4 bg-gray-200 rounded w-3/4" />
+                            <div className="h-3 bg-gray-100 rounded w-full" />
+                        </div>
+                        <div className="h-10 bg-gray-200 rounded-lg w-full" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     return (
         <div className='grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-4'>
             <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-md'>
@@ -338,7 +356,7 @@ const SetupGeneral = () => {
                 </div>
 
                 {loading ? (
-                    <p className="text-center py-8 text-gray-600">Loading detection settings...</p>
+                    <GeneralSkeleton />
                 ) : (
                     <>
                         {/* Field */}
@@ -429,7 +447,7 @@ const SetupGeneral = () => {
                     <h3 className="p-4 text-xl font-bold text-gray-800">Scheduler System Settings</h3>
                 </div>
                 {loading ? (
-                    <p className="text-center py-8 text-gray-600">Loading scheduler settings...</p>
+                    <GeneralSkeleton />
                 ) : (
                     <>
                         {/* Field */}

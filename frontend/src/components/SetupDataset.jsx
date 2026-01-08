@@ -149,13 +149,31 @@ const SetupDataset = () => {
         return data.find(item => item.id === pairId) || null;
     }, [data]);
 
+    // Dataset Skeleton for Loading State
+    const DatasetSkeleton = () => (
+        <div className="p-6 bg-white rounded-lg animate-pulse">
+            <div className="space-y-4">
+                <div className="h-10 bg-gray-100 rounded-lg w-full" />
+                {[...Array(6)].map((_, i) => (
+                    <div key={i} className="flex gap-4 items-center py-2">
+                        <div className="h-4 bg-gray-200 rounded w-8" />
+                        <div className="h-4 bg-gray-200 rounded flex-1" />
+                        <div className="h-4 bg-gray-200 rounded w-12" />
+                        <div className="h-4 bg-gray-200 rounded w-24" />
+                        <div className="h-8 bg-gray-200 rounded-full w-20" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     // --- Main Table Render ---
     return (
         <div className="p-6 bg-white shadow rounded-lg">
             <h3 className="text-xl font-semibold mb-4 text-gray-700">Object Class Configuration</h3>
             
             {loading ? (
-                <p className="text-center py-8 text-gray-600">Loading data...</p>
+                <DatasetSkeleton />
             ) : (
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">

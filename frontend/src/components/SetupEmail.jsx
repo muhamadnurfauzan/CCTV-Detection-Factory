@@ -185,6 +185,30 @@ const SetupEmail = () => {
         }
     };
 
+    // Skeleton untuk loading state
+    const SMTPSkeleton = () => (
+        <div className='space-y-4 animate-pulse'>
+            {/* SMTP Section */}
+            <div className="bg-white p-6 rounded-lg space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="h-12 bg-gray-100 rounded-md" />
+                    <div className="h-12 bg-gray-100 rounded-md" />
+                </div>
+                <div className="h-12 bg-gray-100 rounded-md" />
+                <div className="h-12 bg-gray-100 rounded-md" />
+            </div>
+        </div>
+    );
+
+    const TemplateSkeleton = () => (
+        <div className='space-y-4 animate-pulse'>
+            {/* Template Section */}
+            <div className="bg-white p-6 rounded-lg space-y-6">
+                <div className="h-64 bg-gray-100 rounded-md w-full" />
+            </div>
+        </div>
+    );
+
     // Deteksi perubahan
     const hasSMTPChanged = JSON.stringify(formData) !== JSON.stringify(formDataOriginal || {}) || newPassword !== '';
     const hasTemplateChanged = JSON.stringify(template) !== JSON.stringify(templateOriginal || {});
@@ -200,7 +224,7 @@ const SetupEmail = () => {
                     <h3 className="text-xl font-semibold text-gray-700">SMTP Server</h3>
                 </div>
                 {loading ? (
-                    <p className="text-center py-8 text-gray-600">Loading SMTP configuration...</p>
+                    <SMTPSkeleton />
                 ) : (
                     <>
                         <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4"> 
@@ -358,7 +382,7 @@ const SetupEmail = () => {
                     </div>
                 </div>
                 {loading ? (
-                    <p className="text-center py-8 text-gray-600">Loading SMTP configuration...</p>
+                    <TemplateSkeleton />
                 ) : (
                     <>
                         {/* Email Codemirror */}

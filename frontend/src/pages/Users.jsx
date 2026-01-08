@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaSearch, FaPenSquare, FaTrash } from 'react-icons/fa'; 
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAlert } from '../components/AlertProvider'; 
 import Pagination from '../components/Pagination'; 
 import RoleButton from '../components/RoleButton';
@@ -80,7 +81,6 @@ export default function Users() {
         } catch (err) {
             setUsers([]);
             setTotalItems(0);
-            // Penggunaan showAlert saat GAGAL fetch data
             setError(err.message || 'Error loading user data.');
         } finally {
             setLoading(false);
@@ -141,6 +141,23 @@ export default function Users() {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
+    // Skeleton untuk Baris Tabel
+    const TableSkeleton = () => (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden animate-pulse">
+        <div className="h-12 bg-indigo-100 mb-1" /> {/* Header Table */}
+        {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex gap-4 p-4 border-b border-gray-100">
+            <div className="h-4 bg-gray-200 rounded w-12" />
+            <div className="h-4 bg-gray-200 rounded flex-1" />
+            <div className="h-4 bg-gray-200 rounded flex-1" />
+            <div className="h-4 bg-gray-200 rounded flex-1" />
+            <div className="h-4 bg-gray-200 rounded flex-1" />
+            <div className="h-4 bg-gray-200 rounded flex-1" />
+            </div>
+        ))}
+        </div>
+    );
+
     // --- Render ---
     return (
         <div className="p-6 bg-gray-100 min-h-screen font-sans">
@@ -183,95 +200,101 @@ export default function Users() {
             
             {/* Loading State */}
             {loading ? (
-                <div className="p-6 flex items-center justify-center h-48 bg-white rounded-lg shadow-lg">
-                    <p className="text-xl text-gray-600">Loading user data...</p>
-                </div>
+                <TableSkeleton />
             ) : (
-                <>
-                    {/* Konten Utama: Tabel */}
-                    <div className="bg-white rounded-lg shadow-lg overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-indigo-200 text-center">
-                                <tr>
-                                    <th className="p-2 text-indigo-800 border-r">No.</th>
-                                    <th className="p-2 text-indigo-800 border-r text-left">Full Name</th>
-                                    <th className="p-2 text-indigo-800 border-r">Email</th>
-                                    <th className="p-2 text-indigo-800 border-r">Role</th>
-                                    <th className="p-2 text-indigo-800 border-r">Region (CCTVs)</th>
-                                    <th className="p-2 text-indigo-800">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {users.length === 0 ? (
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key="users-table"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        {/* Konten Utama: Tabel */}
+                        <div className="bg-white rounded-lg shadow-lg overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-indigo-200 text-center">
                                     <tr>
-                                        <td colSpan="6" className="text-center text-gray-500 p-4">
-                                            No users found based on current search or filters.
-                                        </td>
+                                        <th className="p-2 text-indigo-800 border-r">No.</th>
+                                        <th className="p-2 text-indigo-800 border-r text-left">Full Name</th>
+                                        <th className="p-2 text-indigo-800 border-r">Email</th>
+                                        <th className="p-2 text-indigo-800 border-r">Role</th>
+                                        <th className="p-2 text-indigo-800 border-r">Region (CCTVs)</th>
+                                        <th className="p-2 text-indigo-800">Action</th>
                                     </tr>
-                                ) : (
-                                    users.map((user, i) => (
-                                        <tr key={user.id} className="hover:bg-gray-50 transition">
-                                            <td className="p-2 text-center text-gray-600 border-r">
-                                                {(currentPage - 1) * itemsPerPage + i + 1}
-                                            </td>
-                                            <td className="p-2 text-gray-700 font-medium whitespace-nowrap border-r">{user.full_name}</td>
-                                            <td className="p-2 text-gray-700 font-medium whitespace-nowrap border-r">{user.email}</td>
-                                            <td className="p-2 text-center border-r">
-                                                <span 
-                                                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                        user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
-                                                        user.role === 'report_viewer' ? 'bg-yellow-100 text-yellow-800' :
-                                                        user.role === 'viewer' ? 'bg-gray-100 text-gray-800' :
-                                                        'bg-gray-100 text-gray-800'
-                                                    }`}
-                                                >
-                                                    {formatRole(user.role)}
-                                                </span>
-                                            </td>
-                                            <td className="p-2 text-left border-r">     
-                                                <div className="max-h-14 overflow-y-auto pr-1"> 
-                                                    <CCTVTaggable cctvs={user.cctvs} />
-                                                </div>
-                                            </td>
-                                            <td className="p-2 text-center space-x-2 whitespace-nowrap items-center">
-                                                {/* Tombol Aksi */}
-                                                <div className='flex flex-col sm:flex-row justify-center items-center gap-2 transition-all duration-300 ease-in-out'>
-                                                    <RoleButton
-                                                        allowedRoles={['super_admin']}
-                                                        onClick={() => handleEdit(user)}
-                                                        className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
-                                                        title="Edit User"
-                                                    >
-                                                        <FaPenSquare className="w-5 h-5" />
-                                                    </RoleButton>
-                                                    <RoleButton
-                                                        allowedRoles={['super_admin']}
-                                                        onClick={() => handleDelete(user)}
-                                                        className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
-                                                        title="Delete User"
-                                                    >
-                                                        <FaTrash className="w-5 h-5" />
-                                                    </RoleButton>
-                                                </div>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {users.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="text-center text-gray-500 p-4">
+                                                No users found based on current search or filters.
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {/* Komponen Pagination */}
-                    {totalItems > 0 && (
-                        <Pagination
-                            totalItems={totalItems}
-                            itemsPerPage={itemsPerPage}
-                            currentPage={currentPage}
-                            onPageChange={handlePageChange}
-                            onItemsPerPageChange={handleItemsPerPageChange}
-                        />
-                    )}
-                </>
+                                    ) : (
+                                        users.map((user, i) => (
+                                            <tr key={user.id} className="hover:bg-gray-50 transition">
+                                                <td className="p-2 text-center text-gray-600 border-r">
+                                                    {(currentPage - 1) * itemsPerPage + i + 1}
+                                                </td>
+                                                <td className="p-2 text-gray-700 font-medium whitespace-nowrap border-r">{user.full_name}</td>
+                                                <td className="p-2 text-gray-700 font-medium whitespace-nowrap border-r">{user.email}</td>
+                                                <td className="p-2 text-center border-r">
+                                                    <span 
+                                                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                            user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
+                                                            user.role === 'report_viewer' ? 'bg-yellow-100 text-yellow-800' :
+                                                            user.role === 'viewer' ? 'bg-gray-100 text-gray-800' :
+                                                            'bg-gray-100 text-gray-800'
+                                                        }`}
+                                                    >
+                                                        {formatRole(user.role)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-2 text-left border-r">     
+                                                    <div className="max-h-14 overflow-y-auto pr-1"> 
+                                                        <CCTVTaggable cctvs={user.cctvs} />
+                                                    </div>
+                                                </td>
+                                                <td className="p-2 text-center space-x-2 whitespace-nowrap items-center">
+                                                    {/* Tombol Aksi */}
+                                                    <div className='flex flex-col sm:flex-row justify-center items-center gap-2 transition-all duration-300 ease-in-out'>
+                                                        <RoleButton
+                                                            allowedRoles={['super_admin']}
+                                                            onClick={() => handleEdit(user)}
+                                                            className="text-green-600 hover:text-green-800 transition p-1 rounded-full bg-green-100"
+                                                            title="Edit User"
+                                                        >
+                                                            <FaPenSquare className="w-5 h-5" />
+                                                        </RoleButton>
+                                                        <RoleButton
+                                                            allowedRoles={['super_admin']}
+                                                            onClick={() => handleDelete(user)}
+                                                            className="text-red-600 hover:text-red-800 transition p-1 rounded-full bg-red-100"
+                                                            title="Delete User"
+                                                        >
+                                                            <FaTrash className="w-5 h-5" />
+                                                        </RoleButton>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* Komponen Pagination */}
+                        {totalItems > 0 && (
+                            <Pagination
+                                totalItems={totalItems}
+                                itemsPerPage={itemsPerPage}
+                                currentPage={currentPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             )}
             
             {/* === MODALS (Rendered di halaman utama) === */}
