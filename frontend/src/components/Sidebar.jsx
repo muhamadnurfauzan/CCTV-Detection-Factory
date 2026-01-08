@@ -1,6 +1,7 @@
 // Sidebar.jsx – VERSI FINAL (Menu Utama di Atas, Users/Settings/Logout di Bawah)
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FaHome, FaVideo, FaImages, FaBullhorn, FaUsers, FaCog, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 import ModalLogout from './ModalLogout';
@@ -21,98 +22,171 @@ const bottomNavItems = [
 const Sidebar = ({ isExpanded, setIsExpanded }) => {
   const location = useLocation();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth < 640);
   const { user } = useAuth();
+
+  React.useEffect(() => {
+    const handleResize = () => {
+        setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const sidebarVariants = {
+    expanded: { width: "14rem", x: 0, transition: { duration: 0.4, ease: "circOut" } },
+    collapsed: { width: "5rem", x: 0, transition: { duration: 0.4, ease: "circOut" } },
+    mobile: { width: "0rem", x: -100, transition: { duration: 0.4 } }
+  };
+
+  const MotionLink = motion(Link); 
 
   const NavItem = ({ item }) => {
     const { path, label, Icon, allowedRoles } = item;
-
-    // Role check
     if (allowedRoles && !allowedRoles.includes(user?.role)) return null;
 
     const isActive = location.pathname === path;
-    const baseClasses = "flex items-center h-12 rounded transition-colors duration-200 w-full";
-    const activeClasses = "bg-indigo-700 text-white";
-    const inactiveClasses = "text-indigo-200 hover:bg-indigo-700 hover:text-white";
-
+    
     return (
-      <Link
+      <MotionLink
+        layout
         to={path}
-        className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${isExpanded ? 'px-3' : 'justify-center'}`}
+        className={`relative z-10 flex items-center h-12 rounded transition-colors duration-200 w-full overflow-hidden
+          ${isActive ? 'bg-indigo-700 text-white shadow-md' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'}
+          ${isExpanded ? 'px-3' : 'justify-center'}`}
         data-tooltip-id="sidebar-tooltip"
         data-tooltip-content={label}
       >
-        <Icon className="w-6 h-6" />
-        {isExpanded && <span className="ml-3 text-sm font-medium">{label}</span>}
-      </Link>
+        <Icon className="w-6 h-6 flex-shrink-0" />
+        
+        <AnimatePresence> 
+          {isExpanded && (
+            <motion.span
+              key="nav-label"
+              // initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden"
+            >
+              {label}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </MotionLink>
     );
   };
+
+  const activeVariant = isExpanded 
+    ? "expanded" 
+    : (isMobile ? "mobile" : "collapsed");
 
   return (
     <>
       {!isExpanded && <Tooltip id="sidebar-tooltip" place="right" style={{ borderRadius: '0.375rem', zIndex: 50 }} />}
 
-      <nav className={`
-        fixed inset-y-0 left-0 z-40 flex flex-col
-        bg-indigo-900 text-indigo-300 shadow-2xl
-        transition-all duration-300 ease-in-out
-        ${isExpanded ? 'w-56' : 'w-0 sm:w-20'}
-      `}>
+      <motion.nav
+        initial={false}
+        animate={activeVariant}
+        variants={sidebarVariants}
+        className="fixed inset-y-0 left-0 z-40 flex flex-col bg-indigo-900 text-indigo-300 shadow-2xl overflow-hidden"
+      >
         <div className="flex flex-col h-full p-3">
           {/* Header */}
-          <div className={`flex items-center mb-6 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
-            {isExpanded ? (
-              <span className="text-xl font-bold text-white">PPE DETECTION</span>
-            ) : (
-              <span className="text-xl font-bold text-white">X</span>
-            )}
+          <div className={`flex items-center h-12 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
+            <AnimatePresence mode="wait">
+              {isExpanded ? (
+                <motion.span 
+                  key="logo-full"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-xl font-bold text-white whitespace-nowrap"
+                >
+                  PPE DETECTION
+                </motion.span>
+              ) : (
+                <motion.span 
+                  key="logo-short"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="text-xl font-bold text-white"
+                >
+                  
+                </motion.span>
+              )}
+            </AnimatePresence>
+            
             {isExpanded && (
-              <button onClick={() => setIsExpanded(false)} className="p-1 rounded hover:bg-indigo-700 text-white">
+              <motion.button 
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                onClick={() => setIsExpanded(false)} 
+                className="p-1 rounded hover:bg-indigo-700 text-white"
+              >
                 <FaTimes className="w-6 h-6"/>
-              </button>
+              </motion.button>
             )}
           </div>
 
-          {/* MENU UTAMA – Di atas, flex-grow */}
           <div className='border-t-4 border-indigo-700 my-2' />
+          
+          {/* MENU UTAMA */}
           <ul className="space-y-2 flex-1">
             {mainNavItems.map((item, i) => (
               <li key={i}><NavItem item={item} /></li>
             ))}
           </ul>
 
-          {/* MENU BAWAH – Users, Settings, Logout */}
+          {/* MENU BAWAH */}
           <div className="space-y-2">
             {bottomNavItems.map((item, i) => (
               <NavItem key={i} item={item} />
             ))}
             
             <div className="border-t-4 border-indigo-700 my-3" />
-            {/* Logout – tetap button, karena bukan navigasi */}
-            <button
+            <motion.button
+              layout 
               onClick={() => setIsLogoutModalOpen(true)}
-              className={`flex items-center h-12 rounded transition-colors duration-200 w-full
+              className={`flex items-center h-12 rounded transition-all duration-200 w-full overflow-hidden
                 hover:bg-red-600 hover:text-white text-indigo-200
                 ${isExpanded ? 'px-3' : 'justify-center'}
               `}
               data-tooltip-id="sidebar-tooltip"
-              data-tooltip-content="Logout"
+              data-tooltip-content={isExpanded ? "" : "Logout"}
             >
-              <FaSignOutAlt className="w-6 h-6" />
-              {isExpanded && <span className="ml-3 text-sm font-medium">Logout</span>}
-            </button>
+              <FaSignOutAlt className="w-6 h-6 flex-shrink-0" />
+              
+              <AnimatePresence mode="wait">
+                {isExpanded && (
+                  <motion.span
+                    key="logout-text"
+                    // initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    className="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden"
+                  >
+                    Logout
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
           </div>
         </div>
-      </nav>
+      </motion.nav>
 
-      {/* Hamburger button saat collapsed */}
-      {!isExpanded && (
-        <button
-          onClick={() => setIsExpanded(true)}
-          className="fixed top-2 left-2 sm:top-4 sm:left-4 z-40 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg transition-all duration-300 ease-in-out"
-        >
-          <FaBars className="w-6 h-6" />
-        </button>
-      )}
+      {/* Hamburger button (Framer Motion Hover effect) */}
+      <AnimatePresence>
+        {!isExpanded && (
+          <motion.button
+            key="hamburger"
+            initial={{ x: -100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -100, opacity: 0 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsExpanded(true)}
+            className="fixed top-2 left-2 sm:top-4 sm:left-4 z-50 px-3 py-2 rounded bg-indigo-900 text-white hover:bg-indigo-700 shadow-lg"
+          >
+            <FaBars className="w-6 h-6" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <ModalLogout 
         open={isLogoutModalOpen} 
