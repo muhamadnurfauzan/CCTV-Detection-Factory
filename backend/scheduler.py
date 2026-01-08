@@ -23,14 +23,15 @@ def update_daily_log():
             INSERT INTO violation_daily_log (log_date, id_cctv, id_violation, total_violation)
             SELECT DATE(timestamp), id_cctv, id_violation, COUNT(*)
             FROM violation_detection
-            WHERE DATE(timestamp) = CURRENT_DATE -- Mengganti CURDATE()
+            WHERE DATE(timestamp) = CURRENT_DATE
             GROUP BY 1, 2, 3
-            ON CONFLICT (log_date, id_cctv, id_violation) DO UPDATE -- Mengganti ON DUPLICATE KEY UPDATE
+            ON CONFLICT (log_date, id_cctv, id_violation) DO UPDATE 
             SET
-                total_violation = violation_daily_log.total_violation + EXCLUDED.total_violation,
+                -- JANGAN GUNAKAN: total_violation + EXCLUDED.total_violation
+                -- GUNAKAN: EXCLUDED.total_violation untuk sinkronisasi akurat
+                total_violation = EXCLUDED.total_violation, 
                 latest_update = CURRENT_TIMESTAMP;
         """)
-        # Menghapus loop dan query INSERT kedua yang tidak diperlukan.
         
         conn.commit()
     except Exception as e:
