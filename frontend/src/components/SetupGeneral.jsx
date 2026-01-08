@@ -332,7 +332,7 @@ const SetupGeneral = () => {
 
     return (
         <div className='grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-4'>
-            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden'>
+            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-md'>
                 <div className="border-b border-gray-200">
                     <h3 className="p-4 text-xl font-bold text-gray-800">Detection System Settings</h3>
                 </div>
@@ -424,7 +424,7 @@ const SetupGeneral = () => {
                 )}
             </div>
 
-            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden'>
+            <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-md'>
                 <div className="border-b border-gray-200">
                     <h3 className="p-4 text-xl font-bold text-gray-800">Scheduler System Settings</h3>
                 </div>

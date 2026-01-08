@@ -1,9 +1,11 @@
 // frontend/src/pages/ImagesShow.jsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Link, useSearchParams } from 'react-router-dom';
-import { FaAngleLeft, FaAngleRight } from 'react-icons/fa';
+import { useSearchParams } from 'react-router-dom';
+import { FaAngleLeft, FaAngleRight, FaExclamationTriangle, FaCamera, FaCalendar } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 import RoleLink from '../components/RoleLink';
+import '../styles/LazyBlur.css';
 import '../styles/MasonryGrid.css';
 
 const ImagesShow = () => {
@@ -16,8 +18,8 @@ const ImagesShow = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [imageHeights, setImageHeights] = useState({});
   const [pageSize, setPageSize] = useState(20);
+  const [activeCctvName, setActiveCctvName] = useState("");
 
   // ---- LIMIT PAGINATION ACCORDING DEVICES ----
   useEffect(() => {
@@ -37,23 +39,6 @@ const ImagesShow = () => {
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // ---- HITUNG ROWSPAN ----
-  const calculateRowSpan = (imgUrl) => {
-    if (imageHeights[imgUrl]) return imageHeights[imgUrl];
-
-    const img = new Image();
-    img.src = imgUrl;
-    img.onload = () => {
-      const height = img.naturalHeight;
-      const width = img.naturalWidth;
-      // Asumsi column width ~280px
-      const scaledHeight = (height / width) * 280;
-      const rowSpan = Math.ceil(scaledHeight / 10); // 10px per row
-      setImageHeights(prev => ({ ...prev, [imgUrl]: rowSpan }));
-    };
-    return 30; // fallback
-  };
 
   // ---- FILTER + PAGE FROM URL ----
   const currentPath = useMemo(() => {
@@ -75,36 +60,59 @@ const ImagesShow = () => {
     setCurrentPage(currentPath.page);
   }, [currentPath.page]);
 
-  // ---- BREADCRUMB SELALU DARI AWAL ----
+  // Update useEffect fetchData untuk menangkap nama CCTV
+  useEffect(() => {
+    if (options && options.options === 'cctv' && currentPath.cctv) {
+      const found = options.data.find(c => String(c.id) === String(currentPath.cctv));
+      if (found) {
+        setActiveCctvName(found.name);
+        localStorage.setItem('lastCctvName', found.name);
+      }
+    } else if (!activeCctvName) {
+      // Ambil dari storage jika state kosong
+      const saved = localStorage.getItem('lastCctvName');
+      if (saved) setActiveCctvName(saved);
+    }
+  }, [options, currentPath.cctv]);
+
+  // ---- BREADCRUMB ----
   const breadcrumb = useMemo(() => {
-    const crumbs = [{ label: 'CCTV', path: '?' }];
+    const crumbs = [{ label: 'All Cameras', path: '?' }];
 
     if (currentPath.cctv) {
-      crumbs.push({ label: `CCTV ${currentPath.cctv}`, path: `?cctv=${currentPath.cctv}` });
+      // Gunakan nama dari state, storage, atau fallback teks
+      const cctvLabel = activeCctvName || localStorage.getItem('lastCctvName') || `CCTV ${currentPath.cctv}`;
+      crumbs.push({ label: cctvLabel, path: `?cctv=${currentPath.cctv}` });
     }
+    
     if (currentPath.year) {
-      crumbs.push({ label: currentPath.year, path: `?cctv=${currentPath.cctv}&year=${currentPath.year}` });
+      crumbs.push({ label: String(currentPath.year), path: `?cctv=${currentPath.cctv}&year=${currentPath.year}` });
     }
+    
     if (currentPath.month) {
-      crumbs.push({
-        label: format(new Date(currentPath.year, currentPath.month - 1), 'MMMM'),
-        path: `?cctv=${currentPath.cctv}&year=${currentPath.year}&month=${currentPath.month}`,
+      const monthName = format(new Date(2000, currentPath.month - 1), 'MMMM');
+      crumbs.push({ 
+        label: monthName, 
+        path: `?cctv=${currentPath.cctv}&year=${currentPath.year}&month=${currentPath.month}` 
       });
     }
+    
     if (currentPath.day) {
-      crumbs.push({
-        label: currentPath.day,
-        path: `?cctv=${currentPath.cctv}&year=${currentPath.year}&month=${currentPath.month}&day=${currentPath.day}`,
+      crumbs.push({ 
+        label: String(currentPath.day), 
+        path: `?cctv=${currentPath.cctv}&year=${currentPath.year}&month=${currentPath.month}&day=${currentPath.day}` 
       });
     }
 
     return crumbs;
-  }, [currentPath]);
+  }, [currentPath, activeCctvName]);
 
   // ---- FETCH DATA ----
   const fetchData = useCallback(async (pageNum) => {
     setLoading(true);
     setError(null);
+    setImages([]);
+    setOptions(null);
 
     try {
       const params = new URLSearchParams({
@@ -127,18 +135,20 @@ const ImagesShow = () => {
 
       if (json.options && Array.isArray(json.data)) {
         setOptions(json);
+        setImages([]); 
         setHasMore(false);
         return;
       }
 
+      setOptions(null); 
       const safe = json.data.map(img => ({
         ...img,
         timestamp: img.timestamp && !isNaN(new Date(img.timestamp).getTime())
           ? img.timestamp
           : null,
       }));
-
       setImages(safe);
+      
       setHasMore(json.hasMore === true);
       const totalItems = pageNum * pageSize + (json.hasMore ? 1 : 0);
       setTotalPages(Math.ceil(totalItems / pageSize));
@@ -150,8 +160,7 @@ const ImagesShow = () => {
   }, [currentPath.cctv, currentPath.year, currentPath.month, currentPath.day]);
 
   useEffect(() => {
-    setImages([]);
-    setOptions(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     fetchData(currentPath.page);
   }, [currentPath.page, currentPath.cctv, currentPath.year, currentPath.month, currentPath.day, fetchData]);
 
@@ -173,6 +182,42 @@ const ImagesShow = () => {
     return `?${p.toString()}`;
   }, [currentPath]);
 
+  // ---- HANDLE GO BACK BREADCRUMB ----
+  const handleGoBack = () => {
+    setSelectedImage(null); 
+    setImages([]); 
+    
+    if (breadcrumb.length > 1) {
+      const prevPath = breadcrumb[breadcrumb.length - 2].path;
+      const params = new URLSearchParams(prevPath.split('?')[1]);
+      setSearchParams(params);
+    }
+  };
+
+  // ---- LAZY LOAD IMAGE COMPONENT ----
+  const LazyImage = ({ src, alt }) => {
+    const [isLoaded, setIsLoaded] = useState(false);
+    return (
+      <img
+        src={src}
+        alt={alt}
+        onLoad={() => setIsLoaded(true)}
+        className={`masonry-img lazy-load-image ${isLoaded ? 'loaded' : ''}`}
+      />
+    );
+  };
+
+  // ---- SKELETON CARD COMPONENT ----
+  const SkeletonCard = () => (
+    <div className="masonry-item animate-pulse">
+      <div className="masonry-img-container bg-gray-200" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 bg-gray-200 rounded w-3/4" />
+        <div className="h-2 bg-gray-100 rounded w-1/2" />
+      </div>
+    </div>
+  );
+
   // ---- RENDER ----
   if (error) {
     return (
@@ -188,136 +233,223 @@ const ImagesShow = () => {
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen font-sans">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Images</h2>
-      <p className="mb-1 text-gray-600">
-        {options
-          ? `Choose ${options.options === 'cctv' ? 'CCTV' : options.options === 'year' ? 'Year' : options.options === 'month' ? 'Month' : 'Date'}`
-          : `Violation ${currentPath.cctv ? `- CCTV ${currentPath.cctv}` : ''}${currentPath.day ? ` - ${format(new Date(currentPath.year, currentPath.month - 1, currentPath.day), 'dd MMM yyyy')}` : ''}`}
-      </p>
-
-      {/* BREADCRUMB SELALU TAMPIL */}
-      <div className="mb-1 flex items-center space-x-2 text-sm flex-wrap">
-        {breadcrumb.map((crumb, i) => (
-          <span key={i}>
-            {i > 0 && <span className="mx-2 text-gray-400">›</span>}
-            {i < breadcrumb.length - 1 ? (
-              <RoleLink 
-                allowedRoles={['super_admin', 'report_viewer']}
-                to={crumb.path} 
-                className="text-blue-600 hover:underline">{crumb.label}
-              </RoleLink>
-            ) : (
-              <span className="text-gray-700 font-semibold">{crumb.label}</span>
-            )}
-          </span>
-        ))}
+      <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Violation Gallery</h2>
+      
+      {/* breadcrumbs */}
+      <div className="mb-4 flex justify-start">
+        <nav className="inline-flex items-center p-1.5 bg-white/90 backdrop-blur-md border border-gray-100 rounded-lg shadow-md relative z-[70]">
+          {breadcrumb.map((crumb, i) => (
+            <div key={i} className="flex items-center">
+              {i > 0 && <span className="text-gray-400 mx-1.5 text-xs font-bold">/</span>}
+              
+              <motion.div
+                layout
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center"
+              >
+                {i < breadcrumb.length - 1 ? (
+                  <RoleLink 
+                    allowedRoles={['super_admin', 'report_viewer']}
+                    to={crumb.path} 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedImage(null);
+                      setOptions(null); 
+                    }}
+                    className="px-3 py-1.5 text-sm font-bold text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-md transition-all flex items-center gap-2"
+                  >
+                    {/* IKON BERDASARKAN LEVEL */}
+                    {i === 0 && <FaCamera className="text-base" />}
+                    {i === 1 && <FaCamera className="text-base" />}
+                    {(i === 2 || i === 3 || i === 4) && <FaCalendar className="text-base" />}
+                    {crumb.label}
+                  </RoleLink>
+                ) : (
+                  <div className="px-4 py-1.5 bg-indigo-50 border border-indigo-100 rounded-md flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                    <span className="text-sm font-extrabold text-indigo-600">
+                      {crumb.label}
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          ))}
+        </nav>
       </div>
 
-      {loading ? (
-        <p className="flex justify-center w-full py-6 bg-white rounded-xl shadow-lg text-gray-600 items-center">Loading images...</p>
-      ) : (<>
-        {/* HALAMAN OPSI */}
-        {options && (
-          <div className="max-w-4xl lg:max-w-full mx-auto">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {options.data.map(item => {
-                const val = typeof item === 'object' ? (item.id ?? item) : item;
-                const lbl = typeof item === 'object' ? (item.name ?? val) : item;
-                return (
-                  <RoleLink
-                    allowedRoles={['super_admin', 'report_viewer']}
-                    key={val}
-                    to={getNextPath(val, options.options)}
-                    className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 rounded-xl text-center font-semibold text-lg transition-all shadow-md hover:shadow-lg items-center"
-                  >
-                    {lbl}
-                  </RoleLink>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        {/* HALAMAN GAMBAR */}
-        {!options && (
-          <>
-            {images.length === 0 && !loading && (
-              <p className="text-center text-gray-500">No pictures can be found.</p>
-            )}
-
-            {images.length > 0 && (
-              <>
-                <div className="masonry-grid">
-                  {images.map((img, idx) => (
-                    <div
-                      key={img.id ?? idx}
-                      className="masonry-item cursor-pointer"
-                      onClick={() => setSelectedImage(img)}
-                    >
-                      <div className="masonry-img-container">
-                        <img
-                          src={img.signedUrl}
-                          alt={img.violation}
-                          className="masonry-img"
-                          loading="lazy"
-                        />
-                      </div>
-                    </div>
-                  ))}
+      {/* CONTENT AREA */}
+      <AnimatePresence mode="wait">
+        {loading ? (
+          // 1. STATE LOADING (SKELETON)
+          <motion.div
+            key="loading-skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="masonry-grid"
+          >
+            {[...Array(pageSize)].map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </motion.div>
+        ) : options ? (
+          // 2. STATE FOLDER / OPTIONS
+          <motion.div
+            key="options"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            {/* CEK APAKAH DATA FOLDER ADA */}
+            {options.data && options.data.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {options.data.map((item, idx) => {
+                  const val = typeof item === 'object' ? (item.id ?? item) : item;
+                  const lbl = typeof item === 'object' ? (item.name ?? val) : item;
+                  return (
+                    <motion.div key={idx} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <RoleLink 
+                        allowedRoles={['super_admin', 'report_viewer']}
+                        to={getNextPath(val, options.options)}
+                        className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg text-center font-semibold text-lg shadow-md h-full flex items-center justify-center"
+                      >
+                        {lbl}
+                      </RoleLink>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* TAMPILAN JIKA FOLDER KOSONG */
+              <motion.div 
+                key="empty-state"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl shadow-sm border-2 border-dashed border-gray-200"
+              >
+                {/* Ikon Folder/Gambar Kosong */}
+                <div className="bg-gray-50 p-6 rounded-full mb-6">
+                  <FaExclamationTriangle className="text-gray-400 w-12 h-12" />
                 </div>
+                
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  {options ? "This folder is still empty" : "No images found"}
+                </h3>
+                <p className="text-gray-500 text-center max-w-xs mb-8">
+                  It looks like there is no recorded data for the category or date you selected.
+                </p>
 
-                {/* PAGINATION */}
-                <div className="flex justify-center items-center gap-4 mt-8">
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <FaAngleLeft className='h-5 w-5'/>
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">Page</span>
-                    <span className="font-semibold text-lg">{currentPage}</span>
+                {/* TOMBOL GO BACK */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleGoBack}
+                  className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors"
+                >
+                  <FaAngleLeft />
+                  Back to Previous
+                </motion.button>
+              </motion.div>
+            )}
+          </motion.div>
+        ) : images.length > 0 && (
+          // 3. STATE GAMBAR (HASIL ADA)
+          <motion.div
+            key="images"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="masonry-grid"
+          >
+            {images.map((img, idx) => (
+              <motion.div
+                key={`img-${img.id || idx}-${img.timestamp}`}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
+                className="masonry-item cursor-pointer relative z-10"
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  setSelectedImage(img);
+                }}
+              >
+                <div className="masonry-img-container group"> 
+                  <LazyImage src={img.signedUrl} alt={img.violation} />
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                    <p className="text-white font-bold text-sm">{img.violation}</p>
+                    <p className="text-gray-200 text-xs">
+                      {img.timestamp ? format(new Date(img.timestamp), 'HH:mm:ss') : ''}
+                    </p>
                   </div>
-
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={!hasMore}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <FaAngleRight className='h-5 w-5'/>
-                  </button>
                 </div>
-              </>
-            )}
-          </>
+                <div className="p-3">
+                  <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{img.violation}</p>
+                  {/* <p className="text-[10px] text-gray-400">{img.timestamp ? format(new Date(img.timestamp), 'HH:mm') : '--:--'}</p> */}
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
         )}
-        
-        {/* MODAL */}
-        {selectedImage && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center"
+      </AnimatePresence>
+
+      {/* PAGINATION */}
+      {!loading && !options && images.length > 0 && (
+        <div className="flex justify-center items-center gap-4 mt-12 pb-10">
+          <button
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-3 bg-white text-indigo-600 border border-indigo-100 rounded-lg disabled:opacity-50 shadow-sm hover:bg-indigo-50 transition-colors"
+          >
+            <FaAngleLeft className='h-5 w-5'/>
+          </button>
+          <div className="bg-white px-6 py-2 rounded-lg border border-indigo-100 shadow-sm">
+            <span className="text-xs text-gray-400 block text-center uppercase font-bold">Page</span>
+            <span className="font-bold text-lg text-indigo-600">{currentPage} / {totalPages}</span>
+          </div>
+          <button
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={!hasMore}
+            className="p-3 bg-white text-indigo-600 border border-indigo-100 rounded-lg disabled:opacity-50 shadow-sm hover:bg-indigo-50 transition-colors"
+          >
+            <FaAngleRight className='h-5 w-5'/>
+          </button>
+        </div>
+      )}
+
+      {/* MODAL */}
+      <AnimatePresence>
+        {selectedImage && selectedImage.signedUrl && ( 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
             onClick={() => setSelectedImage(null)}
           >
-            <div 
-              className="relative bg-white rounded-lg p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
-              onClick={e => e.stopPropagation()}
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-2xl p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
+              onClick={e => e.stopPropagation()} 
             >
               <img
-                  src={selectedImage.signedUrl}
-                  alt={selectedImage.violation || 'Violation'}
-                  className="max-w-full max-h-[85vh] object-contain"
-                />
-            </div>
+                src={selectedImage.signedUrl}
+                alt="Violation Detail"
+                className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              />
+            </motion.div>
             {/* INFO DI BAWAH */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white place-content-center text-center mt-2">
               <p className='text-base'>Clik here to close the image.</p>
             </div>
-          </div>
+          </motion.div>
         )}
-        </>
-      )}
+      </AnimatePresence>
     </div>
   );
 };

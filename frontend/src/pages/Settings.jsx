@@ -1,14 +1,16 @@
 // Settings.jsx
 import { Tab } from '@headlessui/react';
+import { motion, AnimatePresence } from 'framer-motion'; 
 import GeneralSetup from '../components/SetupGeneral'; 
 import DatasetSetup from '../components/SetupDataset'; 
 import EmailSetup from '../components/SetupEmail'; 
+import { FaCog, FaDatabase, FaEnvelope } from 'react-icons/fa';
 
 const Settings = () => {
     const menuItems = [
-        { key: 'general', label: 'General Settings', component: <GeneralSetup /> },
-        { key: 'dataset', label: 'Dataset Setup', component: <DatasetSetup /> },
-        { key: 'email', label: 'Email Setup', component: <EmailSetup /> },
+        { key: 'general', label: 'General', Icon: FaCog, component: <GeneralSetup /> },
+        { key: 'dataset', label: 'Dataset', Icon: FaDatabase, component: <DatasetSetup /> },
+        { key: 'email', label: 'Email', Icon: FaEnvelope, component: <EmailSetup /> },
     ];
 
     function classNames(...classes) {
@@ -18,42 +20,65 @@ const Settings = () => {
     return (
         <div className="p-4 sm:p-6 bg-gray-50 min-h-screen font-sans">
             <div className="max-w-7xl mx-auto">
-                <h2 className="text-3xl font-bold mb-8 text-gray-900 tracking-tight">System Settings</h2>
+                <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">System Settings</h2>
 
                 <Tab.Group>
-                    <Tab.List className="flex space-x-1 rounded-xl bg-gray-200/50 p-1 mb-4 max-w-md">
-                        {menuItems.map((item) => (
-                            <Tab
-                                key={item.key}
-                                className={({ selected }) =>
-                                    classNames(
-                                        'w-full rounded-lg py-2.5 text-sm font-semibold leading-5 transition-all duration-200 outline-none',
-                                        selected
-                                            ? 'bg-indigo-700 text-white shadow-sm ring-1 ring-black/5'
-                                            : 'text-gray-600 hover:bg-white/[0.35] hover:text-gray-900'
-                                    )
-                                }
-                            >
-                                {item.label}
-                            </Tab>
-                        ))}
-                    </Tab.List>
+                    {/* TAB LIST DENGAN STYLE GLASSMORPHISM PILL */}
+                    <div className="flex mb-4">
+                        <Tab.List className="inline-flex items-center p-1.5 bg-white/90 backdrop-blur-md border border-gray-100 rounded-lg shadow-md relative">
+                            {menuItems.map((item) => (
+                                <Tab
+                                    key={item.key}
+                                    className={({ selected }) =>
+                                        classNames(
+                                            'relative px-6 py-2.5 text-sm font-bold transition-all duration-300 rounded-md flex items-center gap-2 outline-none',
+                                            selected ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-400'
+                                        )
+                                    }
+                                >
+                                    {({ selected }) => (
+                                        <>
+                                            <item.Icon className={classNames("w-4 h-4 z-10", selected ? "text-indigo-600" : "text-gray-400")} />
+                                            <span className="relative z-10">{item.label}</span>
+                                            
+                                            {/* ANIMASI BACKGROUND PILL YANG BERGESER */}
+                                            {selected && (
+                                                <motion.div
+                                                    layoutId="activeTabPill"
+                                                    className="absolute inset-0 bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm"
+                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </Tab>
+                            ))}
+                        </Tab.List>
+                    </div>
 
                     <Tab.Panels>
-                        {menuItems.map((item, idx) => (
-                            <Tab.Panel
-                                key={idx}
-                                className={classNames(
-                                    'rounded-xl outline-none transition-all duration-300',
-                                    'focus:ring-2 focus:ring-indigo-500'
-                                )}
-                            >
-                                {/* Wrapper untuk memberikan efek fade-in halus */}
-                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                    {item.component}
-                                </div>
-                            </Tab.Panel>
-                        ))}
+                        <AnimatePresence mode="wait">
+                            {menuItems.map((item, idx) => (
+                                <Tab.Panel
+                                    key={item.key}
+                                    static 
+                                >
+                                    {({ selected }) => (
+                                        selected && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -10 }}
+                                                transition={{ duration: 0.3 }}
+                                                className="outline-none"
+                                            >
+                                                {item.component}
+                                            </motion.div>
+                                        )
+                                    )}
+                                </Tab.Panel>
+                            ))}
+                        </AnimatePresence>
                     </Tab.Panels>
                 </Tab.Group>
             </div>
