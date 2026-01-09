@@ -12,17 +12,24 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { AlertProvider } from './components/AlertProvider';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { OrbitProgress } from "react-loading-indicators";
 import Login from './pages/Login';
 
 const RequireAuthOrRedirect = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <OrbitProgress variant="disc" color={["#6366F1", "#10B981", "#FFD54F", "#EF4444"]} size="medium" text="" textColor="" />
+      </div>
+    );
+  }
   return user ? <Navigate to="/" replace /> : children;
 };
 
 function AppContent() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
-  const { user } = useAuth(); // DETEKSI APAKAH SUDAH LOGIN
+  const { user } = useAuth(); 
 
   return (
     <div className="min-h-screen bg-gray-50">

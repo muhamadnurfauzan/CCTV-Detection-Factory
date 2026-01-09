@@ -233,7 +233,7 @@ const Dashboard = () => {
   const SummarySkeleton = () => (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
       {[...Array(5)].map((_, i) => (
-        <div key={i} className="w-full p-4 bg-white rounded-xl shadow-lg h-[140px] flex flex-col justify-between">
+        <div key={i} className="w-full p-4 bg-white rounded-xl shadow-lg h-[140px] flex flex-col justify-between animate-pulse">
           <SkeletonBase className="w-10 h-10 rounded-lg" />
           <SkeletonBase className="w-24 h-4" />
           <SkeletonBase className="w-16 h-8" />
@@ -243,7 +243,7 @@ const Dashboard = () => {
   );
 
   const ChartSkeleton = ({ height = "348px" }) => (
-    <div className="w-full p-6 bg-white rounded-xl shadow-lg flex flex-col gap-4" style={{ height }}>
+    <div className="w-full p-6 bg-white rounded-xl shadow-lg flex flex-col gap-4 animate-pulse" style={{ height }}>
       <div className="flex justify-between items-end h-full gap-2">
         {[...Array(6)].map((_, i) => (
           <SkeletonBase key={i} className="w-full" style={{ height: `${Math.random() * 60 + 20}%` }} />

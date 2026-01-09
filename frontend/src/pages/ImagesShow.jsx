@@ -379,12 +379,6 @@ const ImagesShow = () => {
               >
                 <div className="masonry-img-container group"> 
                   <LazyImage src={img.signedUrl} alt={img.violation} />
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                    <p className="text-white font-bold text-sm">{img.violation}</p>
-                    <p className="text-gray-200 text-xs">
-                      {img.timestamp ? format(new Date(img.timestamp), 'HH:mm:ss') : ''}
-                    </p>
-                  </div>
                 </div>
                 <div className="p-3">
                   <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{img.violation}</p>

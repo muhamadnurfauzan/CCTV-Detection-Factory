@@ -1,6 +1,7 @@
 // src/components/ProtectedRoute.jsx 
 import { useAuth } from '../context/AuthContext';
 import { Navigate, useLocation } from 'react-router-dom';
+import { OrbitProgress } from "react-loading-indicators";
 
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, loading } = useAuth();
@@ -8,8 +9,8 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-50">
-        <div className="text-xl text-indigo-600">Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <OrbitProgress variant="disc" color={["#6366F1", "#10B981", "#FFD54F", "#EF4444"]} size="medium" text="" textColor="" />
       </div>
     );
   }

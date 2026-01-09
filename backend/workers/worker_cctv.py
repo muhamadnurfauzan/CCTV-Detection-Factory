@@ -310,7 +310,7 @@ class CCTVWorker:
                 if current_time - last_check_time > 15:
                     if self.frame_count == last_count:
                         logging.error(f"[CCTV {self.cctv_id}] Frame macet selama 15 detik! Memaksa restart...")
-                        os._exit(1) # PM2 akan otomatis restart
+                        os._exit(1) 
                     
                     last_count = self.frame_count
                     last_check_time = current_time
