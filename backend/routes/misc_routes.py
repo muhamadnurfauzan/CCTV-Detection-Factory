@@ -23,10 +23,8 @@ def video_feed():
     def gen():
         # Menyiapkan frame placeholder jika kamera offline
         placeholder_disconnected = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder_disconnected, "Camera Offline/Freeze", (30, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        
-        # Encode placeholder ke JPEG sekali saja untuk efisiensi
+        cv2.putText(placeholder_disconnected, "Camera Offline/Freeze", (120, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
         _, placeholder_jpeg = cv2.imencode('.jpg', placeholder_disconnected)
         placeholder_bytes = placeholder_jpeg.tobytes()
 
@@ -35,17 +33,13 @@ def video_feed():
             # Key format: cctv_frame:[id] (sesuai dengan yang di-set di worker)
             frame_bytes = r.get(f"cctv_frame:{cctv_id}")
 
-            if frame_bytes:
-                # Jika data ada di Redis, kirim ke frontend
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            else:
-                # Jika data kosong (worker mati atau key expired), kirim placeholder
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + placeholder_bytes + b'\r\n')
-
-            # Berikan sedikit jeda untuk mengontrol FPS stream (sekitar 10-15 FPS)
-            time.sleep(0.07)
+            current_frame = frame_bytes if frame_bytes else placeholder_bytes
+        
+            yield (b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + current_frame + b'\r\n')
+            
+            # Samakan dengan FRAME_SKIP worker. Jika worker kirim 10 FPS, sleep 0.1
+            time.sleep(0.08)
 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

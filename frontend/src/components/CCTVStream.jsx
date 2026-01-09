@@ -1,36 +1,50 @@
-// CCTVStream.jsx
+// CCTVStream.jsx - Versi Perbaikan
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaShieldAlt } from 'react-icons/fa';
 
 function CCTVStream({ cctvId }) {
   const imgRef = useRef(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!cctvId || !imgRef.current) return;
 
-    const img = imgRef.current;
+    setIsLoaded(false);
+    setError(false);
 
-    const loadImage = () => {
-      const timestamp = Date.now();
-      const streamUrl = `/api/video-feed?id=${cctvId}&t=${timestamp}`;
-      img.src = streamUrl;
-    };
-
-    loadImage();
+    imgRef.current.src = `/api/video-feed?id=${cctvId}`;
 
     return () => {
-      img.onload = null;
-      img.onerror = null;
-      img.src = '';
+      if (imgRef.current) imgRef.current.src = "";
     };
   }, [cctvId]);
 
   return (
-    <div className="max-w-4xl w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-      <div className="relative max-w-3xl w-full">
+    <div className="max-w-4xl w-full mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="relative bg-black rounded-lg overflow-hidden shadow-md aspect-video group">
+
+        {/* LOADING STATE */}
+        <AnimatePresence>
+          {!isLoaded && !error && (
+            <motion.div 
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-10"
+            >
+              <FaShieldAlt className="text-indigo-500 text-5xl animate-bounce mb-4" />
+              <p className="text-indigo-200 font-mono text-xs tracking-tighter">Connecting...</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ACTUAL STREAM */}
         <img
           ref={imgRef}
-          alt={`CCTV ${cctvId} Stream`}
-          className="w-full h-auto object-cover"
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setError(true)}
+          alt="CCTV Stream"
+          className={`w-full h-full object-contain transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
       </div>
     </div>
