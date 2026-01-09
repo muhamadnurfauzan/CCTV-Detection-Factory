@@ -54,7 +54,9 @@ class SharedState:
                     'sched_weekly_hour': 7,
                     'sched_weekly_minute': 30,
                 }
-
+                cls._instance.active_model_filename = "ppe_detection_yolov12l.pt"
+                
+                cls._instance.MODEL_LOCK = Lock()
                 cls._instance.DETECTION_SETTINGS_LOCK = Lock()
                 cls._instance.SCHEDULER_SETTINGS_LOCK = Lock()
                 cls._instance.ANNOTATED_FRAME_LOCK = Lock()          

@@ -2,14 +2,14 @@
 import { Tab } from '@headlessui/react';
 import { motion, AnimatePresence } from 'framer-motion'; 
 import GeneralSetup from '../components/SetupGeneral'; 
-import DatasetSetup from '../components/SetupDataset'; 
+import ModelSetup from '../components/SetupModel'; 
 import EmailSetup from '../components/SetupEmail'; 
 import { FaCog, FaDatabase, FaEnvelope } from 'react-icons/fa';
 
 const Settings = () => {
     const menuItems = [
         { key: 'general', label: 'General', Icon: FaCog, component: <GeneralSetup /> },
-        { key: 'dataset', label: 'Dataset', Icon: FaDatabase, component: <DatasetSetup /> },
+        { key: 'model', label: 'Model', Icon: FaDatabase, component: <ModelSetup /> },
         { key: 'email', label: 'Email', Icon: FaEnvelope, component: <EmailSetup /> },
     ];
 

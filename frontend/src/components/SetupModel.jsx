@@ -39,7 +39,7 @@ const rgbToHsl = (r, g, b) => {
     return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 };
 
-const SetupDataset = () => {
+const SetupModel = () => {
     const { showAlert } = useAlert(); 
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -47,10 +47,16 @@ const SetupDataset = () => {
     const [editingItem, setEditingItem] = useState(null);
     const [tempEdit, setTempEdit] = useState({});
     
-    // State untuk Color Picker (disimpan di SetupDataset karena state HSL memicu render Modal)
+    // State untuk Color Picker (disimpan di SetupModel karena state HSL memicu render Modal)
     const [colorH, setColorH] = useState(0); 
     const [colorS, setColorS] = useState(100);
     const [colorL, setColorL] = useState(50);
+
+    // State untuk Model Selection
+    const [isEditingModel, setIsEditingModel] = useState(false);
+    const [modelOptions, setModelOptions] = useState([]); 
+    const [selectedModelId, setSelectedModelId] = useState(null); 
+    const [savingModel, setSavingModel] = useState(false);
 
     // API_URL menggunakan /api/object/object-classes (Seperti yang sudah diperbaiki)
     const API_URL = '/api/object/object-classes'; 
@@ -149,8 +155,53 @@ const SetupDataset = () => {
         return data.find(item => item.id === pairId) || null;
     }, [data]);
 
-    // Dataset Skeleton for Loading State
-    const DatasetSkeleton = () => (
+    // --- Efek untuk mengambil daftar model dari database ---
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await fetch('/api/model/list');
+                if (res.ok) {
+                    const data = await res.json();
+                    setModelOptions(data.models);
+                    // Set model yang is_active = true sebagai default
+                    const active = data.models.find(m => m.is_active);
+                    if (active) setSelectedModelId(active.id);
+                }
+            } catch (err) {
+                console.error("Failed to fetch models:", err);
+            }
+        };
+        fetchModels();
+    }, []);
+
+    // --- Handler untuk menyimpan perubahan model ---
+    const handleSaveModelChange = async () => {
+        setSavingModel(true);
+        try {
+            const res = await fetch('/api/model/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: selectedModelId })
+            });
+
+            if (res.ok) {
+                showAlert("AI Model updated and successfully hot-swapped!", "success");
+                setIsEditingModel(false);
+                // Refresh list untuk memastikan status is_active sinkron
+                const data = await (await fetch('/api/model/list')).json();
+                setModelOptions(data.models);
+            } else {
+                throw new Error("Failed to update model");
+            }
+        } catch (err) {
+            showAlert(err.message, "error");
+        } finally {
+            setSavingModel(false);
+        }
+    };
+
+    // Model Skeleton for Loading State
+    const ModelSkeleton = () => (
         <div className="p-6 bg-white rounded-lg animate-pulse">
             <div className="space-y-4">
                 <div className="h-10 bg-gray-100 rounded-lg w-full" />
@@ -170,10 +221,71 @@ const SetupDataset = () => {
     // --- Main Table Render ---
     return (
         <div className="p-6 bg-white shadow rounded-lg">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">Object Class Configuration</h3>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+                <div>
+                    <h3 className="text-xl font-bold text-gray-800">Object Class Configuration</h3>
+                    <p className="text-xs text-gray-500 mt-1">Manage detection classes and active AI model</p>
+                </div>
+
+                <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-extrabold text-gray-400 ml-1">Active AI Model</span>
+                        <select
+                            value={selectedModelId || ""} 
+                            onChange={(e) => setSelectedModelId(parseInt(e.target.value))}
+                            disabled={!isEditingModel || savingModel}
+                            className={`min-w-[200px] p-2 rounded-lg border text-sm font-bold transition-all
+                                ${!isEditingModel 
+                                    ? 'bg-gray-100 border-transparent text-gray-500 cursor-not-allowed' 
+                                    : 'bg-white border-indigo-300 text-indigo-700 cursor-pointer ring-2 ring-indigo-50 shadow-md'}
+                            `}
+                        >
+                            {modelOptions.map((model) => (
+                                <option key={model.id} value={model.id} disabled={!model.exists_on_server}>
+                                    {model.display_name} {!model.exists_on_server ? '(File Missing)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex gap-2 self-end">
+                        {!isEditingModel ? (
+                            <RoleButton
+                                allowedRoles={['super_admin']}
+                                onClick={() => setIsEditingModel(true)}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-bold shadow-md shadow-green-100 transition-all flex items-center gap-2"
+                            >
+                                Edit Model
+                            </RoleButton>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={() => {
+                                        setIsEditingModel(false);
+                                        // Reset ke model yang aktif di awal
+                                        const active = modelOptions.find(m => m.is_active);
+                                        if (active) setSelectedModelId(active.id);
+                                    }}
+                                    disabled={savingModel}
+                                    className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-bold transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveModelChange}
+                                    disabled={savingModel}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-md shadow-indigo-100 transition-all"
+                                >
+                                    {savingModel ? 'Saving...' : 'Save Model'}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
             
             {loading ? (
-                <DatasetSkeleton />
+                <ModelSkeleton />
             ) : (
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -287,4 +399,4 @@ const PairInfoTooltip = React.memo(({ pairDetails }) => {
     );
 });
 
-export default SetupDataset;
+export default SetupModel;

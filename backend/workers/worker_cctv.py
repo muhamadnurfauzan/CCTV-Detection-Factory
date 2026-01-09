@@ -23,14 +23,13 @@ if backend_dir not in sys.path:
 # Import dari modul yang sudah ada
 from shared_state import state
 import services.config_service as config_service
-from services.cctv_services import load_all_cctv_configs
+from services.cctv_services import load_all_cctv_configs, get_active_model_from_db
 from core.violation_processor import process_detection
 from core.violation_gate import ViolationGate
 from core.cctv_scheduler import is_cctv_active_now
 from utils.helpers import get_color_for_class, point_in_polygon
 from config import (
-    CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, 
-    MODEL_PATH, CCTV_RATIO
+    CONFIDENCE_THRESHOLD, QUEUE_SIZE, FRAME_SKIP, CLEANUP_INTERVAL, CCTV_RATIO
 )
 
 # Setup logging khusus worker agar tidak tercampur
@@ -120,7 +119,11 @@ class CCTVWorker:
 
     def process_loop(self):
         """Thread utama deteksi dengan mode Dual: Stream Only vs Full Detection."""
-        self.model = YOLO(MODEL_PATH).to(self.device)
+        state.active_model_filename = get_active_model_from_db()
+        with state.MODEL_LOCK:
+            self.current_model_file = state.active_model_filename
+        model_path = os.path.join("model", self.current_model_file)
+        self.model = YOLO(model_path).to(self.device)
         
         while not self.stop_event.is_set():
             if self.frame_queue:
