@@ -65,7 +65,7 @@ def get_active_model_from_db():
         return row[0] if row else "ppe_detection_yolov12l.pt" # Fallback
     except Exception as e:
         logging.error(f"[DB] Gagal mengambil model aktif: {e}")
-        return "ppe_detection_yolov12l.pt"
+        return "ppe_detection_yolov12n.pt"
     finally:
         cur.close()
         conn.close()

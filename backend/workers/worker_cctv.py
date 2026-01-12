@@ -124,6 +124,7 @@ class CCTVWorker:
             self.current_model_file = state.active_model_filename
         model_path = os.path.join("model", self.current_model_file)
         self.model = YOLO(model_path).to(self.device)
+        logging.info(f"[CCTV {self.cctv_id}] Model loaded: {self.current_model_file} on {self.device}")
         
         while not self.stop_event.is_set():
             if self.frame_queue:

@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.units import inch, cm 
+from reportlab.lib.units import inch
 from io import BytesIO
 
 from email.mime.multipart import MIMEMultipart

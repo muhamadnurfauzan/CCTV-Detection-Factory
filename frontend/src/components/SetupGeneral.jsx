@@ -332,7 +332,7 @@ const SetupGeneral = () => {
 
     // General Skeleton for Scheduler Loading State
     const GeneralSkeleton = () => (
-        <div className='bg-white rounded-2xl border border-gray-200 overflow-hidden p-6'>
+        <div className='bg-white border border-gray-200 overflow-hidden p-6'>
             <div className="animate-pulse space-y-8">
                 <div className="h-6 bg-gray-200 rounded w-1/2 mb-10" />
                 {[...Array(3)].map((_, i) => (

@@ -7,7 +7,7 @@ from db.db_config import get_connection
 from supabase import create_client
 from services.cctv_services import refresh_all_cctv_configs
 from services.notification_service import send_violation_recap_emails
-from services.config_service import load_scheduler_settings
+from services.config_service import load_scheduler_settings, load_email_config
 import config as config
 
 supabase = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
@@ -41,28 +41,33 @@ def update_daily_log():
         conn.close()
 
 def cleanup_old_data():
-    """Menghapus log & gambar yang lebih dari 60 hari."""
+    """Menghapus log & gambar yang lebih tua dari batas hari yang ditentukan."""
     conn = get_connection()
     cur = conn.cursor()
-    # datetime.datetime.now() - datetime.timedelta(days=60) menghasilkan objek datetime yang dapat 
-    # di-*pass* sebagai parameter %s ke PostgreSQL/Psycopg2 dengan aman.
-    cutoff_days = state.scheduler_settings.get('sched_cleanup_cutoff_days', 60)
+    
+    days_limit = state.scheduler_settings.get('sched_cleanup_cutoff_days', 60)
+    
+    # HITUNG TIMESTAMP CUTOFF: Waktu sekarang dikurangi X hari
+    cutoff_timestamp = datetime.datetime.now() - datetime.timedelta(days=days_limit)
 
     try:
-        cur.execute("SELECT image FROM violation_detection WHERE timestamp < %s", (cutoff_days,))
+        # 1. Ambil URL gambar untuk referensi cleanup storage (Opsional jika ingin hapus di Supabase)
+        cur.execute("SELECT image FROM violation_detection WHERE timestamp < %s", (cutoff_timestamp,))
         
-        # Hapus dari DB
-        cur.execute("DELETE FROM violation_detection WHERE timestamp < %s", (cutoff_days,))
+        # 2. Hapus data dari PostgreSQL berdasarkan timestamp
+        cur.execute("DELETE FROM violation_detection WHERE timestamp < %s", (cutoff_timestamp,))
+        
         conn.commit()
-        logging.info(f"[SCHEDULER] Data dan gambar >60 hari dihapus.")
+        logging.info(f"[SCHEDULER] Cleanup success: Data older than {cutoff_timestamp} deleted.")
     except Exception as e:
-        logging.error(f"[SCHEDULER] Gagal hapus data lama: {e}")
+        logging.error(f"[SCHEDULER] Cleanup failed: {e}")
     finally:
         cur.close()
         conn.close()
 
 def scheduler_thread():
     load_scheduler_settings()
+    load_email_config()
     
     while True:
         time.sleep(60)
@@ -130,6 +135,7 @@ def scheduler_thread():
         refresh_interval = s.get('sched_refresh_config_interval', 10)
         if minute % refresh_interval == 0:
             refresh_all_cctv_configs()
+            load_email_config()
             load_scheduler_settings()
 
 if __name__ == "__main__":

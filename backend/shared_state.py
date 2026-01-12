@@ -42,7 +42,7 @@ class SharedState:
                     'target_max_width': 320,
                 }
                 cls._instance.scheduler_settings = {
-                    'sched_cleanup_cutoff_days': 30,
+                    'sched_cleanup_cutoff_days': 60,
                     'sched_cleanup_hour': 0,
                     'sched_cleanup_minute': 5,
                     'sched_daily_recap_minute': 0,

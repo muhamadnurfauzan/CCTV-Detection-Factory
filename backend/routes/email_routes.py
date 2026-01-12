@@ -1,6 +1,6 @@
 # backend/routes/email_routes.py
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from psycopg2.extras import RealDictCursor
 
