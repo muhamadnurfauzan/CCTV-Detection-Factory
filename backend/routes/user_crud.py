@@ -18,14 +18,14 @@ ROLES_NEEDING_CCTV = ['super_admin', 'report_viewer']
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 # Regex untuk validasi password dan username kuat
-GMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@gmail\.com$", re.IGNORECASE)
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@(gmail\.com|summitadyawinsa\.co\.id)$", re.IGNORECASE)
 USERNAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,19}$")
 PASSWORD_PATTERN = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
 )
 
-def is_gmail_email(email: str) -> bool:
-    return bool(GMAIL_PATTERN.match(email.strip()))
+def is_valid_email_domain(email: str) -> bool:
+    return bool(EMAIL_PATTERN.match(email.strip()))
 
 def is_valid_username(username: str) -> bool:
     return bool(USERNAME_PATTERN.match(username))
@@ -57,10 +57,10 @@ def add_user():
         if not email:
             return jsonify({"error": "Email is required."}), 400
 
-        if not is_gmail_email(email):
+        if not is_valid_email_domain(email):
             return jsonify({
-                "error": "Only Gmail (@gmail.com) emails are allowed.\n"
-                         "Example: yourname@gmail.com"
+                "error": "Only Gmail (@gmail.com) or Summitadyawinsa (@summitadyawinsa.co.id) emails are allowed.\n"
+                         "Example: yourname@gmail.com or yourname@summitadyawinsa.co.id"
             }), 400
         
         if not username:
@@ -147,10 +147,10 @@ def update_user(user_id):
         if not email:
             return jsonify({"error": "Email is required."}), 400
 
-        if not is_gmail_email(email):
+        if not is_valid_email_domain(email):
             return jsonify({
-                "error": "Only Gmail (@gmail.com) emails are allowed.\n"
-                         "Example: yourname@gmail.com"
+                "error": "Only Gmail (@gmail.com) or Summitadyawinsa (@summitadyawinsa.co.id) emails are allowed.\n"
+                         "Example: yourname@gmail.com or yourname@summitadyawinsa.co.id"
             }), 400
         
         if not username:

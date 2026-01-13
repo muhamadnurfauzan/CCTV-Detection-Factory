@@ -43,8 +43,8 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
         }
     }, [open, userData]);
 
-    const validateGmail = (email) => {
-        return /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email);
+    const validateEmail = (email) => {
+        return /^[a-zA-Z0-9._%+-]+@(gmail\.com|summitadyawinsa\.co\.id)$/i.test(email);
     };
 
     const validateUsername = (username) => {
@@ -263,17 +263,17 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
                                 onFocus={() => setShowEmailTooltip(true)}
                                 onBlur={() => setShowEmailTooltip(false)}
                                 className={`w-full px-3 py-2 pr-12 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
-                                    form.email && !validateGmail(form.email)
+                                    form.email && !validateEmail(form.email)
                                         ? 'border-red-500 focus:border-red-500'
                                         : 'border-gray-300'
                                 }`}
-                                placeholder="Use Gmail account!"
+                                placeholder="Use Gmail or Summitadyawinsa account!"
                             />
 
                             {/* Indikator valid */}
                             {form.email && (
                                 <div className="absolute right-3 top-2.5">
-                                    {validateGmail(form.email) ? (
+                                    {validateEmail(form.email) ? (
                                         <span className="text-green-600 text-xl">✓</span>
                                     ) : (
                                         <span className="text-red-600 text-xl">✗</span>
@@ -281,14 +281,14 @@ export default function ModalEditUser({ open, onClose, onUpdate, userData }) {
                                 </div>
                             )}
 
-                            {/* Tooltip Gmail Only */}
+                            {/* Tooltip Email */}
                             <div className={`absolute z-10 -top-2 left-1/2 -translate-x-1/2 -translate-y-full ${showEmailTooltip && form.email ? 'block' : 'hidden'}`}>
                                 <div className="bg-gray-900 text-white text-xs rounded-lg py-3 px-4 shadow-xl whitespace-nowrap font-medium">
                                     <p className="flex items-center gap-2">
-                                        <span>Only Gmail emails are allowed!</span>
+                                        <span>Only Gmail or Summitadyawinsa emails are allowed!</span>
                                     </p>
                                     <p className="text-xs mt-1 opacity-90">
-                                        Example: yourname@gmail.com
+                                        Example: yourname@gmail.com or yourname@summitadyawinsa.co.id
                                     </p>
                                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-3 h-3 bg-gray-900"></div>
                                 </div>
