@@ -1,4 +1,4 @@
-# app.py (KODE YANG BENAR)
+# app.py 
 import logging
 import sys
 import os

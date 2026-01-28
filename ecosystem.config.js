@@ -7,7 +7,7 @@ module.exports = {
       interpreter: "/Users/macbook/opt/anaconda3/envs/comvis/bin/python", 
       cwd: "./backend",
       // interpreter: "C:/ProgramData/miniconda3/envs/cctv/python.exe",
-      // cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",
+      // cwd: "C:/Users/Administrator/Projects/CCTV-Detection-Factory/backend",c
       watch: false,
       autorestart: true,
       env: { FLASK_ENV: "production" }

@@ -281,7 +281,7 @@ export default function ModalAddUser({ open, onClose, onSuccess }) {
                                         <span>Only Gmail or Summitadyawinsa emails are allowed!</span>
                                     </p>
                                     <p className="text-xs mt-1 opacity-90">
-                                        Example: yourname@gmail.com or yourname@summitadyawinsa.co.id
+                                        Example: yourname@gmail.com or <br /> yourname@summitadyawinsa.co.id
                                     </p>
                                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-3 h-3 bg-gray-900"></div>
                                 </div>
