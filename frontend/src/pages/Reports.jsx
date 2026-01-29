@@ -9,7 +9,7 @@ import ModalSendRecap from '../components/ModalSendRecap';
 
 // --- Helper Modal Preview Gambar ---
 const ImagePreviewModal = ({ imageUrl, onClose }) => {
-    const [isLoaded, setIsLoaded] = React.useState(false); // State pelacakan loading gambar
+    const [isLoaded, setIsLoaded] = React.useState(false); 
 
     if (!imageUrl) return null;
 
@@ -27,7 +27,7 @@ const ImagePreviewModal = ({ imageUrl, onClose }) => {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
                     className="relative bg-white rounded-2xl p-2 shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
-                    onClick={e => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}pm2
                 >
                     {/* Skeleton Loader */}
                     {!isLoaded && (

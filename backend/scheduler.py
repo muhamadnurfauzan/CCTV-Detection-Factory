@@ -1,16 +1,14 @@
 # scheduler.py
+import os
 import time
 import datetime
 import logging
 from shared_state import state
 from db.db_config import get_connection
-from supabase import create_client
 from services.cctv_services import refresh_all_cctv_configs
 from services.notification_service import send_violation_recap_emails
 from services.config_service import load_scheduler_settings, load_email_config
 import config as config
-
-supabase = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
 
 def update_daily_log():
     """Melakukan rekap data harian dari violation_detection (PostgreSQL)."""
@@ -41,26 +39,26 @@ def update_daily_log():
         conn.close()
 
 def cleanup_old_data():
-    """Menghapus log & gambar yang lebih tua dari batas hari yang ditentukan."""
+    """Menghapus log di DB & file fisik di folder lokal."""
     conn = get_connection()
     cur = conn.cursor()
-    
     days_limit = state.scheduler_settings.get('sched_cleanup_cutoff_days', 60)
-    
-    # HITUNG TIMESTAMP CUTOFF: Waktu sekarang dikurangi X hari
     cutoff_timestamp = datetime.datetime.now() - datetime.timedelta(days=days_limit)
 
     try:
-        # 1. Ambil URL gambar untuk referensi cleanup storage (Opsional jika ingin hapus di Supabase)
+        # 1. Ambil path gambar yang akan dihapus fisiknya
         cur.execute("SELECT image FROM violation_detection WHERE timestamp < %s", (cutoff_timestamp,))
+        old_images = cur.fetchall()
         
-        # 2. Hapus data dari PostgreSQL berdasarkan timestamp
+        base_path = os.getenv("LOCAL_STORAGE_PATH", "public/uploads")
+        for (img_path,) in old_images:
+            full_path = os.path.join(base_path, img_path)
+            if os.path.exists(full_path):
+                os.remove(full_path) 
+
+        # 2. Hapus data dari DB
         cur.execute("DELETE FROM violation_detection WHERE timestamp < %s", (cutoff_timestamp,))
-        
         conn.commit()
-        logging.info(f"[SCHEDULER] Cleanup success: Data older than {cutoff_timestamp} deleted.")
-    except Exception as e:
-        logging.error(f"[SCHEDULER] Cleanup failed: {e}")
     finally:
         cur.close()
         conn.close()

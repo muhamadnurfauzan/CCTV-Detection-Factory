@@ -1,5 +1,4 @@
 import os
-from supabase import create_client, Client
 from dotenv import load_dotenv
 from shared_state import state
 
@@ -17,9 +16,5 @@ QUEUE_SIZE = state.detection_settings['queue_size']
 PADDING_PERCENT = state.detection_settings['padding_percent']
 TARGET_MAX_WIDTH = state.detection_settings['target_max_width']
 
-# --- Supabase Configuration ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "violations")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+# --- Local Storage Configuration ---
+BASE_STORAGE_PATH = os.path.join(os.getcwd(), "public", "cctv")

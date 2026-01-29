@@ -124,8 +124,8 @@ const ImagesShow = () => {
       if (currentPath.month) params.append('month', currentPath.month);
       if (currentPath.day) params.append('day', currentPath.day);
 
-      const API_BASE = import.meta.env.VITE_API_BASE || '/supabase-api';
-      const res = await fetch(`${API_BASE}/violations?${params}`, {
+      const API_BASE = '/api'; 
+      const res = await fetch(`${API_BASE}/violations-history?${params}`, {
         cache: 'no-store',
       });
 
@@ -143,6 +143,7 @@ const ImagesShow = () => {
       setOptions(null); 
       const safe = json.data.map(img => ({
         ...img,
+        displayUrl: img.imageUrl, 
         timestamp: img.timestamp && !isNaN(new Date(img.timestamp).getTime())
           ? img.timestamp
           : null,
@@ -378,7 +379,7 @@ const ImagesShow = () => {
                 }}
               >
                 <div className="masonry-img-container group"> 
-                  <LazyImage src={img.signedUrl} alt={img.violation} />
+                  <LazyImage src={img.displayUrl} alt={img.violation} />
                 </div>
                 <div className="p-3">
                   <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{img.violation}</p>
@@ -416,7 +417,7 @@ const ImagesShow = () => {
 
       {/* MODAL */}
       <AnimatePresence>
-        {selectedImage && selectedImage.signedUrl && ( 
+        {selectedImage && selectedImage.displayUrl && ( 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -432,7 +433,7 @@ const ImagesShow = () => {
               onClick={e => e.stopPropagation()} 
             >
               <img
-                src={selectedImage.signedUrl}
+                src={selectedImage.displayUrl}
                 alt="Violation Detail"
                 className="max-w-full max-h-[85vh] object-contain rounded-lg"
               />

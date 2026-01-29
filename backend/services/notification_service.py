@@ -1,4 +1,5 @@
 # backend/services/notification_service.py
+import os
 import smtplib
 from datetime import datetime
 from string import Template
@@ -80,15 +81,26 @@ def send_notification_with_attachment(recipient_email, subject, body_html, attac
 
 # --- 2. Fungsi Helper untuk Mengunduh Gambar ---
 
-def download_image_from_url(url):
-    """Mengunduh file gambar dari URL (Supabase) dan mengembalikan bytes-nya."""
+def download_image_from_url(relative_path):
+    """Membaca file gambar dari penyimpanan lokal backend."""
     try:
-        # Gunakan requests.get untuk mengunduh gambar
-        response = requests.get(url, stream=True, timeout=10)
-        response.raise_for_status() 
-        return response.content
-    except requests.exceptions.RequestException as e:
-        logging.error(f"[DOWNLOAD] Gagal mengunduh gambar dari {url}: {e}")
+        # 1. Tentukan base path absolut agar lebih aman
+        # os.getcwd() memastikan kita mulai dari root folder backend
+        base_storage = os.path.join(os.getcwd(), "public", "cctv")
+        
+        # 2. Bersihkan relative_path jika mengandung prefiks "cctv/" 
+        clean_path = relative_path.replace("cctv/", "") if relative_path.startswith("cctv/") else relative_path
+        
+        full_path = os.path.join(base_storage, clean_path)
+        
+        if not os.path.exists(full_path):
+            logging.error(f"[LOCAL READ] File TIDAK ditemukan di: {full_path}")
+            return None
+            
+        with open(full_path, 'rb') as f:
+            return f.read()
+    except Exception as e:
+        logging.error(f"[LOCAL READ] Gagal membaca gambar di {relative_path}: {e}")
         return None
 
 # --- 3. Fungsi Ambil Template Email ---

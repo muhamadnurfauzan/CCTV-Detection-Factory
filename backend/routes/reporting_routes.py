@@ -58,7 +58,7 @@ def get_reports():
         total_items = cur.fetchone()['total']
         
         # --- 3. Query Data Laporan ---
-        # NOTE: vd.image sudah berisi URL penuh dari Supabase Storage
+        # NOTE: 
         data_query = f"""
             SELECT
                 vd.id,
@@ -79,35 +79,17 @@ def get_reports():
 
         # --- Format data akhir dan Generate Signed URL ---
         final_reports = []
-        BUCKET_NAME = config.SUPABASE_BUCKET
-
         for report in reports:
-            signed_url = report['image_path'] 
-            
-            # Cek jika URL adalah URL Supabase yang valid (bukan error atau null)
-            if report['image_path'] and 'supabase.co' in report['image_path']:
-                try:
-                    # Ambil PATH RELATIF: Potong bagian host/bucket dari URL penuh
-                    path_parts = report['image_path'].split(f'/public/{BUCKET_NAME}/')
-                    if len(path_parts) > 1:
-                        relative_path = path_parts[1]
-                        
-                        signed_data = config.supabase.storage.from_(BUCKET_NAME).create_signed_url(relative_path, 3600)
-                        signed_url = signed_data['signedUrl']
-                    else:
-                        logging.warning(f"Could not parse relative path for signed URL: {report['image_path']}")
-
-                except Exception as sign_err:
-                    logging.error(f"[SUPABASE SIGN ERROR]: {sign_err}")
-                    # Jika gagal sign, gunakan URL mentah (hanya akan berfungsi jika bucket public)
-                    signed_url = report['image_path']
+            # Langsung arahkan ke path assets lokal
+            raw_path = report['image_path'].replace('cctv/', '') if report['image_path'] else ""
+            local_url = f"/assets/violations/{raw_path}"
             
             final_reports.append({
                 'id': report['id'],
                 'cctv_name': report['cctv_name'],
                 'violation_name': report['violation_name'],
                 'timestamp': report['timestamp'].isoformat() if report['timestamp'] else None,
-                'image_url': signed_url,
+                'image_url': local_url, # Menggunakan URL lokal
             })
             
         return jsonify({
@@ -146,7 +128,7 @@ def delete_report(violation_id):
         # 2. HAPUS DATA DARI DATABASE
         cur.execute("DELETE FROM violation_detection WHERE id = %s", (violation_id,))
         
-        # 3. HAPUS GAMBAR DARI SUPABASE STORAGE
+        # 3. HAPUS GAMBAR DARI LOCAL STORAGE
         image_deletion_success = True
         if image_url:
             image_deletion_success = delete_violation_image(image_url)
@@ -203,7 +185,7 @@ def delete_reports_batch():
         cur.execute(query_select, tuple(violation_ids))
         reports_to_delete = cur.fetchall()
 
-        # 2. Hapus gambar satu per satu dari Supabase Storage
+        # 2. Hapus gambar satu per satu dari Local Storage
         for report_id, image_url in reports_to_delete:
             if image_url:
                 # delete_violation_image diimpor dari services.cloud_storage

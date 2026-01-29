@@ -1,11 +1,11 @@
-// server.mjs
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import NodeCache from 'node-cache';
 import bodyParser from "body-parser";
-import { createClient } from '@supabase/supabase-js';
+import pkg from 'pg'; 
+const { Pool } = pkg;
 import { fileURLToPath } from 'url';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
@@ -14,16 +14,19 @@ const __dirname = path.dirname(__filename);
 
 const sseClients = new Set();
 
-// === LOAD ENV DARI backend/.env ===
+// === LOAD ENV ===
 dotenv.config({
   path: path.resolve(__dirname, '../backend/.env'),
 });
 
-// Validasi ENV wajib
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY || !process.env.SUPABASE_BUCKET) {
-  console.error('ERROR: Missing required env variables (SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET)');
-  process.exit(1);
-}
+// === DATABASE CONNECTION (LOCAL) ===
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+});
 
 // === INIT APP ===
 const app = express();
@@ -33,259 +36,117 @@ const cache = new NodeCache({ stdTTL: 60 });
 // === MIDDLEWARE ===
 app.use(cors());
 app.use(bodyParser.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
+  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
 }));
 
-// === SUPABASE CLIENT (SERVICE ROLE - AMAN) ===
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+// === SERVE IMAGES & ASSETS ===
+// Pastikan folder ini mengarah ke direktori gambar Anda di backend
+app.use('/assets/violations', express.static(path.join(__dirname, '../backend/public/cctv')));
 
-// 1. API ROUTES (SPESIFIK DULU)
-// === API: Get violation images with signed URLs + cache + safe date parsing ===
-app.get('/supabase-api/violations', async (req, res) => {
+// 1. API ROUTES (Murni SQL)
+app.get('/api/violations-history', async (req, res) => {
   const { cctv, year, month, day, page = 1, limit = 20 } = req.query;
 
-  // === VALIDASI & PARSE PARAM ===
   const validCctv = cctv && cctv !== 'null' ? parseInt(cctv, 10) : null;
   const validYear = year && year !== 'null' ? parseInt(year, 10) : null;
   const validMonth = month && month !== 'null' ? parseInt(month, 10) : null;
   const validDay = day && day !== 'null' ? parseInt(day, 10) : null;
 
   const limitNum = Math.min(parseInt(limit, 10), 100);
-  const from = (parseInt(page, 10) - 1) * limitNum;
-  const to = from + limitNum - 1;
-
-  // === FORCE NO CACHE ===
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  const offset = (parseInt(page, 10) - 1) * limitNum;
 
   try {
-    // === 1. TIDAK ADA PARAM → DAFTAR CCTV ===
+    // 1. DAFTAR CCTV
     if (!validCctv) {
-      const { data, error } = await supabase
-        .from('cctv_data')
-        .select('id, name')
-        .order('id', { ascending: true });
-
-      if (error) throw error;
-
-      return res.json({ options: 'cctv', data });
+      const result = await pool.query("SELECT id, name FROM cctv_data ORDER BY id ASC");
+      return res.json({ options: 'cctv', data: result.rows });
     }
 
-    // === 2. ADA CCTV, TAPI TIDAK ADA TAHUN → DAFTAR TAHUN ===
+    // 2. DAFTAR TAHUN
     if (!validYear) {
-      const { data, error } = await supabase
-        .from('violation_detection')
-        .select('timestamp')
-        .eq('id_cctv', validCctv)
-        .not('timestamp', 'is', null)
-        .order('timestamp', { ascending: false });
-
-      if (error) throw error;
-
-      const years = [...new Set(
-        data
-          .map(row => {
-            const date = new Date(row.timestamp);
-            return isNaN(date.getTime()) ? null : date.getFullYear();
-          })
-          .filter(year => year !== null)
-      )].sort((a, b) => b - a);
-
-      return res.json({ options: 'year', data: years });
+      const result = await pool.query(
+        "SELECT DISTINCT EXTRACT(YEAR FROM timestamp) as year FROM violation_detection WHERE id_cctv = $1 ORDER BY year DESC",
+        [validCctv]
+      );
+      return res.json({ options: 'year', data: result.rows.map(r => r.year) });
     }
 
-    // === 3. ADA TAHUN, TAPI TIDAK ADA BULAN → DAFTAR BULAN ===
+    // 3. DAFTAR BULAN
     if (!validMonth) {
-      const start = new Date(validYear, 0, 1).toISOString();
-      const end = new Date(validYear, 11, 31, 23, 59, 59, 999).toISOString();
-
-      const { data, error } = await supabase
-        .from('violation_detection')
-        .select('timestamp')
-        .eq('id_cctv', validCctv)
-        .gte('timestamp', start)
-        .lte('timestamp', end)
-        .not('timestamp', 'is', null)
-        .order('timestamp', { ascending: false });
-
-      if (error) throw error;
-
-      const months = [...new Set(
-        data
-          .map(row => {
-            const date = new Date(row.timestamp);
-            return isNaN(date.getTime()) ? null : date.getMonth() + 1;
-          })
-          .filter(m => m !== null)
-      )].sort((a, b) => b - a);
-
-      return res.json({ options: 'month', data: months });
+      const result = await pool.query(
+        "SELECT DISTINCT EXTRACT(MONTH FROM timestamp) as month FROM violation_detection WHERE id_cctv = $1 AND EXTRACT(YEAR FROM timestamp) = $2 ORDER BY month DESC",
+        [validCctv, validYear]
+      );
+      return res.json({ options: 'month', data: result.rows.map(r => r.month) });
     }
 
-    // === 4. ADA BULAN, TAPI TIDAK ADA TANGGAL → DAFTAR TANGGAL ===
+    // 4. DAFTAR TANGGAL
     if (!validDay) {
-      const start = new Date(validYear, validMonth - 1, 1).toISOString();
-      const end = new Date(validYear, validMonth, 0, 23, 59, 59, 999).toISOString();
-
-      const { data, error } = await supabase
-        .from('violation_detection')
-        .select('timestamp')
-        .eq('id_cctv', validCctv)
-        .gte('timestamp', start)
-        .lte('timestamp', end)
-        .not('timestamp', 'is', null)
-        .order('timestamp', { ascending: false });
-
-      if (error) throw error;
-
-      const days = [...new Set(
-        data
-          .map(row => {
-            const date = new Date(row.timestamp);
-            return isNaN(date.getTime()) ? null : date.getDate();
-          })
-          .filter(d => d !== null)
-      )].sort((a, b) => b - a);
-
-      return res.json({ options: 'day', data: days });
+      const result = await pool.query(
+        "SELECT DISTINCT EXTRACT(DAY FROM timestamp) as day FROM violation_detection WHERE id_cctv = $1 AND EXTRACT(YEAR FROM timestamp) = $2 AND EXTRACT(MONTH FROM timestamp) = $3 ORDER BY day DESC",
+        [validCctv, validYear, validMonth]
+      );
+      return res.json({ options: 'day', data: result.rows.map(r => r.day) });
     }
 
-    // === 5. SEMUA PARAM ADA → TAMPILKAN GAMBAR ===
-    const start = new Date(validYear, validMonth - 1, validDay, 0, 0, 0, 0).toISOString();
-    const end = new Date(validYear, validMonth - 1, validDay, 23, 59, 59, 999).toISOString();
+    // 5. TAMPILKAN GAMBAR
+    const query = `
+      SELECT v.id, v.id_cctv, v.image, v.timestamp, o.name as violation
+      FROM violation_detection v
+      JOIN object_class o ON v.id_violation = o.id
+      WHERE v.id_cctv = $1 
+      AND EXTRACT(YEAR FROM v.timestamp) = $2
+      AND EXTRACT(MONTH FROM v.timestamp) = $3
+      AND EXTRACT(DAY FROM v.timestamp) = $4
+      ORDER BY v.timestamp DESC
+      LIMIT $5 OFFSET $6
+    `;
+    const result = await pool.query(query, [validCctv, validYear, validMonth, validDay, limitNum, offset]);
 
-    let query = supabase
-      .from('violation_detection')
-      .select('id, id_cctv, image, timestamp, object_class(name)')
-      .eq('id_cctv', validCctv)
-      .gte('timestamp', start)
-      .lte('timestamp', end)
-      .not('timestamp', 'is', null)
-      .order('timestamp', { ascending: false })
-      .range(from, to);
+    const data = result.rows.map(row => {
+      const cleanPath = row.image.replace(/^cctv\//, ''); 
+      
+      return {
+          ...row,
+          imageUrl: `/assets/violations/${cleanPath}`
+      };
+    });
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const imagesWithUrl = await Promise.all(
-      data.map(async (item) => {
-        let signedUrl = item.image;
-
-        // Hanya generate signed URL jika path relatif
-        if (item.image && !item.image.startsWith('http')) {
-          try {
-            const { data: signed } = await supabase.storage
-              .from(process.env.SUPABASE_BUCKET)
-              .createSignedUrl(item.image, 3600); // 1 jam
-            signedUrl = signed?.signedUrl || item.image;
-          } catch (signErr) {
-            console.warn(`[SIGN URL FAILED] ${item.image}:`, signErr.message);
-            signedUrl = item.image; // fallback
-          }
-        }
-
-        // Sanitasi timestamp
-        const safeTimestamp = item.timestamp && !isNaN(new Date(item.timestamp).getTime())
-          ? item.timestamp
-          : null;
-
-        return {
-          id: item.id,
-          id_cctv: item.id_cctv,
-          image: item.image,
-          signedUrl,
-          timestamp: safeTimestamp,
-          violation: item.object_class?.name || 'unknown',
-        };
-      })
-    );
-
-    const hasMore = data.length === limitNum;
-    const result = { data: imagesWithUrl, hasMore };
-
-    // === CACHE (opsional, tapi aman karena no-store di header) ===
-    const cacheKey = req.originalUrl;
-    cache.set(cacheKey, result, 30); // 30 detik
-
-    return res.json(result);
+    return res.json({ data, hasMore: data.length === limitNum });
 
   } catch (err) {
-    console.error('[SUPABASE API ERROR]:', err.message);
+    console.error('[DB ERROR]:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// API: Invalidate cache
-app.post('/invalidate-cache', (req, res) => {
-  cache.flushAll();
-  console.log('[CACHE] All flushed');
-  res.json({ success: true });
-});
-
-// Subscribe Supabase Realtime
-const realtimeChannel = supabase
-  .channel('violation-broadcast')
-  .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'violation_detection'
-  }, (payload) => {
-      const msg = `data: ${JSON.stringify({ id: payload.new.id })}\n\n`;
-      sseClients.forEach(c => c.res.write(msg));
-  })
-  .subscribe();
-
-// SSE Endpoint
+// SSE Endpoint (Untuk Realtime sederhana)
 app.get('/api/sse', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
   });
-
-  res.write('event: connected\ndata: SSE connected\n\n');
-
   const client = { id: Date.now(), res };
   sseClients.add(client);
-
-  req.on('close', () => {
-    console.log('Client disconnected');
-    sseClients.delete(client);
-  });
+  req.on('close', () => sseClients.delete(client));
 });
 
-// 2. PROXY KE PYTHON BACKEND
-app.use(
-  '/api',
-  createProxyMiddleware({
-    target: 'http://127.0.0.1:5000',
-    changeOrigin: true,
-    logLevel: 'debug',
-    onProxyReq: (proxyReq, req) => {
-      // Pastikan body dikirim ulang
-      if (req.rawBody) {
-        proxyReq.setHeader('Content-Type', 'application/json');
-        proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody));
-        proxyReq.write(req.rawBody);
-      }
-    },
-  })
-);
+// PROXY KE PYTHON
+app.use('/api', createProxyMiddleware({
+  target: 'http://127.0.0.1:5000',
+  changeOrigin: true,
+  onProxyReq: (proxyReq, req) => {
+    if (req.rawBody) {
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.write(req.rawBody);
+    }
+  },
+}));
 
-// 3. SERVE VITE BUILD (dist/)
 app.use(express.static(path.join(__dirname, 'dist')));
+app.use((req, res) => { res.sendFile(path.join(__dirname, 'dist', 'index.html')); });
 
-// 4. FALLBACK UNTUK REACT ROUTER (HARUS TERAKHIR!)
-// Gunakan middleware function tanpa path wildcard
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-// SERVER START
 app.listen(PORT, () => {
-  console.log(`\nServer running at http://localhost:${PORT}`);
-  console.log(`Supabase API: http://localhost:${PORT}/supabase-api/violations`);
-  console.log(`Python Proxy:  http://localhost:${PORT}/api/...`);
-  console.log(`Frontend:      http://localhost:${PORT}\n`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });

@@ -59,7 +59,6 @@ def log_violation_async(cctv_id, class_name, public_url, image_bytes):
         if conn: conn.close()
 
 def upload_and_log_violation(cctv_id, class_name, image_bytes):
-    """Mengelola Upload Supabase dan memanggil log DB asinkron."""
     try:
         # --- BLOKIR PALING LAMA ---
         public_url = upload_violation_image(image_bytes, cctv_id, class_name)

@@ -1,4 +1,6 @@
 # routes/cctv_crud.py
+import shutil
+import os
 import io
 import cv2
 import json
@@ -276,26 +278,35 @@ def delete_cctv(cctv_id):
     conn = None
     cur = None
     try:
+        # 1. Tentukan path folder CCTV yang akan dihapus
+        # Pastikan path ini sesuai dengan BASE_STORAGE_PATH di local_storage.py
+        base_path = os.path.join(os.getcwd(), "public", "cctv")
+        cctv_folder_path = os.path.join(base_path, str(cctv_id))
+
         conn = get_connection()
         cur = conn.cursor()
 
-        # --- LANGKAH PENTING: CASCADE DELETION MANUAL ---
-        logging.info(f"[DELETE] Deleting cascade data for CCTV {cctv_id}")
+        logging.info(f"[DELETE] Deleting cascade data and files for CCTV {cctv_id}")
 
-        # Hapus log harian (violation_daily_log)
+        # 2. Hapus data di Database (Sesuai kode Anda)
         cur.execute("DELETE FROM violation_daily_log WHERE id_cctv = %s", (cctv_id,))
-
-        # Hapus data pelanggaran (violation_detection)
         cur.execute("DELETE FROM violation_detection WHERE id_cctv = %s", (cctv_id,))
-        
-        # Hapus mapping user (jika user_cctv_map sudah diterapkan)
-        # cur.execute("DELETE FROM user_cctv_map WHERE cctv_id = %s", (cctv_id,)) 
-
-        # 3. Hapus dari DB (Tabel Induk)
+        cur.execute("DELETE FROM user_cctv_map WHERE cctv_id = %s", (cctv_id,)) 
         cur.execute("DELETE FROM cctv_data WHERE id = %s", (cctv_id,))
+
+        # 3. Hapus Folder Fisik secara rekursif
+        if os.path.exists(cctv_folder_path):
+            try:
+                shutil.rmtree(cctv_folder_path)
+                logging.info(f"[DELETE] Folder {cctv_folder_path} deleted successfully.")
+            except Exception as folder_err:
+                logging.error(f"[DELETE WARNING] Database cleared, but folder fail: {folder_err}")
+        else:
+            logging.warning(f"[DELETE] Folder {cctv_folder_path} not found, skipping file deletion.")
+
         conn.commit()
-        
-        return jsonify({"success": True}), 200
+        return jsonify({"success": True, "message": "CCTV and all related files deleted"}), 200
+
     except Exception as e:
         if conn: conn.rollback()
         logging.error(f"[DELETE ERROR {cctv_id}]: {e}")
