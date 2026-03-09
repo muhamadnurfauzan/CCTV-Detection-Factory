@@ -73,7 +73,8 @@ CCTV-Detection-Factory
 │   │   ├── pm2_manager.py
 │   │   └── cctv_worker.py
 │   ├── model/                # YOLO model files
-│   └── services/             # DB / storage services
+│   ├── services/             # DB / storage services
+|   └── .env.example          # Environment variable template
 │
 ├── frontend/
 │   ├── src/
@@ -81,8 +82,6 @@ CCTV-Detection-Factory
 │   └── package.json
 │
 ├── ecosystem.config.js       # PM2 process configuration
-├── violations/               # Saved violation images
-├── backend/.env.example      # Environment variable template
 └── README.md
 ```
 
@@ -121,6 +120,13 @@ Optional:
     cd frontend
     npm install
     npm install -g pm2
+    ```
+
+4. Database Setup
+    The system uses **PostgreSQL by Supabase**.
+    A database schema is provided in:
+    ```
+    db_ppe_detection.sql
     ```
 
 4. Configure Environment Variables
