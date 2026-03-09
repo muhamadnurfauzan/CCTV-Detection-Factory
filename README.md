@@ -73,7 +73,9 @@ CCTV-Detection-Factory
 │   │   ├── pm2_manager.py
 │   │   └── cctv_worker.py
 │   ├── model/                # YOLO model files
-│   └── services/             # DB / storage services
+│   ├── services/             # DB / storage services
+|   ├── public/cctv/          # Saved violation images
+|   └── .env.example          # Environment variable template
 │
 ├── frontend/
 │   ├── src/
@@ -81,8 +83,6 @@ CCTV-Detection-Factory
 │   └── package.json
 │
 ├── ecosystem.config.js       # PM2 process configuration
-├── violations/               # Saved violation images
-├── backend/.env.example      # Environment variable template
 └── README.md
 ```
 
