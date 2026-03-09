@@ -123,6 +123,31 @@ Optional:
     npm install -g pm2
     ```
 
+4. Database Setup
+    The system uses **PostgreSQL**.
+    A database schema is provided in:
+    ```
+    db_ppe_detection.sql
+    ```
+
+    1. Create database
+        ```bash
+        createdb ppe_detection
+        ```
+
+    2. Import database schema
+        ```bash
+        psql -U postgres -d ppe_detection -f db_ppe_detection.sql
+        ```
+        This will automatically create:
+        - users
+        - cctv_data
+        - violation_detection
+        - violation_daily_log
+        - object_class
+        - scheduler tables
+        - system configuration tables
+
 4. Configure Environment Variables
     Create the `.env` file from the template:
     ```bash
