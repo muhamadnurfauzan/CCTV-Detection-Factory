@@ -148,14 +148,14 @@ Optional:
         - scheduler tables
         - system configuration tables
 
-4. Configure Environment Variables
+5. Configure Environment Variables
     Create the `.env` file from the template:
     ```bash
     cp backend/.env.example backend/.env
     ```
     Then edit the file and fill in the required values.
 
-5. Start Redis
+6. Start Redis
     - macOS (Homebrew):
         ```bash
         brew install redis
@@ -169,12 +169,12 @@ Optional:
         redis-server
         ```
 
-6. Run Backend
+7. Run Backend
     ```bash
     python backend/app.py
     ```
 
-7. Run Frontend
+8. Run Frontend
     ```bash
     cd frontend
     npm run build
